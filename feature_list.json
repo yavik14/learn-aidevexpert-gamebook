@@ -1,0 +1,365 @@
+[
+  {
+    "id": "kmp-project-bootstrap",
+    "area": "setup",
+    "title": "Bootstrap del proyecto KMP con Compose Multiplatform",
+    "user_visible_behavior": "La app arranca en Android y iOS mostrando una pantalla placeholder, con un módulo core compartido y UI en Compose Multiplatform.",
+    "depends_on": [],
+    "status": "not_started",
+    "verification": [
+      "Provisional hasta bootstrap: `./gradlew :composeApp:assembleDebug` compila; el target iOS compila; la app lanza en emulador Android y simulador iOS mostrando la pantalla placeholder."
+    ],
+    "evidence": [],
+    "notes": "Primer paso técnico. Requiere macOS + Xcode para iOS. Sin lógica de producto."
+  },
+  {
+    "id": "local-persistence-sqldelight",
+    "area": "persistence",
+    "title": "Persistencia local con SQLDelight",
+    "user_visible_behavior": "La app crea la base local y aplica el esquema inicial sin errores; los datos sobreviven al reinicio.",
+    "depends_on": [
+      "kmp-project-bootstrap"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core KMP que abre la DB, escribe y lee un registro; driver por plataforma (Android/iOS) configurado."
+    ],
+    "evidence": [],
+    "notes": "Esquema inicial: tabla de notas. Ver docs/technical-discovery.md."
+  },
+  {
+    "id": "note-model-crud-core",
+    "area": "core",
+    "title": "Modelo Nota y CRUD en el core KMP",
+    "user_visible_behavior": "El core KMP puede crear, leer, actualizar y borrar Notas con owner, cuerpo, categoría, etiquetas y estado.",
+    "depends_on": [
+      "local-persistence-sqldelight"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests unitarios del core que cubren el CRUD y la persistencia del modelo."
+    ],
+    "evidence": [],
+    "notes": "Modelo según docs/domain-model.md. Categoría y tipo como enums."
+  },
+  {
+    "id": "notes-list-ui",
+    "area": "ui",
+    "title": "Lista de notas en Compose Multiplatform",
+    "user_visible_behavior": "El usuario ve en pantalla la lista de sus notas locales.",
+    "depends_on": [
+      "note-model-crud-core"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: la app muestra la lista de notas persistidas; caso vacío manejado."
+    ],
+    "evidence": [],
+    "notes": "Primera UI real. Sin diseño formal todavía (DESIGN.md diferido)."
+  },
+  {
+    "id": "create-text-note",
+    "area": "ui",
+    "title": "CRUD de nota de texto en la UI",
+    "user_visible_behavior": "Desde la UI, el usuario crea una nota de texto, la edita y la borra; la lista refleja los cambios.",
+    "depends_on": [
+      "notes-list-ui"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: flujo manual crear/editar/borrar en emulador Android y simulador iOS; test del use case de nota."
+    ],
+    "evidence": [],
+    "notes": "Cubre el CRUD del MVP para texto, primer modo de captura."
+  },
+  {
+    "id": "note-category-and-tags",
+    "area": "core",
+    "title": "Categoría fija y etiquetas editables en la nota",
+    "user_visible_behavior": "El usuario asigna una categoría (mecánica/nivel/narrativa/arte/otro) y agrega/quita etiquetas libres a una nota.",
+    "depends_on": [
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core sobre categoría (única, enum) y etiquetas (múltiples, libres); UI permite editarlas."
+    ],
+    "evidence": [],
+    "notes": "Distinción Categoría vs Etiqueta definida en CONTEXT.md."
+  },
+  {
+    "id": "ai-client-interface",
+    "area": "ai",
+    "title": "Interfaz AiClient y wiring",
+    "user_visible_behavior": "El core depende de una abstracción AiClient; existe una implementación fake/real desacoplada inyectable.",
+    "depends_on": [
+      "note-model-crud-core"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test que usa un AiClient fake; el runtime real se puede cambiar sin tocar el core."
+    ],
+    "evidence": [],
+    "notes": "Requisito explícito del concept-prompt. Ver docs/technical-discovery.md."
+  },
+  {
+    "id": "ai-runtime-decision",
+    "area": "ai",
+    "title": "Decisión de runtime de IA (spike + ADR)",
+    "user_visible_behavior": "Existe una decisión documentada y justificada sobre cloud / on-device / híbrido, con al menos un spike comparativo.",
+    "depends_on": [
+      "ai-client-interface"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: ADR creado en docs/adr/ con alternativas y trade-offs; spike ejecutado y registrado."
+    ],
+    "evidence": [],
+    "notes": "Riesgo principal hoy postergado (docs/risks-and-open-questions.md). Bloquea el enriquecimiento real."
+  },
+  {
+    "id": "ai-enrichment-classify-tags-type",
+    "area": "ai",
+    "title": "Enriquecimiento async: categoría, etiquetas y tipo",
+    "user_visible_behavior": "Al guardar una nota, un job async asigna categoría, etiquetas y tipo; la nota pasa por capturada/pendiente/enriquecida/fallida.",
+    "depends_on": [
+      "ai-client-interface",
+      "ai-runtime-decision",
+      "note-category-and-tags"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test con AiClient fake que verifica la transición de estados; la captura nunca se bloquea por la IA."
+    ],
+    "evidence": [],
+    "notes": "Ciclo definido en docs/domain-model.md. Todo debe ser tolerante a fallos."
+  },
+  {
+    "id": "note-enrichment-status-ui",
+    "area": "ui",
+    "title": "UI de estado de enriquecimiento y corrección",
+    "user_visible_behavior": "El usuario ve el estado de enriquecimiento de la nota y puede corregir categoría/etiquetas/tipo sin que el próximo enriquecimiento pise sus cambios.",
+    "depends_on": [
+      "ai-enrichment-classify-tags-type"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: flujo manual de corrección; test que re-enriquecer no sobrescribe correcciones."
+    ],
+    "evidence": [],
+    "notes": "Edge case de docs/domain-model.md."
+  },
+  {
+    "id": "voice-capture-stt",
+    "area": "capture-voice",
+    "title": "Captura por voz con speech-to-text nativo",
+    "user_visible_behavior": "El usuario graba un dictado y obtiene una nota con el texto transcripto.",
+    "depends_on": [
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: dictado real en Android (SpeechRecognizer) y iOS (Speech) que produce una nota con transcripción."
+    ],
+    "evidence": [],
+    "notes": "Integración nativa (criterio de éxito del MVP). Manejo de permisos de micrófono."
+  },
+  {
+    "id": "voice-attachment-storage",
+    "area": "capture-voice",
+    "title": "Guardar el audio original como Adjunto",
+    "user_visible_behavior": "La nota de voz conserva el audio original como Adjunto, separado de la transcripción.",
+    "depends_on": [
+      "voice-capture-stt"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: el Adjunto persiste y se puede reproducir; la transcripción vive en la nota."
+    ],
+    "evidence": [],
+    "notes": "Distinción Nota vs Adjunto en CONTEXT.md."
+  },
+  {
+    "id": "image-capture-camera",
+    "area": "capture-image",
+    "title": "Captura de foto de boceto (cámara/galería)",
+    "user_visible_behavior": "El usuario toma o elige una foto de un boceto y crea una nota con esa imagen como Adjunto.",
+    "depends_on": [
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: captura real en Android e iOS que produce una nota con Adjunto de imagen."
+    ],
+    "evidence": [],
+    "notes": "Integración nativa. Manejo de permisos de cámara/galería."
+  },
+  {
+    "id": "image-ocr-optional",
+    "area": "capture-image",
+    "title": "OCR del boceto a texto derivado (si es viable)",
+    "user_visible_behavior": "El texto manuscrito del boceto se extrae como texto derivado de la nota, cuando la integración es viable.",
+    "depends_on": [
+      "image-capture-camera"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test de OCR sobre una imagen de muestra; si no es viable, se documenta el descarte."
+    ],
+    "evidence": [],
+    "notes": "Opcional/min. Si se descarta, actualizar docs y el estado de la feature."
+  },
+  {
+    "id": "embeddings-generation",
+    "area": "ai",
+    "title": "Generación y persistencia de embeddings",
+    "user_visible_behavior": "Cada nota enriquecida tiene un embedding persistido localmente como BLOB.",
+    "depends_on": [
+      "ai-client-interface",
+      "note-model-crud-core"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test con AiClient fake que genera y persiste un vector; el vector se recupera intacto."
+    ],
+    "evidence": [],
+    "notes": "Estrategia: BLOB + similitud en memoria (docs/technical-discovery.md)."
+  },
+  {
+    "id": "semantic-linking",
+    "area": "linking",
+    "title": "Enlazado por similitud semántica",
+    "user_visible_behavior": "Las notas se enlazan entre sí según similitud coseno, con un score.",
+    "depends_on": [
+      "embeddings-generation"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test que calcula similitud y crea/actualiza enlaces con umbral definido."
+    ],
+    "evidence": [],
+    "notes": "Definir umbral y si los enlaces son bidireccionales (docs/risks-and-open-questions.md)."
+  },
+  {
+    "id": "note-links-ui",
+    "area": "ui",
+    "title": "Ver notas relacionadas",
+    "user_visible_behavior": "Desde una nota, el usuario ve las notas relacionadas por similitud.",
+    "depends_on": [
+      "semantic-linking"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: flujo manual que abre una nota y muestra sus enlaces con navegación."
+    ],
+    "evidence": [],
+    "notes": "Superficie de lectura de los enlaces generados."
+  },
+  {
+    "id": "gdd-view",
+    "area": "gdd",
+    "title": "Vista de GDD que agrupa y resume las notas",
+    "user_visible_behavior": "El usuario ve un GDD navegable que agrupa y resume sus notas por categoría/etiqueta.",
+    "depends_on": [
+      "note-category-and-tags",
+      "notes-list-ui"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: flujo manual que muestra notas agrupadas y resumidas; incluye notas sin enriquecer."
+    ],
+    "evidence": [],
+    "notes": "El GDD es una vista sobre las notas, sin tabla propia (docs/domain-model.md)."
+  },
+  {
+    "id": "rag-query",
+    "area": "rag",
+    "title": "Consulta en lenguaje natural sobre las notas (RAG)",
+    "user_visible_behavior": "El usuario pregunta en lenguaje natural y obtiene una respuesta generada a partir de sus propias notas.",
+    "depends_on": [
+      "embeddings-generation",
+      "ai-runtime-decision"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: pregunta de ejemplo responde usando notas reales recuperadas por similitud."
+    ],
+    "evidence": [],
+    "notes": "Diferenciador del producto. Requiere runtime de IA decidido."
+  },
+  {
+    "id": "rag-answer-citations",
+    "area": "rag",
+    "title": "La respuesta RAG referencia las notas usadas",
+    "user_visible_behavior": "Cada respuesta en lenguaje natural indica de qué notas proviene.",
+    "depends_on": [
+      "rag-query"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: la respuesta lista las notas fuente y permite navegar a ellas."
+    ],
+    "evidence": [],
+    "notes": "Trazabilidad de la respuesta."
+  },
+  {
+    "id": "android-release-pipeline",
+    "area": "release",
+    "title": "Publicación de Android en Play internal testing",
+    "user_visible_behavior": "Un build firmado de Android se distribuye a un canal de pruebas internas.",
+    "depends_on": [
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build firmado publicado en Play internal testing e instalable desde el canal."
+    ],
+    "evidence": [],
+    "notes": "Aprendizaje 'lanzar a producción'. No commitear keystores ni secrets."
+  },
+  {
+    "id": "ios-release-pipeline",
+    "area": "release",
+    "title": "Distribución de iOS en TestFlight",
+    "user_visible_behavior": "Un build de iOS se distribuye a TestFlight e instala en dispositivos de prueba.",
+    "depends_on": [
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build archivado y subido a TestFlight; instalable en un dispositivo real."
+    ],
+    "evidence": [],
+    "notes": "Aprendizaje 'lanzar a producción'. Requiere cuenta de desarrollador Apple."
+  },
+  {
+    "id": "offline-pending-retry",
+    "area": "ai",
+    "title": "Reintento de enriquecimiento al recuperar conexión",
+    "user_visible_behavior": "Las notas pendientes se enriquecen automáticamente cuando la IA vuelve a estar disponible.",
+    "depends_on": [
+      "ai-enrichment-classify-tags-type"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test con AiClient fake que simula fallo y luego éxito; la nota pasa de pendiente a enriquecida."
+    ],
+    "evidence": [],
+    "notes": "Resuelve la parte offline/online del MVP."
+  },
+  {
+    "id": "enrichment-observability-logging",
+    "area": "observability",
+    "title": "Logging local de fallos de enriquecimiento e integraciones",
+    "user_visible_behavior": "Los fallos de IA o de integraciones nativas quedan registrados localmente para diagnóstico.",
+    "depends_on": [
+      "ai-enrichment-classify-tags-type"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: un fallo simulado genera una entrada de log local recuperable."
+    ],
+    "evidence": [],
+    "notes": "Observabilidad mínima del MVP (docs/technical-discovery.md)."
+  }
+]
