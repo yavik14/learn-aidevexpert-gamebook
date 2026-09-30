@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Helper"
+  short_description: "Explain how a given skill works."
+  default_prompt: "Use $skill-helper to explain how a skill works."

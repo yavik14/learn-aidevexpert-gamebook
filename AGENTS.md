@@ -26,6 +26,7 @@ Las skills viven en `.opencode/skills/` y se ejecutan con el tool `skill` (o los
 - `feature-flow` — orquesta `planner` → `implementer` → `validator` con los subagentes.
 - `git-committer` — crea commits siguiendo Conventional Commits.
 - `skill-creator` — crea o mejora las propias skills de opencode.
+- `skill-helper` — explica el funcionamiento de una skill indicada, con un ejemplo práctico.
 
 Los subagentes `planner`, `implementer` y `validator` (en `.opencode/agent/`) envuelven las skills de rol. Flujo estándar por feature: spec → implementación → validación independiente → estado `accepted` y commit.
 

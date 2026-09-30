@@ -11,9 +11,20 @@ All commits must follow the Conventional Commits specification. Do NOT include e
 
 `<type>(<scope>): <description>`
 
-Or, when a task ID is present in the branch name or explicitly provided:
+When a task ID is present in the branch name or provided explicitly:
 
 `<type>(<scope>): <TASK-ID> - <description>`
+
+## Task IDs
+
+Prefix the description with a task ID when the branch name contains one or the user provides one explicitly. IDs come in several formats depending on the tracker, so recognize the common ones instead of assuming a single shape. For example:
+
+- `ABC-123` — Jira, Linear, Azure Boards, and similar key-number systems.
+- `#123` — GitHub, GitLab, and Bitbucket issue references.
+- `AB#123` — Azure DevOps shorthand.
+- Trello card identifiers or short links (e.g. `https://trello.com/c/<id>`).
+
+Use the bare identifier in the message (for example `#123`, not the full issue URL). If something looks like an ID but its format is ambiguous, ask the user before using it, and never invent an ID.
 
 ## Types
 
@@ -32,7 +43,7 @@ Or, when a task ID is present in the branch name or explicitly provided:
 - Keep the title concise.
 - Imperative description in Spanish.
 - Do NOT include emojis in commit messages.
-- If the current branch name contains a task ID (e.g., `MID-88` in `feature/MID-88-detekt-setup`) or the task ID is explicitly provided, include `<TASK-ID> - ` as a prefix in the description (e.g., `build(detekt): MID-88 - <description>`).
+- Include the task ID prefix as described in Task IDs when one applies.
 - Use `!` when breaking compatibility.
 
 ## Repository rules
