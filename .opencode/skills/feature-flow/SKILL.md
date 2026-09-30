@@ -7,9 +7,9 @@ description: Orchestrate the planner, implementer, and validator workflow for on
 
 Use this skill to let the main agent coordinate the three project subagents:
 
-- `planner` wraps `$feature-spec`.
-- `implementer` wraps `$feature-implementer`.
-- `validator` wraps `$feature-validator`.
+- `planner` wraps the `feature-spec` skill.
+- `implementer` wraps the `feature-implementer` skill.
+- `validator` wraps the `feature-validator` skill.
 
 The main agent is the orchestrator. It chooses the next role, launches the right subagent, reviews the result, and keeps the same feature moving until the flow reaches an explicit stop condition.
 
@@ -34,8 +34,8 @@ The main agent is the orchestrator. It chooses the next role, launches the right
 1. `../../../AGENTS.md`
 2. `../../../PROGRESS.md`
 3. `feature_list.json`
-4. `docs/specs/` if present
-5. `docs/validations/` if present
+4. `../../../docs/specs/` if present
+5. `../../../docs/validations/` if present
 6. Current git status
 
 ## Feature Selection
@@ -98,10 +98,10 @@ Creating the commit is the main orchestrator's final step after the validator re
 2. Persist acceptance by updating `feature_list.json` for the selected feature to status `accepted` and appending concise validator evidence. If a validation artifact is useful, create or update `../../../docs/validations/<feature-id>.md`; otherwise `feature_list.json` plus `../../../PROGRESS.md` evidence is sufficient.
 3. Identify the files changed for the accepted feature, including required harness/docs/evidence updates.
 4. Stage only those files. Do not stage unrelated user or other-agent changes.
-5. Create one Conventional Commit, using a message that names the feature. Prefer:
-   - `feat: complete <feature-id>` for user-visible product/platform features,
+5. Create one Conventional Commit, using a message that names the feature. Follow the `git-committer` skill for format and types. Prefer:
+   - `feature: complete <feature-id>` for user-visible product/platform features,
    - `docs: complete <feature-id>` for documentation-only features,
-   - `chore: complete <feature-id>` for workflow/tooling-only features.
+   - `build: complete <feature-id>` for workflow/tooling-only features.
 6. If the accepted feature's changes cannot be isolated from unrelated work, stop and report the commit blocker instead of making a mixed commit.
 7. Do not push the commit unless the user explicitly requested a push.
 8. After the commit succeeds, select the next available feature and report the next required role. Do not start the next feature unless asked.

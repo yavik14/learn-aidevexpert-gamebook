@@ -10,7 +10,7 @@ Use this skill to turn an unclear project, significant feature, or product chang
 ## Hard Rules
 
 - Do not implement code.
-- Do not create `../../../AGENTS.md`, `features.yaml`, `../../../PROGRESS.md`, issue backlogs, task plans, or implementation plans until the user explicitly asks after discovery is complete.
+- Do not create `../../../AGENTS.md`, `feature_list.json`, `../../../PROGRESS.md`, issue backlogs, task plans, or implementation plans until the user explicitly asks after discovery is complete.
 - Ask one question at a time. Include a recommended answer when useful.
 - Prefer structured question tools when available: if the current agent environment exposes a multiple-choice/user-input tool, use it for bounded discovery questions; otherwise present the question and options as plain text.
 - If a repository or existing docs exist, inspect them before asking questions that the files can answer.
@@ -18,7 +18,7 @@ Use this skill to turn an unclear project, significant feature, or product chang
 - Keep documents concise and maintainable. Avoid context rot, duplicated statements, and stale open questions.
 - Before creating or updating discovery documents, always ask which language to use for project documents. Do not assume from the conversation language.
 - For products/features with a visual interface, discover existing design assets and create or update `../../../DESIGN.md` after the MVP or new-feature direction is clear.
-- If the user asks to create design direction and no source-of-truth design exists, use the `imagegen` skill for a small number of UI concept images, then save the accepted project-bound images under `docs/design/concepts/` and reference them from `../../../DESIGN.md`.
+- If the user asks to create design direction and no source-of-truth design exists, use an available image-generation skill (if the runtime exposes one, such as `imagegen`) for a small number of UI concept images, then save the accepted project-bound images under `docs/design/concepts/` and reference them from `../../../DESIGN.md`. If no image-generation skill is available, describe the intended direction in prose instead.
 - Treat this as a teaching workflow: explain why each artifact exists when introducing it. If the user mentions training, a workshop, a course, or students, read `references/teaching-notes.md` before starting (see Teaching Mode below).
 
 ## Controlled Outputs
@@ -150,7 +150,7 @@ First discover whether the user already has design inputs:
 
 If design assets exist, record where they are and whether they are source of truth, inspiration, outdated, or partial.
 
-If design assets do not exist, decide whether the user wants generated visual concepts before locking `../../../DESIGN.md`. If yes, use the `imagegen` skill in its default built-in mode for 1-3 concept mockups that show the product feel across the most important surfaces. Good defaults are:
+If design assets do not exist, decide whether the user wants generated visual concepts before locking `../../../DESIGN.md`. If yes and an image-generation skill is available (such as `imagegen` in some runtimes), use it for 1-3 concept mockups that show the product feel across the most important surfaces; otherwise capture the direction in prose. Good defaults are:
 
 - one primary user-facing screen for the MVP's first workflow,
 - one secondary operational or edge-state screen when the MVP has internal users,
@@ -181,7 +181,7 @@ Run this step when discovery is about to close, or when the user explicitly asks
 - Mark remaining questions as `Blocking next phase`, `Implementation-time`, or `Later`.
 - Do not leave critical sections as only `Not yet defined`; write a minimal initial position or explain why it is safely deferred.
 - Check that access revocation/expiry, verification/testing, observability, operational ownership, and MVP validation have at least a minimal stance.
-- For visual products/features, check that design assets were either referenced or `../../../DESIGN.md` was created with enough direction for future UI implementation. If `imagegen` was used, verify that project-bound concept images are saved under `docs/design/concepts/`, referenced from `../../../DESIGN.md`, and clearly marked as directional rather than exact UI source.
+- For visual products/features, check that design assets were either referenced or `../../../DESIGN.md` was created with enough direction for future UI implementation. If an image-generation skill was used, verify that project-bound concept images are saved under `docs/design/concepts/`, referenced from `../../../DESIGN.md`, and clearly marked as directional rather than exact UI source.
 - Keep each document concise enough to be reread by an agent; if a document grows large, summarize decisions and move details to later planning docs only when the user asks.
 
 ### 10. Stop Condition

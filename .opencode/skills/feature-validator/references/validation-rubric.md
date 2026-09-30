@@ -13,7 +13,7 @@ Status convention:
 | --- | --- | --- | --- |
 | Correctness | Does the implementation match the feature spec? | Acceptance scenarios pass or have strong evidence. | Behavior missing, fake, or materially different from the spec. |
 | Verification | Did required checks actually run with evidence? | Exact commands/results are recorded and rerunnable where possible. | No evidence, failed checks hidden, or only verbal confidence. |
-| E2E coverage | For observable user/API flows, did persistent E2E coverage exist and get updated when available? | `pnpm test:e2e` or repo-equivalent coverage exercises the changed flow, or the spec justifies why it is not needed. | Only manual smoke evidence remains after an E2E harness exists and the changed flow is E2E-testable. |
+| E2E coverage | For observable user/API flows, did persistent E2E coverage exist and get updated when available? | The repo's E2E coverage exercises the changed flow, or the spec justifies why it is not needed. | Only manual smoke evidence remains after an E2E harness exists and the changed flow is E2E-testable. |
 | Scope discipline | Did implementation stay inside the selected feature? | No unrelated feature work or broad refactors. | Adjacent features implemented opportunistically. |
 | Architecture | Does code respect documented boundaries and patterns? | Dependencies and layers match `../../../../ARCHITECTURE.md`/repo patterns. | New ad hoc architecture, boundary violations, tangled coupling. |
 | Security/access | Does the diff avoid obvious security/privacy regressions? | Auth, secrets, input, data exposure, and external calls are handled appropriately for this slice. | Secrets committed, unsafe auth bypass, unchecked input, private data exposure. |
@@ -29,11 +29,11 @@ Acceptable:
 
 - runs lint/typecheck/tests/build or the repo-equivalent non-blocking checks,
 - exits non-zero when those checks fail,
-- prints manual commands such as `pnpm dev` only after checks pass.
+- prints manual commands such as the dev/run command only after checks pass.
 
 Not acceptable after bootstrap:
 
-- only echoes "run pnpm lint && pnpm test",
+- only echoes a list of commands without running them,
 - starts a long-running dev server by default,
 - reports success without executing any check.
 
@@ -99,4 +99,4 @@ Update:
 - <state/doc artifact>
 ```
 
-The repair brief should not be vague. Prefer "change `init.sh` so it executes `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`, but does not start `pnpm dev`" over "improve init.sh".
+The repair brief should not be vague. Prefer "change `init.sh` so it executes the repo's lint/build and unit-test commands, but does not start the dev server" over "improve init.sh".
