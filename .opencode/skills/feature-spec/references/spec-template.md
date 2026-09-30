@@ -110,12 +110,12 @@ Use these rules:
 
 - <Command or manual scenario to run.>
 - <Expected result.>
-- If the repo has a persistent E2E command such as `pnpm test:e2e` and this feature changes user-visible behavior, authentication, authorization, routing, or API flows, add or update focused E2E coverage and include the E2E command here. If E2E is not appropriate, state why.
+- If the repo has a persistent E2E command and this feature changes user-visible behavior, authentication, authorization, routing, or API flows, add or update focused E2E coverage and include the E2E command here. If E2E is not appropriate, state why.
 
 For `init.sh`, be explicit:
 
 - `./init.sh` should execute the non-blocking standard gate for the current repo state.
-- `./init.sh` must not start long-running processes such as `pnpm dev`.
+- `./init.sh` must not start long-running processes such as a dev server or simulator session.
 - It may print manual follow-up commands after the non-blocking checks pass.
 
 ## Evidence To Capture

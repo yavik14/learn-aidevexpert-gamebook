@@ -78,7 +78,7 @@ Use this hierarchy:
 
 1. static/syntax checks,
 2. tests and runtime/startup checks,
-3. persistent E2E checks such as `pnpm test:e2e` when available and relevant,
+3. persistent E2E checks when available and relevant,
 4. user-flow or manual smoke checks when persistent E2E is not yet available or cannot cover the case.
 
 If the repo has a persistent E2E command and the feature changes user-visible behavior, authentication, authorization, routing, or API flows, verify that focused E2E coverage was added/updated or that the spec/implementation gives a credible reason it was not needed. Missing relevant E2E coverage is normally a `revise` finding once the E2E harness exists.

@@ -70,7 +70,7 @@ Ask one question at a time. Include a recommended answer when helpful. Prefer sc
 - What should the product feel like in use: calm and operational, premium/editorial, playful, technical, dense and tool-like, or another direction?
 - Which screen should be visualized first because it carries the MVP value?
 - Which secondary state or internal workflow needs design direction so agents do not improvise it later?
-- Are generated `imagegen` UI concepts acceptable as inspiration before `../../../../DESIGN.md` is finalized?
+- Are generated UI concepts (via an available image-generation skill) acceptable as inspiration before `../../../../DESIGN.md` is finalized?
 - Should the first design pass prioritize desktop, mobile, or both?
 - What visual details must not be invented: logo, colors, typography, product screenshots, instructor identity, or certification branding?
 - What would make a generated design concept unacceptable?

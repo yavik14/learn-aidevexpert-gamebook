@@ -74,7 +74,7 @@ Rules:
 - Keep WIP=1.
 - Do not implement adjacent features from `feature_list.json`.
 - Add regression/unit/integration/smoke tests when they fit the feature and current repo maturity.
-- If the repo has a persistent E2E command such as `pnpm test:e2e` and the selected feature changes user-visible behavior, authentication, authorization, routing, or API flows, add or update focused E2E coverage unless the spec explicitly justifies not doing so.
+- If the repo has a persistent E2E command and the selected feature changes user-visible behavior, authentication, authorization, routing, or API flows, add or update focused E2E coverage unless the spec explicitly justifies not doing so.
 - Use `references/implementation-rules.md` for durable documentation rules.
 
 ### 4. Self-Verify

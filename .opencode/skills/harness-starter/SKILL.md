@@ -36,7 +36,7 @@ Read available discovery docs before generating artifacts:
    - `../../../docs/mvp-scope.md`
    - `../../../docs/adr/*.md`
 
-If none of these exist, stop and tell the user to run `$build-brief` first.
+If none of these exist, stop and tell the user to run the `build-brief` skill first.
 
 ## Workflow
 
@@ -102,4 +102,4 @@ When explaining the result, emphasize the progression:
 
 `Build Brief -> minimal repo harness -> technical bootstrap -> implementation`
 
-The student should not need a long prompt. The value of the skill is that `$harness-starter` already knows this phase's rules.
+The student should not need a long prompt. The value of the skill is that `harness-starter` already knows this phase's rules.

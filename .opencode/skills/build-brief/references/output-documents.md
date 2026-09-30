@@ -46,7 +46,7 @@ Split `../../../../docs/technical-discovery.md` when technology, integrations, d
 
 Split `../../../../docs/mvp-scope.md` when MVP boundaries are too large for `../../../../docs/build-brief.md`.
 
-Create root `../../../../DESIGN.md` when the MVP or new feature has a visual interface. Ask for existing app designs first; if none exist, generate an initial design direction for agents. When the user wants image-generated concepts, use the `imagegen` skill, save accepted project-bound mockups under `docs/design/concepts/`, and reference them from `../../../../DESIGN.md`.
+Create root `../../../../DESIGN.md` when the MVP or new feature has a visual interface. Ask for existing app designs first; if none exist, generate an initial design direction for agents. When the user wants image-generated concepts and an image-generation skill is available (such as `imagegen`), use it, save accepted project-bound mockups under `docs/design/concepts/`, and reference them from `../../../../DESIGN.md`.
 
 Create ADRs only for confirmed, hard-to-reverse decisions.
 
@@ -185,18 +185,18 @@ If the user already has design assets, include them first and state their author
 - Notes: <how agents should use it>
 ```
 
-If `imagegen` was used, save the images in the repo and include them as directional assets:
+If an image-generation skill was used, save the images in the repo and include them as directional assets:
 
 ```md
 ## Generated Concept Images
 
 | Image | Role | Status |
 | --- | --- | --- |
-| `docs/design/concepts/learner-dashboard-v1.png` | Primary learner dashboard concept | Inspiration / accepted direction |
+| `docs/design/concepts/dashboard-v1.png` | Primary dashboard concept | Inspiration / accepted direction |
 
 Prompt notes:
 
-- `learner-dashboard-v1.png`: <short prompt summary and important constraints>
+- `dashboard-v1.png`: <short prompt summary and important constraints>
 
 Generated images are visual direction only. `../../../../DESIGN.md` tokens, layout rules, and component guidance are authoritative when image details conflict with written guidance.
 ```
@@ -276,11 +276,11 @@ Keep this as product/feature direction, not a full implementation plan. Feature 
 
 ## Generated Design Asset Rules
 
-Use `imagegen` for high-level UI mockups, mood references, product illustrations, or visual concepts when a raster concept image helps agents and stakeholders align. Keep the batch small: 1-3 images is enough for most MVPs.
+Use an image-generation skill (`imagegen` when available) for high-level UI mockups, mood references, product illustrations, or visual concepts when a raster concept image helps agents and stakeholders align. Keep the batch small: 1-3 images is enough for most MVPs.
 
 Do not use generated images as pixel-perfect UI specs. Generated text, exact component placement, and spacing are not authoritative unless the user explicitly accepts them. Capture durable decisions in `../../../../DESIGN.md` tokens and guidance.
 
-Save project-bound concepts under `docs/design/concepts/` with stable, descriptive filenames. Do not leave referenced design assets only under Codex's default generated-image folder.
+Save project-bound concepts under `docs/design/concepts/` with stable, descriptive filenames. Do not leave referenced design assets only under the agent runtime's default generated-image folder.
 
 ## `../../../../docs/risks-and-open-questions.md`
 
