@@ -24,7 +24,7 @@ Show that project documentation is not ceremony. Each artifact exists to remove 
 - `../../../../docs/technical-discovery.md`: prevents hidden platform/integration constraints.
 - `../../../../docs/mvp-scope.md`: prevents overbuilding.
 - `../../../../DESIGN.md`: prevents visual drift and gives implementation agents stable UI direction before feature work starts.
-- `docs/design/concepts/`: keeps generated visual concepts close to the repo when `imagegen` is used for direction rather than leaving them as ephemeral chat artifacts.
+- `docs/design/concepts/`: keeps generated visual concepts close to the repo when an image-generation skill is used for direction rather than leaving them as ephemeral chat artifacts.
 - `../../../../docs/risks-and-open-questions.md`: prevents pretending unknowns are decisions.
 - ADRs: preserve the reasoning behind expensive decisions.
 

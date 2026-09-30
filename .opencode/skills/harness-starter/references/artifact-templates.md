@@ -168,12 +168,14 @@ Status values:
 - `not_started`
 - `in_progress`
 - `blocked`
-- `passing`
+- `passing` — implementation and self-verification complete; ready for independent validation, not yet accepted.
+- `accepted` — an independent validator returned `accept` and the main orchestrator persisted it.
 
 Rules:
 
 - Only one feature may be `in_progress`.
 - `passing` requires verification evidence.
+- Only the main orchestrator sets `accepted`, after an independent validator accepts; implementers never set `accepted`.
 - `depends_on` is required for every feature. Use an empty array for features with no prerequisites.
 - `depends_on` values must be stable feature `id` strings from the same file. Do not reference numeric positions.
 - The order of the JSON array is the preferred plan order when more than one feature is ready; it is not a dependency system.

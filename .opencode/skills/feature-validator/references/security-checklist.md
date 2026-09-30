@@ -1,6 +1,6 @@
 # Feature Security Checklist
 
-Use this checklist during feature validation. It is intentionally portable: do not assume Codex Security or any specific plugin is available.
+Use this checklist during feature validation. It is intentionally portable: do not assume any specific security plugin is available.
 
 This is not a full repository security audit. It is a feature-scoped security review anchored to:
 
@@ -37,14 +37,14 @@ Pass signal:
 
 ### 2. Authentication And Authorization
 
-When the feature touches identity, sessions, roles, API keys, enrollment, certificates, admin, or teacher flows, check:
+When the feature touches identity, sessions, roles, API keys, admin, or service flows, check:
 
 - unauthenticated access is intentionally public,
-- authenticated-only routes enforce auth server-side,
-- role checks are server-side and cannot be bypassed by UI changes,
+- authenticated-only operations enforce auth at the correct boundary,
+- role checks cannot be bypassed by client/UI changes,
 - service/API keys are checked before side effects,
 - revoked or expired access is respected,
-- public certificate verification does not expose private learner data.
+- public or shared surfaces do not expose private user data.
 
 Pass signal:
 
@@ -58,7 +58,7 @@ When the feature handles user/API input, search, transcript text, file names, UR
 - input is parsed/validated at the boundary,
 - SQL uses parameterized queries or ORM-safe APIs,
 - search queries cannot break query syntax or access unintended records,
-- HTML/Markdown/template rendering avoids XSS,
+- rendered or generated content avoids injection (XSS, template, or format injection),
 - URLs are validated before redirects or fetches,
 - file paths cannot traverse outside allowed directories.
 
@@ -70,12 +70,12 @@ Pass signal:
 
 ### 4. Data Exposure And Privacy
 
-When the feature returns or renders learner, cohort, transcript, progress, certificate, or attendance data, check:
+When the feature returns or renders user, note, attachment, transcript, or progress data, check:
 
 - responses include only required fields,
-- private data does not appear in public pages, logs, screenshots, or error messages,
-- one learner cannot access another learner's private state,
-- public verification pages expose only intentionally public certificate fields.
+- private data does not appear in shared screens, logs, screenshots, or error messages,
+- one user cannot access another user's private state,
+- public or shared surfaces expose only intentionally public fields.
 
 Pass signal:
 
@@ -85,7 +85,7 @@ Pass signal:
 
 ### 5. External Services And SSRF-Like Risks
 
-When the feature calls Mux, Zoom, SendGrid, n8n, webhooks, user-provided URLs, or other external services, check:
+When the feature calls external services, webhooks, user-provided URLs, or other third parties, check:
 
 - outbound URLs are allowlisted or constructed from trusted config,
 - webhooks verify signatures or secrets,
@@ -113,22 +113,22 @@ Pass signal:
 
 - dependency additions are justified,
 - no obvious abandoned or unrelated package is introduced,
-- generated artifacts such as `.next/`, coverage, and tsbuild info are ignored.
+- generated build artifacts such as build output directories, coverage, and caches are ignored.
 
-### 7. Server/Client Boundary
+### 7. Client, Server, And Device Boundary
 
-For web apps, especially Next.js/React, check:
+Check the boundary between trusted backend logic and untrusted client or on-device code:
 
-- secrets and server-only logic are not imported into client components,
-- server actions/routes validate input server-side,
-- client UI checks are not treated as authorization,
-- public environment variables contain only public values,
-- sensitive code uses server-only modules or boundaries where applicable.
+- secrets, API keys, and service credentials are not embedded in client or on-device code,
+- server endpoints validate input server-side,
+- client/UI checks are not treated as authorization,
+- public configuration contains only public values,
+- sensitive operations run in the trusted boundary (backend service or secured native layer), not in client code.
 
 Pass signal:
 
-- client/server split is obvious,
-- sensitive operations happen server-side.
+- the client/server or client/device split is obvious,
+- sensitive operations and credentials stay in the trusted boundary.
 
 ### 8. File Uploads And Media
 
@@ -146,7 +146,7 @@ Pass signal:
 
 ### 9. Auditability And Abuse Controls
 
-When the feature changes enrollment, access, certificate, admin, teacher review, or service APIs, check:
+When the feature changes access, sharing, admin, review, or service APIs, check:
 
 - important state changes are auditable,
 - destructive/revocation actions are explicit,
@@ -163,28 +163,28 @@ Pass signal:
 Use the validator's required finding format. Security findings should add:
 
 - Attack path: how an attacker or unauthorized actor reaches the issue.
-- Affected asset: learner data, certificate validity, service credential, admin capability, etc.
+- Affected asset: user data, private records, service credential, admin capability, etc.
 - Closest missing or weak control: auth check, validation, allowlist, server/client boundary, escaping, parameterization, etc.
 
 Example:
 
 ```md
-### Finding: Enrollment API accepts unauthenticated writes
+### Finding: Sync API accepts unauthenticated writes
 
 - Severity: High
-- Evidence: `src/app/api/enroll/route.ts` creates enrollments without checking the service API key described in the spec.
-- Attack path: Anyone who can reach the route can create learner enrollments.
-- Affected asset: Academy access and learner records.
-- Closest missing control: Server-side service API key verification before side effects.
-- Why it matters: Unauthorized enrollments grant private course access.
-- Required change: Reject requests without the configured service API key before parsing or writing enrollment data.
+- Evidence: `sync/api/notes` creates records without checking the service API key described in the spec.
+- Attack path: Anyone who can reach the endpoint can create records.
+- Affected asset: User records and private notes.
+- Closest missing control: Service API key verification before side effects.
+- Why it matters: Unauthorized writes corrupt or expose private user data.
+- Required change: Reject requests without the configured service API key before parsing or writing data.
 - Suggested implementation:
-  1. Add a server-side service API key guard for this route.
+  1. Add a service API key guard for this endpoint.
   2. Return 401/403 before any database write when the key is absent or invalid.
   3. Add tests for missing, invalid, and valid keys.
 - Verification after fix:
-  - `pnpm test`
-  - API call without key returns 401/403 and creates no enrollment.
+  - the repo's test command
+  - API call without key returns 401/403 and creates no record.
   - API call with valid key succeeds.
 ```
 

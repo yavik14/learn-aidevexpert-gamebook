@@ -36,16 +36,14 @@ Default behavior:
 
 - execute the standard checks that can run without external long-lived services,
 - fail fast on errors via `set -euo pipefail`,
-- avoid starting blocking commands such as `pnpm dev`,
+- avoid starting blocking commands such as a dev server or simulator session,
 - optionally print manual follow-up commands after checks pass.
 
-For a Next.js baseline, a good default is:
+For a bootstrapped Kotlin Multiplatform/Android project, a good default is:
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+./gradlew :composeApp:assembleDebug
+./gradlew :composeApp:testDebugUnitTest
 ```
 
 Only allow an informational-only `init.sh` during an explicitly pre-bootstrap phase.

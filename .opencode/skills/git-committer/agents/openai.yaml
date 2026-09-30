@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Committer"
+  short_description: "Create commits following Conventional Commits."
+  default_prompt: "Use $git-committer to commit the current changes."

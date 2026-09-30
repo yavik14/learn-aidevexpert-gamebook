@@ -14,6 +14,21 @@ Leer docs opcionales solo cuando apliquen:
 - `docs/technical-discovery.md` — al tocar stack, storage, integraciones (STT, cámara), IA o despliegue.
 - `docs/adr/*.md` — cuando una decisión pueda contradecir decisiones ya aceptadas.
 
+## Skills del proyecto y flujo de trabajo
+
+Las skills viven en `.opencode/skills/` y se ejecutan con el tool `skill` (o los comandos `/` definidos en `.opencode/command/`):
+
+- `build-brief` — descubrimiento guiado antes de implementar.
+- `harness-starter` — crea el harness mínimo (`AGENTS.md`, `init.sh`, `PROGRESS.md`, `feature_list.json`).
+- `feature-spec` — planifica una feature en `docs/specs/<feature-id>.md`.
+- `feature-implementer` — implementa una feature planificada y autorregistra evidencia.
+- `feature-validator` — validación independiente; devuelve `accept`/`revise`/`block`.
+- `feature-flow` — orquesta `planner` → `implementer` → `validator` con los subagentes.
+- `git-committer` — crea commits siguiendo Conventional Commits.
+- `skill-creator` — crea o mejora las propias skills de opencode.
+
+Los subagentes `planner`, `implementer` y `validator` (en `.opencode/agent/`) envuelven las skills de rol. Flujo estándar por feature: spec → implementación → validación independiente → estado `accepted` y commit.
+
 ## Flujo de arranque
 
 Antes de escribir código:

@@ -59,14 +59,14 @@ Investigate how to implement the selected feature in this specific repo:
 - relevant API boundaries,
 - relevant auth/permission patterns,
 - verification commands available today,
-- persistent E2E commands available today, such as `pnpm test:e2e`, when the feature has user-facing or API-flow behavior,
+- persistent end-to-end (E2E) test commands available today, when the feature has user-facing or API-flow behavior,
 - gaps caused by pre-bootstrap or missing infrastructure.
 
 Record inspected files in the spec. Do not pretend to have inspected files that do not exist.
 
 ### 3. Write The Feature Implementation Spec
 
-Create or update `../../../docs/specs/<feature-id>.md` using `references/spec-template.md`. For a sense of the right level of detail, look at an existing accepted spec such as `../../../docs/specs/bootstrap-nextjs-shell.md`.
+Create or update `../../../docs/specs/<feature-id>.md` using `references/spec-template.md`. For a sense of the right level of detail, look at an existing accepted spec under `../../../docs/specs/` if one exists.
 
 The spec must include:
 
