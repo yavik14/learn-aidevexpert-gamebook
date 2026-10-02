@@ -77,7 +77,7 @@ $ARGUMENTS
 
 ### Subagent wrapper
 
-To run a skill as an isolated role, add an agent at `.opencode/agent/<name>.md`:
+To run a skill as an isolated role, add an agent at `.opencode/agents/<name>.md`:
 
 ```markdown
 ---

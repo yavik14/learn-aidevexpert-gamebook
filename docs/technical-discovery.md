@@ -52,3 +52,22 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
   fallos y se reintenta.
 - **Costo de KMP × 2 plataformas:** Android + iOS duplica el trabajo nativo
   (permisos, STT, cámara) y requiere entorno macOS/Xcode.
+
+## Bootstrap Decisions (kmp-project-bootstrap)
+
+Implementado 2026-10-01. Estructura y versiones fijadas:
+
+- **Estructura:** `:core` (KMP library, sin UI) + `:composeApp` (Compose MP UI +
+  app Android + framework iOS `ComposeApp`) + `iosApp` (host Xcode SwiftUI).
+  Detalle y dirección de dependencias en `ARCHITECTURE.md`.
+- **Identidad de paquete:** base `com.playbook`; `applicationId` Android y bundle
+  id iOS `com.playbook.app`; framework iOS `ComposeApp`.
+- **Versiones (combinación compatible, centralizada en
+  `gradle/libs.versions.toml`):** Gradle wrapper 8.14.5, Kotlin 2.1.21, Compose
+  Multiplatform 1.8.2, AGP 8.10.1, compileSdk 36, minSdk 24, targetSdk 36, JVM
+  target 11.
+- **Motor de UI Android:** Jetpack Compose (via Compose Multiplatform) con
+  `activity-compose` 1.10.1; sin Views/XML de UI (solo `themes.xml` mínimo).
+- **iOS:** framework estático `ComposeApp` enlazado por el host Xcode; el script
+  phase `Compile Kotlin Framework` invoca
+  `:composeApp:embedAndSignAppleFrameworkForXcode`.
