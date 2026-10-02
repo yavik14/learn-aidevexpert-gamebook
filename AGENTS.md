@@ -1,93 +1,80 @@
 # Instrucciones para agentes
 
-Este repositorio contiene **Playbook**, una app móvil de notas de diseño de juegos
-(Kotlin Multiplatform + Compose Multiplatform) que construye un GDD vivo a partir
-de capturas de texto, voz e imagen.
+**Playbook** es una app móvil de notas de diseño de juegos (Kotlin Multiplatform +
+Compose Multiplatform, Android + iOS en paralelo) que construye un GDD vivo a
+partir de capturas de texto, voz e imagen.
+
+## Estado actual: bootstrapped
+El repo ya tiene toolchain y app mínima: wrapper de Gradle, version catalog,
+módulo `:core` (KMP library compartida), módulo `:composeApp` (UI Compose
+Multiplatform + app Android + framework iOS) y host `iosApp` (Xcode). `./init.sh`
+corre el gate real no bloqueante: Android `assembleDebug`, tests del core y link
+del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
+`docs/technical-discovery.md`. Próxima feature en cola:
+`local-persistence-sqldelight`.
 
 ## Leer primero
-- `CONTEXT.md` — lenguaje de dominio (glosario).
-- `docs/build-brief.md` — problema, objetivos y slice del MVP.
-- `docs/domain-model.md` — entidades, relaciones, estados y escenarios.
-- `docs/risks-and-open-questions.md` — riesgos y preguntas abiertas.
+1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
+2. `feature_list.json` — estado de las features y dependencias.
+3. `docs/specs/<feature-id>.md` — contrato de la feature a trabajar.
 
-Leer docs opcionales solo cuando apliquen:
-- `docs/technical-discovery.md` — al tocar stack, storage, integraciones (STT, cámara), IA o despliegue.
-- `docs/adr/*.md` — cuando una decisión pueda contradecir decisiones ya aceptadas.
+Contexto de producto y dominio: `CONTEXT.md` (glosario), `docs/build-brief.md`,
+`docs/domain-model.md`, `docs/risks-and-open-questions.md`. Al tocar
+stack/IA/storage/integraciones: `docs/technical-discovery.md` y `docs/adr/*.md`
+(cuando existan).
 
-## Skills del proyecto y flujo de trabajo
+Los documentos del repo se escriben en **español**, con términos técnicos en
+inglés.
 
-Las skills viven en `.opencode/skills/` y se ejecutan con el tool `skill` (o los comandos `/` definidos en `.opencode/command/`):
+## Flujo por feature (SDD)
+Toda feature se planifica antes de implementarse; hay tres roles separados:
+**planner → implementer → validator**. No se implementa una feature sin spec.
 
-- `build-brief` — descubrimiento guiado antes de implementar.
-- `harness-starter` — crea el harness mínimo (`AGENTS.md`, `init.sh`, `PROGRESS.md`, `feature_list.json`).
-- `feature-spec` — planifica una feature en `docs/specs/<feature-id>.md`.
-- `feature-implementer` — implementa una feature planificada y autorregistra evidencia.
-- `feature-validator` — validación independiente; devuelve `accept`/`revise`/`block`.
-- `feature-flow` — orquesta `planner` → `implementer` → `validator` con los subagentes.
-- `git-committer` — crea commits siguiendo Conventional Commits.
-- `skill-creator` — crea o mejora las propias skills de opencode.
-- `skill-helper` — explica el funcionamiento de una skill indicada, con un ejemplo práctico.
+1. `$feature-spec` → crear `docs/specs/<feature-id>.md` (una feature por corrida).
+2. `$feature-implementer` → implementar la spec, correr la verificación y registrar evidencia.
+3. `$feature-validator` → validar contra la spec de forma independiente (`accept`/`revise`/`block`).
 
-Los subagentes `planner`, `implementer` y `validator` (en `.opencode/agent/`) envuelven las skills de rol. Flujo estándar por feature: spec → implementación → validación independiente → estado `accepted` y commit.
+`$feature-flow` orquesta los tres roles con los subagentes (`planner`,
+`implementer`, `validator` en `.opencode/agents/`). Las skills viven en
+`.opencode/skills/` y son la fuente de verdad de cada rol: no dupliques sus
+reglas.
 
-## Flujo de arranque
+Ciclo de estado en `feature_list.json`: `not_started → in_progress → passing →
+accepted` (o `blocked`). `passing` = implementada y auto-verificada; solo un
+validador independiente (`accept`) habilita `accepted`. Trabaja **una feature a
+la vez** (WIP=1).
 
-Antes de escribir código:
+Selección de la próxima feature: la primera en orden de `feature_list.json` que
+no esté `passing`/`accepted`, cuyos `depends_on` estén satisfechos (una
+dependencia se satisface cuando su estado es `accepted`) y que ya tenga spec.
 
+## Arranque de sesión
 1. Confirmar el directorio con `pwd`.
-2. Leer `PROGRESS.md` para ver el estado verificado y el siguiente paso.
-3. Leer `feature_list.json` y elegir la primera feature lista sin terminar en orden de lista.
-4. Leer la spec de esa feature en `docs/specs/<feature-id>.md` (ver SDD abajo).
-5. Ejecutar `./init.sh`.
-6. Si la verificación base falla, arreglar la base antes de añadir trabajo nuevo.
+2. Ejecutar `./init.sh`; si la verificación base falla, arreglarla antes de avanzar.
+3. Elegir la feature según la regla anterior y leer su spec.
 
-## Flujo Spec Driven Development (SDD)
-
-Toda feature se planifica antes de implementarse. La spec es el contrato entre tres roles separados: **planner → implementer → validator**. No se implementa una feature sin spec.
-
-1. **Planificar** con `$feature-spec`: crear `docs/specs/<feature-id>.md` (una feature por corrida). No escribe código de producto.
-2. **Implementar** con `$feature-implementer`: ejecutar la spec, correr la verificación y registrar evidencia.
-3. **Validar** con `$feature-validator`: validar contra la spec de forma independiente del implementador.
-
-Reglas del SDD:
-
-- La spec vive en `docs/specs/<feature-id>.md` e incluye: goal, non-goals, escenarios Given/When/Then, research, approach, cambios de archivos esperados, plan, tareas, verificación y checklist del validador.
-- Antes de tocar código, leer la spec de la feature y mantener los cambios dentro de su alcance.
-- Si la feature no tiene spec, primero planificarla; no implementar a ciegas.
-- Si una feature es demasiado amplia para una spec clara (más de un modelo de datos + un flujo, o >250 líneas), dividirla en `feature_list.json` antes de seguir.
-- El ciclo de estado en `feature_list.json` acompaña al SDD: `not_started` → `in_progress` → `passing` (implementada y verificada). La aceptación del validador se registra como evidencia.
+Mantener los cambios dentro del alcance de la feature elegida salvo que un
+bloqueo requiera un arreglo de soporte acotado.
 
 ## Reglas de trabajo
-
-- Trabajar en una feature a la vez.
-- No marcar una feature como completa solo porque se añadió código.
-- Mantener los cambios dentro del alcance de la feature elegida salvo que un bloqueo requiera un arreglo de soporte acotado.
-- No cambiar en silencio las reglas de verificación durante la implementación.
-- Actualizar los artefactos durables del repo en lugar de depender de resúmenes de chat.
-- Trabajar en una rama nueva siguiendo gitflow estándar (`feature/*` desde `develop`).
-
-## Artefactos requeridos
-
-- `feature_list.json`: fuente de verdad del estado de features.
-- `PROGRESS.md`: estado verificado actual y log ligero de sesión.
-- `init.sh`: ruta estándar de arranque y verificación.
+- Rama nueva con gitflow: `feature/*` desde `develop` (`main` es release).
+- No marcar una feature completa solo porque se añadió código.
+- No cambiar en silencio las reglas de verificación ni el alcance de la spec.
+- Actualizar los artefactos durables (`PROGRESS.md`, `feature_list.json`, docs)
+  en lugar de depender de resúmenes del chat.
+- Nunca commitear secrets, API keys ni keystores.
+- `init.sh` debe seguir siendo un gate no bloqueante: ejecuta checks del estado
+  actual y **no** levanta procesos de larga duración (sin dev servers).
 
 ## Definición de hecho
-
-Una feature está hecha solo cuando se cumple todo:
-
-- existe una spec en `docs/specs/<feature-id>.md` y la implementación se mantiene dentro de su alcance,
-- el comportamiento objetivo está implementado,
-- la verificación requerida se ejecutó de verdad,
-- la evidencia quedó registrada en `feature_list.json` o `PROGRESS.md`,
-- el repositorio sigue arrancable desde la ruta estándar,
-- los docs relevantes se actualizaron si cambió el comportamiento de producto, las reglas de dominio, la API o la verificación.
+Una feature está hecha solo si: existe spec y la implementación se ciñe a ella;
+el comportamiento objetivo está implementado; la verificación requerida se
+ejecutó de verdad; la evidencia quedó en `feature_list.json`/`PROGRESS.md`; el
+repo sigue arrancable con `./init.sh`; y los docs relevantes se actualizaron si
+cambió el comportamiento de producto, las reglas de dominio, la API o la
+verificación.
 
 ## Fin de sesión
-
-Antes de terminar una sesión:
-
-1. Actualizar `PROGRESS.md`.
-2. Actualizar `feature_list.json`.
-3. Registrar riesgos o bloqueos no resueltos.
-4. Dejar el repo limpio para que la próxima sesión pueda correr `./init.sh` de inmediato.
+Actualizar `PROGRESS.md` y `feature_list.json`, registrar riesgos o bloqueos no
+resueltos y dejar el repo limpio para que la próxima sesión pueda correr
+`./init.sh` de inmediato.
