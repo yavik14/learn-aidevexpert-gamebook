@@ -5,11 +5,24 @@
     "title": "Bootstrap del proyecto KMP con Compose Multiplatform",
     "user_visible_behavior": "La app arranca en Android y iOS mostrando una pantalla placeholder, con un módulo core compartido y UI en Compose Multiplatform.",
     "depends_on": [],
-    "status": "not_started",
+    "status": "passing",
     "verification": [
-      "Provisional hasta bootstrap: `./gradlew :composeApp:assembleDebug` compila; el target iOS compila; la app lanza en emulador Android y simulador iOS mostrando la pantalla placeholder."
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL; APK debug generado.",
+      "`./gradlew :core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` → 1 test OK, 0 failures.",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; `ComposeApp.framework` generado.",
+      "`xcodebuild` del scheme `iosApp` (iPhone 15 / iOS 17.2) → BUILD SUCCEEDED; app instalada y lanzada en simulador iOS.",
+      "App lanzada en emulador Android (Pixel_3A_API_34) y simulador iOS (iPhone 15, iOS 17.2) mostrando la pantalla placeholder; capturas tomadas.",
+      "`./init.sh` → exit 0 sin dev servers; con toolchain ausente → exit 1 con mensaje accionable."
     ],
-    "evidence": [],
+    "evidence": [
+      "2026-10-01: `./gradlew :composeApp:assembleDebug :core:testDebugUnitTest` → BUILD SUCCESSFUL in 41s; APK en composeApp/build/outputs/apk/debug/composeApp-debug.apk (10.0 MB).",
+      "2026-10-01: `:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` → GreetingTest 1/1 OK, 0 failures (core/build/test-results/).",
+      "2026-10-01: `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; ComposeApp.framework en composeApp/build/xcode-frameworks/Debug/iphonesimulator27.0/.",
+      "2026-10-01: xcodebuild scheme iosApp → BUILD SUCCEEDED; Playbook.app instalado y lanzado en iPhone 15 (iOS 17.2), proceso vivo sin crash reports.",
+      "2026-10-01: app Android lanzada en emulator-5554 (Pixel_3A_API_34); MainActivity en foco; screenshot capturado; sin excepciones en logcat.",
+      "2026-10-01: `./init.sh` → exit 0 (Android build + tests core + link framework iOS), sin procesos de larga duración; con JDK/Xcode ausentes → exit 1 y mensaje accionable.",
+      "Versiones: JDK 21.0.8, Gradle 8.14.5, Kotlin 2.1.21, Compose Multiplatform 1.8.2, AGP 8.10.1, Android SDK 36, Xcode 27.0 (build 27A266a)."
+    ],
     "notes": "Primer paso técnico. Requiere macOS + Xcode para iOS. Sin lógica de producto."
   },
   {
