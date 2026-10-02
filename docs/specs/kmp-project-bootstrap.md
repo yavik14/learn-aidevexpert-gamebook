@@ -87,9 +87,23 @@ aparenta éxito silencioso.
 - `docs/risks-and-open-questions.md` — Android+iOS en paralelo duplica trabajo y
   requiere macOS/Xcode.
 - `docs/domain-model.md` — no aplica (sin dominio todavía).
-- `docs/specs/` — no existía; se crea en esta corrida.
+- `docs/idea/concept-prompt.md` — decisiones abiertas de stack (plataformas, runtime IA).
+- `init.sh` — confirma que hoy solo imprime estado y termina en 0.
+- `docs/specs/kmp-project-bootstrap.md` — esta spec (revisada en esta corrida).
 - Raíz del repo — confirmado: **no hay** `settings.gradle(.kts)`, `build.gradle(.kts)`,
   wrapper, `gradle/libs.versions.toml`, módulos ni proyecto Xcode.
+
+### Environment (verificado 2026-10-01; re-verificar al implementar)
+
+- macOS host, por lo que el build de iOS es posible en esta máquina.
+- JDK: JBR/OpenJDK **21.0.8** (`java -version`). AGP 8.x exige JDK 17+; 21 sirve.
+- Android SDK: instalado en `~/Library/Android/sdk` (p. ej. `platforms/android-36`,
+  `build-tools/36.0.0`). **`ANDROID_HOME` no está seteado** y `adb`/`sdkmanager`
+  no están en `PATH`; el implementer debe fijar `sdk.dir` en `local.properties`
+  (no versionado) o exportar `ANDROID_HOME`.
+- AVDs disponibles: `Pixel_3A_API_34` (arm64-v8a), `Pixel_XL_API_31`, entre otros;
+  usar uno existente para el arranque Android.
+- Xcode **27.0** (build 27A266a) presente; simuladores iOS disponibles.
 
 ### Existing Patterns To Follow
 
@@ -102,8 +116,9 @@ aparenta éxito silencioso.
 - No existe toolchain Gradle ni wrapper.
 - No existen los módulos `:core` ni `:composeApp`.
 - No existe proyecto Xcode para iOS.
-- Se desconoce el JDK, Android SDK y Xcode disponibles en la máquina; hay que
-  verificarlos y fijarlos.
+- No hay identidad de paquete decidida: faltan el package Kotlin base, el
+  `applicationId` Android y el bundle id iOS.
+- No hay `local.properties` ni `ANDROID_HOME` configurado (ver Environment).
 
 ## Technical Approach
 
@@ -120,16 +135,25 @@ Bootstrapear con estructura estándar de **Compose Multiplatform**:
   `AndroidManifest.xml`, `iosMain` con `MainViewController`; framework estático
   `composeApp` para iOS.
 - **`iosApp`**: proyecto Xcode que embebe el framework y arranca la UI compartida.
-- **Versiones**: fijar en `libs.versions.toml` versiones compatibles entre sí
-  (Kotlin 2.x, Compose Multiplatform 1.7+/1.8, AGP 8.x, Gradle 8.x). No inventar
-  versiones: partir del template oficial de Compose Multiplatform y verificar
-  compatibilidad; registrar las elegidas en la spec/PR.
+- **Versiones**: centralizadas en `gradle/libs.versions.toml` (ver Open Decisions).
 - **`init.sh`**: actualizar a variante bootstrapeada: verificar JDK, correr
   compilación Android y compilación del target iOS; no iniciar dev servers;
   imprimir al final los comandos manuales (instalar/abrir en emulador/simulador).
 
 Riesgo de versión: el mayor riesgo es el desalineo Kotlin/Compose/AGP. Mitigación:
 usar versiones del template oficial y compilar temprano en Android antes de tocar iOS.
+
+### Open Decisions
+
+- **Identidad de paquete/ids (bloqueante menor):** el repo no define ninguna.
+  Default propuesto: package base `com.playbook.app`, `applicationId` Android
+  `com.playbook.app` y bundle id iOS `com.playbook.app`. El implementer debe fijar
+  la elección y registrarla; cambiarla luego de publicar IDs es costoso, así que
+  hacerlo ahora. Si el autor prefiere otro prefijo, ajustarlo antes de crear módulos.
+- **Versiones concretas:** no inventarlas; partir del template oficial de Compose
+  Multiplatform y fijar un conjunto compatible (Kotlin 2.x, Compose MP 1.7+/1.8,
+  AGP 8.x, Gradle 8.x), registrándolo en `libs.versions.toml` y en
+  `docs/technical-discovery.md`.
 
 ## Expected File Changes
 
@@ -191,6 +215,8 @@ al template oficial durante la implementación):
 ## Implementation Tasks
 
 - [ ] Verificar `java -version`, Android SDK y `xcodebuild -version`; registrar versiones.
+- [ ] Decidir y registrar package base, `applicationId` Android y bundle id iOS; crear
+      `local.properties` con `sdk.dir` (no versionado).
 - [ ] Crear wrapper y esqueleto Gradle con version catalog.
 - [ ] Crear módulo `:core` con targets `androidTarget`, `iosX64`, `iosArm64`, `iosSimulatorArm64`.
 - [ ] Agregar un test trivial en `core/src/commonTest` que corra en el gate.
