@@ -10,8 +10,8 @@ Aplicación de notas de diseño de juegos (nombre tentativo) que construye un
 GDD vivo a partir de capturas del usuario.
 
 ### Nota
-Unidad mínima de captura creada por el usuario. Tiene `owner`, cuerpo, categoría,
-etiquetas, tipo inferido y adjuntos. Es la entidad central del dominio.
+Unidad mínima de captura creada por el usuario. Tiene `owner`, cuerpo, `track`,
+`etiquetas`, `estado` y `adjuntos`. Es la entidad central del dominio.
 
 ### Captura
 Insumo con el que se crea una Nota: texto, voz (speech-to-text) o imagen
@@ -21,21 +21,17 @@ Insumo con el que se crea una Nota: texto, voz (speech-to-text) o imagen
 Archivo asociado a una Nota: audio original de la voz o imagen del boceto.
 Se distingue del texto derivado (transcripción / OCR).
 
-### Categoría
-Clasificación única y fija de una Nota. Valores: `mecánica`, `nivel`,
-`narrativa`, `arte`, `otro`.
+### Track
+Pilar de diseño al que pertenece una Nota. Clasificación única y fija elegida
+por el usuario. Valores: `mecánicas`, `personajes`, `historia`. Es la
+estructura principal del producto (reemplaza a la antigua `Categoría`).
 
 ### Etiqueta (Tag)
-Descriptor libre y múltiple de una Nota, sugerido por la IA y editable por el
+Descriptor libre y múltiple de una Nota, creado y editado manualmente por el
 usuario.
 
-### Tipo de nota
-Clasificación inferida por IA del rol de la Nota. Valores fijos: `idea`,
-`pregunta`, `referencia`, `decisión`, `tarea`. Corregible por el usuario.
-Es un concepto distinto de Categoría.
-
 ### GDD (Game Design Document)
-Vista agregada y navegable que agrupa y resume las Notas del usuario.
+Vista agregada y navegable que agrupa y resume las Notas del usuario por track.
 
 ### Enlace / Relación
 Conexión entre dos Notas por similitud semántica (embeddings).
@@ -44,9 +40,9 @@ Conexión entre dos Notas por similitud semántica (embeddings).
 Pregunta en lenguaje natural respondida a partir de las Notas propias del
 usuario y sus embeddings.
 
-### Enriquecimiento (IA)
-Proceso asíncrono que asigna Categoría, Etiquetas, Tipo de nota y Enlaces a una
-Nota.
+### Indexado (IA)
+Proceso asíncrono que genera el embedding de una Nota y, con él, sus Enlaces.
+No clasifica ni etiqueta: eso lo decide el usuario.
 
 ### Owner
 Identificador del dueño de una Nota. En el MVP es único (single-user), pero se
@@ -54,13 +50,19 @@ modela para no cerrar la puerta a multi-usuario.
 
 ## Rejected / Ambiguous Terms
 
-### Categoría vs Etiqueta
-No son sinónimos. Usar `Categoría` para el enum fijo y único, y `Etiqueta` para
-el vocabulario libre y múltiple.
+### Categoría / Tipo de nota
+Descartados del MVP. La Nota se clasifica con un único `Track` fijo
+(`mecánicas`/`personajes`/`historia`) elegido por el usuario; no hay `Categoría`
+ni `Tipo` inferidos por IA.
+
+### Track vs Etiqueta
+No son sinónimos. Usar `Track` para el enum fijo y único, y `Etiqueta` para el
+vocabulario libre y múltiple.
 
 ### Nivel
-Ambiguo. Usar "Nivel" solo como valor de `Categoría` (diseño de un nivel).
-Reservar `Level` (tilemap) para la Fase B (Level Design Lab).
+Ambiguo. No es un `Track`. Reservar `Level` (tilemap) para la Fase B (Level
+Design Lab); para una nota sobre el diseño de un nivel, usar el track
+`mecánicas` o `historia` según corresponda.
 
 ### Contenido
 Término vago. Usar `Nota` o `Adjunto` según corresponda.

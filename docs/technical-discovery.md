@@ -43,13 +43,13 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - Prueba manual end-to-end en Android y iOS.
 
 ## Observability
-- Mínimo: logging local de fallos de enriquecimiento e integraciones nativas.
+- Mínimo: logging local de fallos de indexado e integraciones nativas.
 - Sin telemetría remota en el MVP.
 
 ## Constraints
 - **API keys y costos:** a resolver si se elige cloud; nunca commitear keys.
-- **Offline:** la captura siempre debe funcionar; el enriquecimiento tolera
-  fallos y se reintenta.
+- **Offline:** la captura siempre debe funcionar; el indexado tolera fallos y se
+  reintenta.
 - **Costo de KMP × 2 plataformas:** Android + iOS duplica el trabajo nativo
   (permisos, STT, cámara) y requiere entorno macOS/Xcode.
 
