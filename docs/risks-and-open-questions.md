@@ -2,19 +2,21 @@
 
 ## Blocking Next Phase
 - **Runtime de IA (cloud / on-device / híbrido) y proveedor.** `AiClient` se
-  diseña ya, pero el flujo de IA no se puede validar sin elegir. Es el riesgo
-  principal del proyecto, hoy postergado a propósito.
+  diseña ya, pero el flujo de IA (embeddings + RAG) no se puede validar sin
+  elegir. Es el riesgo principal del proyecto, hoy postergado a propósito.
 - **¿Los Adjuntos sin texto entran al RAG?** Definir si un audio sin transcribir
-  o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de
-  enriquecimiento.
-- **Diseño visual (`DESIGN.md`).** Diferido; bloquea las features de UI.
+  o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
 
 ## Implementation-Time Questions
+- Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
+  de UI/UX; `DESIGN.md` tiene una dirección provisional.
 - Modelo de STT y cámara por plataforma, más manejo de permisos.
 - Modelo y dimensión del embedding concreto.
 - ¿Los enlaces son bidireccionales? ¿Cuándo se recalculan y con qué umbral?
-- Estrategia para no pisar correcciones manuales al re-enriquecer.
-- Orden final y granularidad de las features del MVP (fase harness).
+- Comportamiento al cambiar el `track` de una Nota ya indexada.
+- Orden final y granularidad de las features del MVP (fase harness). Requiere
+  **re-derivar `feature_list.json`** tras el cambio de alcance (se descartó el
+  enriquecimiento/clasificación IA y se introdujeron los tracks).
 
 ## Later / Not MVP
 - Multi-usuario, cuentas, sync y backend.
@@ -27,16 +29,22 @@
 - La captura nunca debe bloquearse por la IA.
 - SQLDelight + similitud en memoria alcanza sin una vector DB dedicada.
 - Los criterios de éxito son de aprendizaje, no de escala.
+- Sin clasificación IA, el usuario organiza cada Nota eligiendo un `track`; la
+  auto-organización no es un requisito del MVP.
 
 ## Risks
 - **Postergar el runtime de IA** mantiene abierto el riesgo principal; si se
-  deja para el final, el flujo de IA puede no llegar a validarse.
+  deja para el final, el flujo de IA (embeddings + RAG) puede no llegar a
+  validarse.
 - **Android + iOS en paralelo** duplica esfuerzo nativo y puede retrasar el
   primer flujo end-to-end.
 - **Alcance amplio del MVP** (texto + voz + imagen + GDD + RAG): sin respetar la
   secuencia, se corre el riesgo de terminar varias cosas a medias y ninguna
   end-to-end.
-- **Sin `DESIGN.md`**, drift visual en las features de UI.
+- **Sin clasificación IA**, notas mal clasificadas por el usuario ensucian el
+  GDD; el diseño de UI debe hacer fácil elegir y corregir el track.
+- **Sin tokens visuales definitivos**, drift visual en las features de UI
+  mientras el equipo de UI/UX no entregue la dirección.
 
 ## Research Tasks
 - Spike comparativo cloud vs on-device para clasificación y embeddings.

@@ -17,9 +17,11 @@ no hay búsqueda semántica sobre lo ya capturado.
 
 ## Goals
 - Capturar ideas rápido en texto, voz e imagen de bocetos.
-- Clasificar, etiquetar y tipificar notas automáticamente con IA.
+- Organizar cada Nota en uno de tres tracks de diseño: `mecánicas`, `personajes`,
+  `historia` (elección manual del usuario).
+- Etiquetar las notas manualmente con vocabulario libre.
 - Enlazar notas por similitud semántica.
-- Construir un GDD vivo y navegable.
+- Construir un GDD vivo y navegable agrupado por track.
 - Consultar en lenguaje natural sobre las notas propias (RAG).
 - Aprender: IA integrada en un flujo real, KMP compartido de verdad, al menos
   una integración nativa, y base escalable a la Fase B sin refactor mayor.
@@ -27,33 +29,36 @@ no hay búsqueda semántica sobre lo ya capturado.
 ## Non-Goals
 - Multi-usuario, cuentas, autenticación o colaboración (MVP single-user
   local-first).
+- Clasificación/tipificación automática por IA (categoría, tipo) — descartada
+  del MVP; el usuario elige el track y las etiquetas.
 - Editor de niveles 2D, generación automática de niveles, evaluación de
   dificultad y export a Godot/Unity/LÖVE (Fase B).
 - Desktop y Web en el MVP (se apunta a Android + iOS en paralelo).
 - Runtime de IA on-device como requisito del MVP (decisión abierta detrás de
   `AiClient`).
-- Dirección de diseño visual formal (`DESIGN.md`) — diferida explícitamente.
 
 ## MVP Slice
 Alcance completo del concepto, pero construido como **secuencia explícita de
 features** (no todo en paralelo). Orden preliminar:
 
-1. Modelo de `Nota` + persistencia local (SQLDelight) + CRUD de notas de texto.
+1. Modelo de `Nota` (con `Track`) + persistencia local (SQLDelight) + CRUD de
+   notas de texto eligiendo track.
 2. Captura por voz (speech-to-text nativo) → `Nota` con transcripción.
 3. Captura por imagen de boceto (cámara) → `Nota` con `Adjunto`.
-4. Enriquecimiento IA (categoría, etiquetas, tipo) detrás de `AiClient`, con
-   estados `capturada → pendiente/enriquecida/fallida` y reintento.
+4. Generación de embeddings por Nota detrás de `AiClient`, con estados
+   `capturada → indexada/pendiente/fallida` y reintento. (Reemplaza al
+   enriquecimiento/clasificación IA, descartado del MVP.)
 5. Enlazado por similitud (embeddings como BLOB + similitud coseno en memoria).
-6. Vista de GDD que agrupa y resume las notas.
+6. Vista de GDD que agrupa y resume las notas por track.
 7. Consulta en lenguaje natural (RAG) sobre las notas propias.
 
 El detalle granular de features y su criterio de done se deriva en la fase
 harness, no en este brief.
 
 ## Validation Plan
-- Flujo end-to-end: crear nota (texto/voz/imagen) → enriquecida por IA →
-  enlazada y agrupada en el GDD → consulta en lenguaje natural respondida con
-  notas reales.
+- Flujo end-to-end: crear nota (texto/voz/imagen) eligiendo track → indexada
+  (embedding) → enlazada y agrupada en el GDD → consulta en lenguaje natural
+  respondida con notas reales.
 - Tests del core KMP con un `AiClient` fake (deterministas, sin red).
 - Prueba manual en Android y iOS.
 
@@ -68,3 +73,7 @@ harness, no en este brief.
 - Idioma de los documentos: español, con términos técnicos en inglés.
 - `Owner` se modela aunque el MVP sea single-user.
 - El foco es aprender; el alcance puede recortarse si amenaza el aprendizaje.
+- 2026-10-05: alcance revisado. Se introducen los **tracks** (`mecánicas`,
+  `personajes`, `historia`) como estructura del producto y se descarta la
+  clasificación automática por IA; se mantienen embeddings, enlaces y RAG.
+  `feature_list.json` debe re-derivarse antes de la próxima implementación.
