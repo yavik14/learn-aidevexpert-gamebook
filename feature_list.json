@@ -174,12 +174,29 @@
     "depends_on": [
       "note-model-crud-core"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: test que usa un AiClient fake; el runtime real se puede cambiar sin tocar el core."
+      "`./gradlew :core:testDebugUnitTest` → AiClientAndroidTest 3/3 (fakeSatisfiesContract, constantSatisfiesContract, fakeBehaviourIsDeterministic) + NotePersistenceAndroidTest 2/2 + NoteRepositoryAndroidTest 1/1 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test` → AiClientIosTest 3/3 + NotePersistenceIosTest 2/2 + NoteRepositoryIosTest 1/1 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (el `:core` con coroutines compila en Android).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (el `:core` con coroutines compila/enlaza en iOS).",
+      "Esquema v1 confirmado (`Schema.version = 1`), sin `.sqm`; sin cambios en `:composeApp`, `iosApp`, `init.sh` ni `Note.sq`.",
+      "`./init.sh` → exit 0; gate no bloqueante sin dev servers ni simuladores, sin cambios.",
+      "Control negativo de sustitución: el contrato `verifyAiClientContract` pasa con `FakeAiClient` y con `ConstantAiClient` (implementación test-only en `commonTest`) sin modificar ningún archivo de producción de `:core`.",
+      "E2E persistente: no aplica (no hay consumidor ni flujo de usuario/API observable de IA, y no existe harness E2E); la cobertura es de tests del core en dos plataformas más la compilación de la app."
     ],
-    "evidence": [],
-    "notes": "Requisito explícito del concept-prompt. Ver docs/technical-discovery.md."
+    "evidence": [
+      "2026-10-08: `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL (20 tasks executed); Android/JVM: AiClientAndroidTest 3/3, NotePersistenceAndroidTest 2/2, NoteRepositoryAndroidTest 1/1, GreetingTest 1/1; iOS: AiClientIosTest 3/3, NotePersistenceIosTest 2/2, NoteRepositoryIosTest 1/1, GreetingTest 1/1; 0 failures en ambos (core/build/test-results/).",
+      "2026-10-08: `verifyAiClientContract(client)` cubre `embed(emptyList()) == emptyList()`, un embedding por texto (mismo tamaño de salida), dimensión consistente y > 0, determinismo de `embed` y `generate`, y respuesta de `generate` no vacía. Corre contra `FakeAiClient` y `ConstantAiClient` (test-only) en Android/JVM e iOS.",
+      "2026-10-08: `verifyFakeAiClient()` cubre `FakeAiClient.DEFAULT_DIMENSION = 8`, determinismo, textos distintos → vectores distintos, dimensión configurable (3) y `require(dimension > 0)` (0 → IllegalArgumentException).",
+      "2026-10-08: control negativo propio: forzar temporalmente `FakeAiClient.embed` a devolver `Embedding(emptyList())` hace fallar `fakeSatisfiesContract` (dimensión 0) y `fakeBehaviourIsDeterministic` (`:core:testDebugUnitTest --tests com.playbook.core.ai.AiClientAndroidTest` → 2 failed); restaurado a la implementación determinista y re-ejecutado en verde 3/3.",
+      "2026-10-08: `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (57 tasks); el core con `kotlinx-coroutines` compila en Android y enlaza en iOS.",
+      "2026-10-08: `kotlinx-coroutines` resuelto en **1.10.1** (`androidDebugCompileClasspath` → `org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1` y `-jvm:1.10.1`), compatible con Kotlin 2.1.21; sin conflictos de versión en el build.",
+      "2026-10-08: `PlaybookDatabaseImpl.Schema.version = 1`; `find core/src -name '*.sqm'` sin resultados; `git status` sólo muestra los archivos de la feature (`core/build.gradle.kts`, `gradle/libs.versions.toml`, `core/src/**/ai/**`, docs, `feature_list.json`, `PROGRESS.md`); sin cambios en `:composeApp`/`iosApp`/`init.sh`/`Note.sq`.",
+      "2026-10-08: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración.",
+      "2026-10-08: validación independiente (accept). `./init.sh` exit 0 con el gate real y `init.sh` sin cambios; `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` BUILD SUCCESSFUL con AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 en cada plataforma, 0 failures (conteos leídos de core/build/test-results/*/TEST-*.xml); `:composeApp:assembleDebug` + link framework iOS con `--rerun-tasks` BUILD SUCCESSFUL (57 tasks); `kotlinx-coroutines-core/-core-jvm:1.10.1` resuelto en `androidDebugCompileClasspath`; `Schema.version = 1` y sin `.sqm`; sin cambios en `:composeApp`/`iosApp`/`init.sh`/`Note.sq` ni hallazgos de seguridad. Control negativo propio del validador (cambiar `ConstantAiClient.embed` a `emptyList()`) hace fallar `constantSatisfiesContract` mientras los tests de `FakeAiClient` siguen en verde; restaurado y re-ejecutado. Hallazgos Low no bloqueantes: el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales)."
+    ],
+    "notes": "Puerto `AiClient` (`com.playbook.core.ai`) + `FakeAiClient` determinista y sin red en `commonMain`; tests de contrato compartidos en `commonTest` corridos en Android/JVM e iOS contra 2 implementaciones. `kotlinx-coroutines` 1.10.1 (`-core` en commonMain, `-test` en commonTest). Sin wiring a la app (no hay consumidor de IA todavía; lo cableará `embeddings-generation`); sin cambio de esquema (v1, sin `.sqm`). Runtime real/dimensión quedan para `ai-runtime-decision`. Ver docs/technical-discovery.md y ARCHITECTURE.md."
   },
   {
     "id": "ai-runtime-decision",

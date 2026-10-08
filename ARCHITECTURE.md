@@ -2,9 +2,10 @@
 
 Mapa de la base KMP. `local-persistence-sqldelight` agregó la capa de
 persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
-`Note` y su CRUD, `notes-list-ui` la primera pantalla real (lista de notas) y
-`create-text-note` el CRUD de notas de texto desde la UI (crear/editar/borrar +
-refresco).
+`Note` y su CRUD, `notes-list-ui` la primera pantalla real (lista de notas) con
+el repositorio cableado a la app, `create-text-note` el CRUD de notas de texto
+desde la UI (crear/editar/borrar + refresco), y `ai-client-interface` el puerto
+`AiClient` hacia el runtime de IA más un adaptador fake por defecto.
 
 ## Modules
 
@@ -86,6 +87,33 @@ composeApp (Android app / commonMain) ──▶ core
 - El repositorio se instancia en los entry points de plataforma y se pasa a la
   UI; no hay DI.
 
+## AI
+
+- **Puerto** (`com.playbook.core.ai`): `AiClient` con
+  `suspend fun embed(texts: List<String>): List<Embedding>` y
+  `suspend fun generate(request: GenerateRequest): String`. Tipos: `Embedding`
+  (`values: List<Float>`), `GenerateRequest` (`prompt`, `context` default
+  `emptyList()`) y `AiClientException` para fallos del runtime (red, cuota,
+  modelo). `suspend` porque las llamadas de IA son asíncronas y cancelables.
+- **Dirección de dependencia (regla durable):** la lógica de dominio consume
+  **sólo el puerto** `AiClient`; los adaptadores concretos se inyectan desde
+  afuera. `:core` expone el puerto y un adaptador fake por defecto; los
+  adaptadores reales (cloud/on-device) vivirán fuera de `:core` y se inyectarán
+  sin tocar la lógica de dominio. Elegir el runtime es `ai-runtime-decision`.
+- **Fake por defecto** (`commonMain`): `FakeAiClient(dimension = 8)` es
+  determinista y sin red. Los vectores derivan de `String.hashCode()` (estable
+  entre plataformas): mismo texto → mismo vector; textos distintos → vectores
+  distintos salvo colisión de hash. `embed(emptyList()) == emptyList()`,
+  `require(dimension > 0)` y `generate` devuelve una respuesta no vacía. Al
+  vivir en `commonMain` (no en test) es inyectable desde el composition root.
+- **Sin wiring todavía:** no hay consumidor de IA (`embeddings-generation` será
+  el primero), por lo que `AiClient` **no** se cablea a `App` ni a los entry
+  points; sería una dependencia muerta. La inyección se materializa en los tests
+  del contrato (dos implementaciones por el mismo puerto).
+- **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato
+  `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
+  **1.10.1**, compatible con Kotlin 2.1.21.
+
 ## UI
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository)` es
@@ -162,7 +190,9 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Etiquetas, adjuntos, enlaces, embeddings e IA (features posteriores).
+- Etiquetas, adjuntos, enlaces y embeddings (features posteriores). El runtime
+  de IA concreto (`ai-runtime-decision`) y el wiring de `AiClient` a su primer
+  consumidor (`embeddings-generation`) también quedan pendientes.
 - Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
 - Manejo del back físico Android/iOS en el editor (hoy sólo "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

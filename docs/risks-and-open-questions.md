@@ -1,9 +1,11 @@
 # Risks and Open Questions
 
 ## Blocking Next Phase
-- **Runtime de IA (cloud / on-device / híbrido) y proveedor.** `AiClient` se
-  diseña ya, pero el flujo de IA (embeddings + RAG) no se puede validar sin
-  elegir. Es el riesgo principal del proyecto, hoy postergado a propósito.
+- **Runtime de IA (cloud / on-device / híbrido) y proveedor.** El puerto
+  `AiClient` ya existe en `:core` (feature `ai-client-interface`), pero sigue
+  **sin decidirse** el runtime/proveedor, así que el flujo de IA (embeddings +
+  RAG) no se puede validar. Es el riesgo principal del proyecto, hoy postergado
+  a propósito a `ai-runtime-decision`.
 - **¿Los Adjuntos sin texto entran al RAG?** Definir si un audio sin transcribir
   o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
 
