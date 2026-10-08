@@ -1,0 +1,30 @@
+-- Esquema inicial v1 de Playbook: tabla `note`.
+-- `track` es nullable para respetar el edge case "Nota sin track" (docs/domain-model.md).
+-- La generación de `id` y los defaults de `status` pertenecen a note-model-crud-core.
+CREATE TABLE note (
+  id TEXT NOT NULL PRIMARY KEY,
+  owner TEXT NOT NULL,
+  body TEXT NOT NULL,
+  track TEXT,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+insertNote:
+INSERT INTO note (id, owner, body, track, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- Orden determinista para la lista de notas: más reciente primero; `id` desempata
+-- de forma estable. Es un cambio de query, no de esquema (sigue v1, sin `.sqm`).
+selectAllNotes:
+SELECT * FROM note ORDER BY updated_at DESC, id DESC;
+
+selectNoteById:
+SELECT * FROM note WHERE id = ?;
+
+updateNote:
+UPDATE note SET body = ?, track = ?, status = ?, updated_at = ? WHERE id = ?;
+
+deleteNoteById:
+DELETE FROM note WHERE id = ?;

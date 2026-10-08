@@ -10,8 +10,9 @@ módulo `:core` (KMP library compartida), módulo `:composeApp` (UI Compose
 Multiplatform + app Android + framework iOS) y host `iosApp` (Xcode). `./init.sh`
 corre el gate real no bloqueante: Android `assembleDebug`, tests del core y link
 del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
-`docs/technical-discovery.md`. Próxima feature en cola:
-`local-persistence-sqldelight`.
+`docs/technical-discovery.md`. La primera UI real (lista de notas) llegó con
+`notes-list-ui`. Próxima feature en cola: `create-text-note` (depende de
+`notes-list-ui`, que debe quedar `accepted`; requiere spec).
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
