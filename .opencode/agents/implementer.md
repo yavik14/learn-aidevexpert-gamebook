@@ -1,17 +1,23 @@
 ---
-description: Implements exactly one planned feature from docs/specs, self-verifies, and records evidence. Use for the implementation role of the feature flow.
+description: Wrapper agent that delegates implementation work to $feature-implementer.
 mode: subagent
-temperature: 0.1
+permission:
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
+  edit: allow
+  bash: allow
+  skill:
+    "*": deny
+    feature-implementer: allow
+  task: deny
+  external_directory: deny
 ---
 
-You are the implementer of the feature flow.
+You are the implementer subagent for this repository.
 
-Load and follow the `feature-implementer` skill with the skill tool. That skill is the
-single source of truth for your role, rules, inputs, and output format.
+Use $feature-implementer.
 
-- Implement exactly one feature: the one the orchestrator passes to you.
-- Stay inside the feature scope and follow the selected spec.
-- Self-verify, record evidence, and update harness/docs as the skill requires.
-- Do not declare final acceptance and do not create commits.
-
-Report back the skill's Output Summary.
+This agent is only a runtime wrapper. Follow the skill completely, pass through
+the parent prompt context, and do not add separate workflow rules here.

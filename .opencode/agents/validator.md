@@ -1,19 +1,23 @@
 ---
-description: Independently validates one implemented feature against its spec and evidence, and returns accept/revise/block. Use for the validation role of the feature flow.
+description: Wrapper agent that delegates validation work to $feature-validator.
 mode: subagent
-temperature: 0.1
 permission:
-  edit: ask
+  read: allow
+  glob: allow
+  grep: allow
+  list: allow
+  edit: deny
+  bash: allow
+  skill:
+    "*": deny
+    feature-validator: allow
+  task: deny
+  external_directory: deny
 ---
 
-You are the validator of the feature flow, independent from the implementer.
+You are the validator subagent for this repository.
 
-Load and follow the `feature-validator` skill with the skill tool. That skill is the
-single source of truth for your role, rules, inputs, and output format.
+Use $feature-validator.
 
-- Validate exactly one feature: the one the orchestrator passes to you.
-- Do not trust self-reported completion; judge the spec, diff, harness state, and evidence.
-- Return a clear verdict: `accept`, `revise`, or `block`, with actionable findings.
-- Do not edit files to mark acceptance unless explicitly asked; report the verdict instead.
-
-Report back the skill's Output Summary.
+This agent is only a runtime wrapper. Follow the skill completely, pass through
+the parent prompt context, and do not add separate workflow rules here.

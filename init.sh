@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "Repository: $(pwd)"
-echo "Harness status: bootstrapped (Kotlin Multiplatform + Compose Multiplatform)"
+echo "Harness status: bootstrapped (Kotlin Multiplatform + Compose Multiplatform + SQLDelight)"
 echo ""
 
 # --- Requisitos del entorno -----------------------------------------------
@@ -46,12 +46,17 @@ echo ">> Compilando Android y corriendo tests del core..."
 if [ "$(uname -s)" = "Darwin" ]; then
   if [ "$(uname -m)" = "arm64" ]; then
     IOS_LINK_TASK=":composeApp:linkDebugFrameworkIosSimulatorArm64"
+    IOS_CORE_TEST_TASK=":core:iosSimulatorArm64Test"
   else
     IOS_LINK_TASK=":composeApp:linkDebugFrameworkIosX64"
+    IOS_CORE_TEST_TASK=":core:iosX64Test"
   fi
   echo ""
   echo ">> Compilando el framework iOS ($IOS_LINK_TASK)..."
   ./gradlew "$IOS_LINK_TASK" --console=plain
+  echo ""
+  echo ">> Corriendo tests del core en iOS ($IOS_CORE_TEST_TASK)..."
+  ./gradlew "$IOS_CORE_TEST_TASK" --console=plain
 fi
 
 # --- Comandos manuales (no se ejecutan aquí) ------------------------------

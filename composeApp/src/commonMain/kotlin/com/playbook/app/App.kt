@@ -1,30 +1,22 @@
 package com.playbook.app
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.playbook.core.Greeting
+import androidx.compose.runtime.remember
+import com.playbook.core.repository.NoteRepository
 
+/**
+ * Raíz de la UI compartida.
+ *
+ * La lectura de la lista es sincrónica y se hace una vez por composición con
+ * `remember`: el repositorio es síncrono y todavía no hay mutaciones. No se
+ * introduce DI/ViewModel/Flow. **No hay refresco tras mutaciones**: cuando
+ * llegue `create-text-note` habrá que re-leer o introducir estado observable.
+ */
 @Composable
-fun App() {
+fun App(noteRepository: NoteRepository) {
     MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(text = "Playbook", style = MaterialTheme.typography.headlineMedium)
-                Text(text = Greeting().greet(), style = MaterialTheme.typography.bodyLarge)
-            }
-        }
+        val notes = remember(noteRepository) { noteRepository.getAll() }
+        NotesListScreen(notes = notes)
     }
 }

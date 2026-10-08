@@ -71,3 +71,96 @@ Implementado 2026-10-01. Estructura y versiones fijadas:
 - **iOS:** framework estático `ComposeApp` enlazado por el host Xcode; el script
   phase `Compile Kotlin Framework` invoca
   `:composeApp:embedAndSignAppleFrameworkForXcode`.
+
+## Persistence Decisions (local-persistence-sqldelight)
+
+Implementado 2026-10-05. Detalles en `ARCHITECTURE.md`.
+
+- **SQLDelight 2.1.0** como única fuente de verdad local. Se eligió 2.1.0
+  (contemporánea de Kotlin 2.1.21) para no arrastrar KGP 2.2.x/2.3.x de
+  SQLDelight 2.2.1+ y pisar la Kotlin fijada del bootstrap.
+- **Codegen con AGP 8.10.1:** el riesgo de que los fuentes generados no se
+  compilaran con AGP 8.9–8.11 (corregido recién en 2.4.0) **no se materializó**:
+  `generateCommonMainPlaybookDatabaseInterface` + `:core:testDebugUnitTest`
+  compilaron sin mitigaciones extra.
+- **Esquema v1:** tabla `note` con `track` nullable (edge case "nota sin track")
+  y `schema.version = 1`; sin archivos de migración. Queries de plumbing:
+  `insertNote`, `selectAllNotes`, `selectNoteById`.
+- **Drivers:** `AndroidSqliteDriver` (`playbook.db` en el directorio de bases de
+  Android) y `NativeSqliteDriver` (iOS). En iOS el archivo queda en
+  `Library/Application Support/databases/playbook.db`.
+- **Native driver perezoso:** `NativeSqliteDriver` no abre la conexión (ni crea el
+  archivo/esquema) hasta el primer statement. `createDatabase(...)` en `:core`
+  ejecuta un `PRAGMA user_version` inocuo para forzar la apertura y aplicar el
+  esquema al arrancar. Como `PRAGMA user_version` retorna filas, debe ejecutarse
+  con `driver.executeQuery(...)`; usar `driver.execute(...)` lanza
+  `SQLiteException: Queries can be performed using SQLiteDatabase query or
+  rawQuery methods only` y rompía el arranque en Android e iOS (corregido
+  2026-10-05).
+- **Link de SQLite en iOS:** el host Xcode necesita enlazar `libsqlite3`
+  (`OTHER_LDFLAGS = -lsqlite3`); sin eso el link de la app falla con símbolos
+  `sqlite3_*` no encontrados.
+- **Tests:** helper compartido en `commonTest` que recibe un `SqlDriver`; se
+  corre en Android/JVM con `JdbcSqliteDriver.IN_MEMORY` y en iOS con
+  `inMemoryDriver`. Incluye `createDatabaseOpensConnection`, que ejercita el
+  helper real `createDatabase(...)` (path de arranque) y cubre la regresión del
+  `PRAGMA` de apertura. `init.sh` corre también `:core:iosSimulatorArm64Test` en
+  macOS.
+
+## Domain Decisions (note-model-crud-core)
+
+Implementado 2026-10-05. Detalles en `ARCHITECTURE.md`.
+
+- **Modelo:** `Note`/`NoteDraft` en `com.playbook.core.model` con `track`
+  nullable y `status` no nulo. `Track` (`MECHANICS`/`CHARACTERS`/`STORY`) y
+  `NoteStatus` (`CAPTURED`/`PENDING`/`INDEXED`/`FAILED`) guardan un `code`
+  canónico en español (el valor de dominio de `CONTEXT.md`); los identificadores
+  Kotlin quedan en inglés.
+- **Mapeo tolerante vs fail-fast:** `Track.fromCode(null | desconocido)` → `null`
+  (preserva el edge case "Nota sin `track`" ante datos migrados);
+  `NoteStatus.fromCode(desconocido)` lanza `IllegalArgumentException` porque la
+  columna es `NOT NULL` y sólo la escribe este código.
+- **Repositorio:** `NoteRepository` + `SqlDelightNoteRepository(database,
+  idFactory, clock)`. `create` genera `id`/timestamps; `update` re-sella
+  `updated_at` con `clock()` y preserva `owner`/`created_at`; `update`/`delete`
+  devuelven `rowsAffected > 0` (los mutators SQLDelight 2.x retornan
+  `QueryResult<Long>`, leído sincrónicamente con `.value`).
+- **IDs y tiempo por plataforma:** `expect/actual` `randomNoteId()` /
+  `currentTimeMillis()` en `commonMain`/`androidMain`/`iosMain`. Los tests
+  inyectan fakes deterministas; no se usa `expect/actual` en source sets de test.
+- **Queries nuevas sin migración:** `updateNote`/`deleteNoteById` en `Note.sq`;
+  `schema.version` sigue en 1, sin `.sqm`.
+- **Tests compartidos del CRUD:** `verifyNoteCrud(driver)` en `commonTest`
+  (create/read, avance de `updatedAt`, ids inexistentes, delete, round-trip de
+  todos los `Track`/`NoteStatus`, `track = null`, track desconocido y relectura
+  con una segunda instancia). Corre en `NoteRepositoryAndroidTest`
+  (`JdbcSqliteDriver.IN_MEMORY` + `Schema.create`) y `NoteRepositoryIosTest`
+  (`inMemoryDriver`).
+
+## UI Decisions (notes-list-ui)
+
+Implementado 2026-10-05. Detalles en `ARCHITECTURE.md`.
+
+- **Wiring sin DI:** `App(noteRepository: NoteRepository)` recibe la dependencia
+  como parámetro; no se introduce framework DI, `ViewModel`/`Lifecycle` ni
+  `Flow`. `MainActivity`/`MainViewController` construyen
+  `SqlDelightNoteRepository(database, ::randomNoteId, ::currentTimeMillis)` y lo
+  pasan a `App(...)`.
+- **Lectura estática:** la lista se lee una vez por composición con
+  `remember(noteRepository) { noteRepository.getAll() }`. Es aceptable para una
+  tabla local pequeña; no hay reactividad ni refresco tras mutaciones (llega con
+  `create-text-note`). No se expone el `PlaybookDatabase` a la UI.
+- **Orden determinista en SQL:** `selectAllNotes` pasa a
+  `ORDER BY updated_at DESC, id DESC`; el `id` desempata de forma estable. El
+  cambio es de query, no de esquema (`schema.version` sigue en 1, sin `.sqm`).
+  Se extiende `verifyNoteCrud` con la aserción de orden (incluye empates de
+  `updated_at` y compara con re-ordenar en Kotlin con el mismo criterio).
+- **UI sólo lectura:** `NotesListScreen` renderiza estado vacío ("Todavía no hay
+  notas", sin CTA) y estado con notas (título "Notas", `LazyColumn` de `Card`s).
+  Cada tarjeta muestra `body` a máx. 2 líneas con ellipsis y `track.code` (o "Sin
+  track") + `status.code` como **texto**, no sólo color (accesibilidad de
+  `DESIGN.md`). Se evitó `TopAppBar` experimental: un `Text` de encabezado basta.
+- **Sin deps ni migraciones:** `compose.foundation`/`compose.material3` ya
+  estaban; `init.sh` no cambió. El estado no vacío se sembró sólo para QA
+  (`sqlite3` sobre el `playbook.db` del emulador/simulador); no se commiteó
+  código de seed.

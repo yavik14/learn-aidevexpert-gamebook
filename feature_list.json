@@ -5,7 +5,7 @@
     "title": "Bootstrap del proyecto KMP con Compose Multiplatform",
     "user_visible_behavior": "La app arranca en Android y iOS mostrando una pantalla placeholder, con un módulo core compartido y UI en Compose Multiplatform.",
     "depends_on": [],
-    "status": "passing",
+    "status": "accepted",
     "verification": [
       "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL; APK debug generado.",
       "`./gradlew :core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` → 1 test OK, 0 failures.",
@@ -21,7 +21,8 @@
       "2026-10-01: xcodebuild scheme iosApp → BUILD SUCCEEDED; Playbook.app instalado y lanzado en iPhone 15 (iOS 17.2), proceso vivo sin crash reports.",
       "2026-10-01: app Android lanzada en emulator-5554 (Pixel_3A_API_34); MainActivity en foco; screenshot capturado; sin excepciones en logcat.",
       "2026-10-01: `./init.sh` → exit 0 (Android build + tests core + link framework iOS), sin procesos de larga duración; con JDK/Xcode ausentes → exit 1 y mensaje accionable.",
-      "Versiones: JDK 21.0.8, Gradle 8.14.5, Kotlin 2.1.21, Compose Multiplatform 1.8.2, AGP 8.10.1, Android SDK 36, Xcode 27.0 (build 27A266a)."
+      "Versiones: JDK 21.0.8, Gradle 8.14.5, Kotlin 2.1.21, Compose Multiplatform 1.8.2, AGP 8.10.1, Android SDK 36, Xcode 27.0 (build 27A266a).",
+      "2026-10-05: validación independiente (accept). `./init.sh` exit 0; build limpio `:composeApp:assembleDebug :core:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL; GreetingTest 1/1 en Android e iOS (`--rerun-tasks`); `xcodebuild` scheme iosApp BUILD SUCCEEDED; app instalada/lanzada en iPhone 15 (iOS 17.2) sin crashes; Scenario 4 (entorno incompleto) exit 1 con mensaje accionable."
     ],
     "notes": "Primer paso técnico. Requiere macOS + Xcode para iOS. Sin lógica de producto."
   },
@@ -33,27 +34,58 @@
     "depends_on": [
       "kmp-project-bootstrap"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: test del core KMP que abre la DB, escribe y lee un registro; driver por plataforma (Android/iOS) configurado."
+      "`./gradlew :core:testDebugUnitTest` → NotePersistenceAndroidTest 2/2 OK (JdbcSqliteDriver.IN_MEMORY; incluye regresión de `createDatabase`) + GreetingTest 1/1.",
+      "`./gradlew :core:iosSimulatorArm64Test` → NotePersistenceIosTest 2/2 OK (inMemoryDriver; incluye regresión de `createDatabase`) + GreetingTest 1/1.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (driver Android compila).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (driver iOS compila).",
+      "`xcodebuild` scheme iosApp (iPhone 15 / iOS 17.2) → BUILD SUCCEEDED; arranque real en simulador que crea `playbook.db` con la tabla `note` y `user_version=1`, sin crashes.",
+      "Arranque real en emulador Android (Pixel_3A_API_34): proceso vivo, sin `FATAL EXCEPTION`, y `databases/playbook.db` con la tabla `note` y `user_version=1`.",
+      "`./init.sh` → exit 0; incluye el test del core en iOS en macOS, sin dev servers ni simuladores."
     ],
-    "evidence": [],
-    "notes": "Esquema inicial: tabla de notas. Ver docs/technical-discovery.md."
+    "evidence": [
+      "2026-10-05: SQLDelight 2.1.0 (runtime, android-driver, native-driver, sqlite-driver) con AGP 8.10.1: codegen y `:core:testDebugUnitTest` compilaron sin mitigaciones (descartado el riesgo de fuentes generadas no compiladas).",
+      "2026-10-05: `:core:testDebugUnitTest` → NotePersistenceAndroidTest 2/2 (createDatabaseOpensConnection + writesAndReadsNote), 0 failures (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-05: `:core:iosSimulatorArm64Test` → NotePersistenceIosTest 2/2 (createDatabaseOpensConnection + writesAndReadsNote), 0 failures (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-05 (repair): la regresión `createDatabaseOpensConnection` reproduce el fallo del validador si se usa `execute(...)`: en iOS falla con `SQLiteException: Queries can be performed using SQLiteDatabase query or rawQuery methods only.`; con `executeQuery(...)` pasa en Android/JVM y en iOS. El test anterior no llamaba a `createDatabase(...)` y por eso no cubría el bug.",
+      "2026-10-05: `:composeApp:assembleDebug` + `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; `xcodebuild` scheme iosApp → BUILD SUCCEEDED.",
+      "2026-10-05 (repair, iOS real): app instalada y lanzada con `simctl launch` (PID vivo) y relanzada sin crash nuevo; `Library/Application Support/databases/playbook.db` con `CREATE TABLE note (...)` y `PRAGMA user_version=1`. Los crash reports `Playbook-*.ips` de 21:11–21:16 corresponden a la versión rota previa al fix; no hay ninguno posterior.",
+      "2026-10-05 (repair, Android real): emulador Pixel_3A_API_34 (emulator-5554), `pm clear com.playbook.app` + launch; PID vivo, sin `FATAL EXCEPTION`/`SQLiteException` en logcat; `databases/playbook.db` con tabla `note` y `user_version=1`.",
+      "2026-10-05: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración.",
+      "Hallazgos: `PRAGMA user_version` retorna filas, así que debe ejecutarse con `executeQuery(...)` (no `execute(...)`); `NativeSqliteDriver` abre la conexión de forma perezosa (createDatabase la fuerza); el host Xcode requiere `OTHER_LDFLAGS = -lsqlite3`.",
+      "2026-10-05: validación independiente (accept). Control negativo propio del validador (revertir `executeQuery`→`execute`) reproduce en iOS el `SQLiteException` exacto y luego se restaura; `./init.sh` exit 0; `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` 2/2 + 2/2 con 0 failures; `assembleDebug` + link framework iOS OK; iOS real (iPhone 15, iOS 17.2) PID vivo y `playbook.db` con `user_version=1` y tabla `note`, relanzado sin crashes nuevos; Android real (Pixel_3A_API_34) PID vivo, sin `FATAL EXCEPTION`/`SQLiteException`, `playbook.db` con tabla `note`."
+    ],
+    "notes": "Esquema v1 tabla `note` (track nullable). Sin modelo/CRUD/UI. Arranque real verificado en Android (emulador) e iOS (simulador) el 2026-10-05 tras corregir `createDatabase`. Ver docs/technical-discovery.md."
   },
   {
     "id": "note-model-crud-core",
     "area": "core",
     "title": "Modelo Nota y CRUD en el core KMP",
-    "user_visible_behavior": "El core KMP puede crear, leer, actualizar y borrar Notas con owner, cuerpo, categoría, etiquetas y estado.",
+    "user_visible_behavior": "El core KMP puede crear, leer, actualizar y borrar Notas con owner, cuerpo, track y estado.",
     "depends_on": [
       "local-persistence-sqldelight"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: tests unitarios del core que cubren el CRUD y la persistencia del modelo."
+      "`./gradlew :core:testDebugUnitTest` → NoteRepositoryAndroidTest 1/1 (crudRoundTrip) + NotePersistenceAndroidTest 2/2 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test` → NoteRepositoryIosTest 1/1 (crudRoundTrip) + NotePersistenceIosTest 2/2 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (el core compila en Android).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (el core compila en iOS).",
+      "Esquema v1 confirmado: `schema.version = 1` en `PlaybookDatabaseImpl`, sin archivos `.sqm`; sólo se agregaron queries `updateNote`/`deleteNoteById`.",
+      "`./init.sh` → exit 0; corre el gate no bloqueante (tests del core en Android/JVM e iOS), sin dev servers ni simuladores.",
+      "E2E persistente: no aplica (sin flujo de usuario/API observable; la UI de notas llega en `notes-list-ui`). La cobertura es de tests del core en dos plataformas más la compilación de la app."
     ],
-    "evidence": [],
-    "notes": "Modelo según docs/domain-model.md. Categoría y tipo como enums."
+    "evidence": [
+      "2026-10-05: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; NoteRepositoryAndroidTest 1/1 (`crudRoundTrip`), NotePersistenceAndroidTest 2/2, GreetingTest 1/1, 0 failures (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-05: `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; NoteRepositoryIosTest 1/1 (`crudRoundTrip[iosSimulatorArm64]`), NotePersistenceIosTest 2/2, GreetingTest 1/1, 0 failures (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-05: `verifyNoteCrud(driver)` cubre create/read (getById + getAll), update (avance de `updatedAt` al `clock()`, preserva `createdAt`, ignora el `updatedAt` del argumento, id inexistente → `false`), delete (+ id inexistente → `false`), round-trip de todos los `Track`/`NoteStatus`, `track = null`, track desconocido → `null`, `NoteStatus` desconocido → `IllegalArgumentException`, y relectura con una segunda instancia sobre el mismo driver.",
+      "2026-10-05: `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "2026-10-05: `PlaybookDatabaseImpl.Schema.version = 1`; `find core/src -name '*.sqm'` sin resultados; sólo `Note.sq` con las queries nuevas.",
+      "2026-10-05: `./init.sh` → exit 0; `assembleDebug` + `testDebugUnitTest` + link framework iOS + `iosSimulatorArm64Test`, sin procesos de larga duración.",
+      "2026-10-05: validación independiente (accept). `./init.sh` exit 0; `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` 1/2/1 + 1/2/1 con 0 failures; `assembleDebug` + link framework iOS con `--rerun-tasks` BUILD SUCCESSFUL; `Schema.version = 1` y sin `.sqm`; control negativo propio (romper `updated_at = clock()` en `update`) hace fallar `crudRoundTrip` y se restaura."
+    ],
+    "notes": "Modelo `Note`/`NoteDraft` + CRUD en `:core` según docs/domain-model.md; `Track` fijo (mecánicas/personajes/historia) y `NoteStatus` (capturada/pendiente/indexada/fallida). Sin UI ni wiring del repositorio en la app. Sin cambio de esquema (sigue v1, sin `.sqm`). Etiquetas/adjuntos/enlaces/embeddings/IA fuera de alcance."
   },
   {
     "id": "notes-list-ui",
@@ -63,12 +95,30 @@
     "depends_on": [
       "note-model-crud-core"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: la app muestra la lista de notas persistidas; caso vacío manejado."
+      "`./gradlew :core:testDebugUnitTest` → BUILD SUCCESSFUL; NoteRepositoryAndroidTest 1/1 (crudRoundTrip, incluye la aserción de orden `updated_at DESC, id DESC`) + NotePersistenceAndroidTest 2/2 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; NoteRepositoryIosTest 1/1 (crudRoundTrip) + NotePersistenceIosTest 2/2 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (UI + wiring Android).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (UI + wiring iOS); `xcodebuild` scheme iosApp → BUILD SUCCEEDED.",
+      "Esquema v1 confirmado (`schema.version = 1`), sin `.sqm`; `selectAllNotes` sólo agrega `ORDER BY`. Sin dependencias nuevas; `init.sh` sin cambios.",
+      "`./init.sh` → exit 0; gate no bloqueante sin dev servers ni simuladores.",
+      "Smoke manual Android (emulador Pixel_3A_API_34): instalación nueva → estado vacío; base sembrada → lista ordenada, body truncado a 2 líneas con ellipsis, `track`/`status` como texto y `Sin track` para track nulo.",
+      "Smoke manual iOS (simulador iPhone 15, iOS 17.2): idem estado vacío y sembrado, verificado por OCR sobre las capturas.",
+      "E2E persistente: no aplica (no hay harness de UI/E2E y `init.sh` no levanta simuladores). El path de datos ordenado está cubierto por tests del core en dos plataformas; la UI se verificó manualmente en Android e iOS."
     ],
-    "evidence": [],
-    "notes": "Primera UI real. Sin diseño formal todavía (DESIGN.md diferido)."
+    "evidence": [
+      "2026-10-05: `:core:testDebugUnitTest` → BUILD SUCCESSFUL; NoteRepositoryAndroidTest 1/1 (`crudRoundTrip` con aserción de orden), NotePersistenceAndroidTest 2/2, GreetingTest 1/1, 0 failures (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-05: `:core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; NoteRepositoryIosTest 1/1, NotePersistenceIosTest 2/2, GreetingTest 1/1, 0 failures (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-05: control negativo propio: cambiar `selectAllNotes` a `ORDER BY id` hace fallar `NoteRepositoryAndroidTest.crudRoundTrip` (AssertionError); restaurado a `ORDER BY updated_at DESC, id DESC`.",
+      "2026-10-05: `:composeApp:assembleDebug` + `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks); `xcodebuild` scheme iosApp (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.",
+      "2026-10-05 (smoke Android, Pixel_3A_API_34/emulator-5554): `pm clear` + launch → UI dump `Notas` / `Todavía no hay notas` / `Tus ideas capturadas van a aparecer acá.`; base sembrada con `sqlite3` → UI dump en orden `seed-1, seed-3, seed-2, seed-4` con chips `mecánicas/capturada`, `historia/indexada`, `personajes/pendiente`, `Sin track/fallida`; capturas `android-empty.png`/`android-seeded.png`.",
+      "2026-10-05 (smoke iOS, iPhone 15 iOS 17.2): instalación limpia → OCR de la captura: `Todavía no hay notas` + línea de apoyo; base sembrada vía `sqlite3` en `Library/Application Support/databases/playbook.db` → OCR: orden `seed-1, seed-3, seed-2, seed-4`, body largo truncado con `...`, chips `mecánicas/capturada`, `historia/indexada`, `personajes/pendiente`, `Sin track/fallida`; capturas `ios-empty.png`/`ios-seeded.png`.",
+      "2026-10-05: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración.",
+      "2026-10-05: `schema.version = 1`, sin `.sqm`; `git status` sólo muestra los archivos de la feature (sin `build.gradle.kts`/`libs.versions.toml`/`init.sh`/`iosApp`); no se commiteó código de seed.",
+      "2026-10-05: validación independiente (accept). `./init.sh` exit 0; `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test`/`assembleDebug`/link framework iOS con `--rerun-tasks` BUILD SUCCESSFUL (0 failures); `Schema.version = 1` sin `.sqm`; control negativo propio del validador (cambiar `ORDER BY updated_at DESC, id DESC` → `ORDER BY id`) hace fallar `crudRoundTrip` y se restaura; smoke iOS independiente (iPhone 15, iOS 17.2) reproduce estado vacío y lista ordenada `seed-1, seed-3, seed-2, seed-4` con chips de texto. Smoke Android no re-ejecutado por falta de emulador/adb en el entorno del validador."
+    ],
+    "notes": "Primera UI real, sólo lectura (estado vacío y lista con notas). `DESIGN.md` existe y es `provisional`: se sigue su dirección estructural y la regla de accesibilidad 'no sólo color'; sin tokens formales. Sin crear/editar/borrar, tags, adjuntos, IA ni GDD. Repositorio cableado a `App(noteRepository)` sin DI/ViewModel/Flow. Sin cambio de esquema (v1, sin `.sqm`)."
   },
   {
     "id": "create-text-note",
