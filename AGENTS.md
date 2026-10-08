@@ -11,8 +11,10 @@ Multiplatform + app Android + framework iOS) y host `iosApp` (Xcode). `./init.sh
 corre el gate real no bloqueante: Android `assembleDebug`, tests del core y link
 del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 `docs/technical-discovery.md`. La primera UI real (lista de notas) llegó con
-`notes-list-ui`. Próxima feature en cola: `create-text-note` (depende de
-`notes-list-ui`, que debe quedar `accepted`; requiere spec).
+`notes-list-ui` y el CRUD de texto desde la UI (crear/editar/borrar + refresco)
+con `create-text-note` (implementada y `accepted`).
+Próxima feature en cola: `note-category-and-tags` (depende de `create-text-note`,
+ya `accepted`; requiere spec).
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
