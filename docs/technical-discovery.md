@@ -11,8 +11,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - **Persistencia:** SQLDelight.
 - **Búsqueda semántica:** embeddings almacenados como BLOB + similitud coseno
   calculada en memoria.
-- **IA:** interfaz `AiClient` como abstracción. Runtime (cloud / on-device /
-  híbrido) todavía **sin decidir**.
+- **IA:** interfaz `AiClient` como abstracción (puerto ya implementado en
+  `:core`; ver "AI Decisions"). Runtime (cloud / on-device / híbrido) todavía
+  **sin decidir**.
 - **Integraciones nativas:** speech-to-text (voz) y cámara (foto de bocetos).
 
 ## Data and Storage
@@ -25,8 +26,8 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 ## Integrations
 - **Speech-to-text nativo:** Android `SpeechRecognizer` / iOS `Speech`.
 - **Cámara / galería:** captura de bocetos; el OCR (si existe) es texto derivado.
-- **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — pendiente de
-  elección (ver riesgos).
+- **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto ya
+  implementado; runtime pendiente de elección (ver riesgos).
 
 ## Authentication and Authorization
 - Ninguna en el MVP (single-user local-first).
@@ -200,3 +201,38 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
   (`idb`/`cliclick` ausentes; `osascript`/System Events bloqueado), así que el
   CRUD interactivo se ejercitó en Android sobre el mismo `commonMain` y en iOS se
   verificaron build, launch y render (OCR).
+
+## AI Decisions (ai-client-interface)
+
+Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
+
+- **Puerto `AiClient`** en `com.playbook.core.ai` con `suspend fun
+  embed(texts): List<Embedding>` y `suspend fun generate(request):
+  GenerateRequest → String`; tipos `Embedding`, `GenerateRequest` y
+  `AiClientException`. `suspend` porque las llamadas de IA son asíncronas y
+  cancelables; un contrato síncrono forzaría a bloquear a los runtimes de red.
+  Se definen ya embeddings **y** generación (el concept-prompt pide ambos detrás
+  de `AiClient`) para no reabrir el puerto al llegar el RAG; `generate` queda
+  como seam sin consumidor actual.
+- **Agnóstico de runtime/dimensión:** el puerto no fija el proveedor
+  (cloud/on-device/híbrido) ni la dimensión del embedding; los adaptadores los
+  deciden (`ai-runtime-decision`, `risks-and-open-questions.md`).
+- **`FakeAiClient` (commonMain, default):** determinista y sin red, con
+  `dimension` configurable (default 8) y `require(dimension > 0)`. Los vectores
+  derivan de `String.hashCode()` (estable entre plataformas) mediante un LCG de
+  32 bits: mismo texto → mismo vector, textos distintos → vectores distintos
+  salvo colisión de hash. `embed(emptyList()) == emptyList()` y `generate`
+  devuelve una respuesta no vacía. Vive en `commonMain` porque es el runtime por
+  defecto inyectable hasta que se decida el real; también lo usan los tests.
+- **Inyección / wiring:** no hay consumidor de IA todavía, así que **no** se
+  cablea `AiClient` a `App`/entry points (sería una dependencia muerta). La
+  inversión de dependencia se demuestra con tests de contrato que corren la misma
+  interfaz contra `FakeAiClient` y una segunda implementación test-only
+  (`ConstantAiClient`), sin tocar archivos de producción de `:core`.
+- **Dependencia `kotlinx-coroutines`:** `core` no tenía coroutines. Se agrega
+  **1.10.1** (compatible con Kotlin 2.1.21; resuelta en
+  `androidDebugCompileClasspath`): `kotlinx-coroutines-core` en `commonMain` y
+  `kotlinx-coroutines-test` en `commonTest` para `runTest`. `init.sh` no cambió.
+- **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
+  `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
+  en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
