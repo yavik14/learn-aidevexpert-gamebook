@@ -149,7 +149,8 @@ Implementado 2026-10-05. Detalles en `ARCHITECTURE.md`.
 - **Lectura estática:** la lista se lee una vez por composición con
   `remember(noteRepository) { noteRepository.getAll() }`. Es aceptable para una
   tabla local pequeña; no hay reactividad ni refresco tras mutaciones (llega con
-  `create-text-note`). No se expone el `PlaybookDatabase` a la UI.
+  `create-text-note`). No se expone el `PlaybookDatabase` a la UI. **(Superado por
+  `create-text-note`: la lectura pasó a `LaunchedEffect` + `refreshKey`.)**
 - **Orden determinista en SQL:** `selectAllNotes` pasa a
   `ORDER BY updated_at DESC, id DESC`; el `id` desempata de forma estable. El
   cambio es de query, no de esquema (`schema.version` sigue en 1, sin `.sqm`).
@@ -164,3 +165,38 @@ Implementado 2026-10-05. Detalles en `ARCHITECTURE.md`.
   estaban; `init.sh` no cambió. El estado no vacío se sembró sólo para QA
   (`sqlite3` sobre el `playbook.db` del emulador/simulador); no se commiteó
   código de seed.
+
+## UI Decisions (create-text-note)
+
+Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
+
+- **Estado de lista sin DI/ViewModel/Flow:** `App(noteRepository)` hoistea
+  `notes` con `mutableStateOf` y un `refreshKey`; la lectura vive en
+  `LaunchedEffect(refreshKey)` y **no** en el cuerpo de composición (resuelve la
+  deuda de `notes-list-ui`). `reload()` incrementa la clave tras cada mutación
+  (crear/editar/borrar) para releer y reflejar los cambios sin reiniciar.
+- **Navegación local:** `sealed interface NotesDestination`
+  (`List`/`Create`/`Edit(noteId)`) resuelve lista ↔ editor sin librería de
+  navegación ni `ViewModel`. Si el `noteId` de `Edit` ya no existe en `notes`, se
+  vuelve a `List`.
+- **Owner del MVP:** `LOCAL_OWNER_ID = "local"` como `private const val` en la UI;
+  `:core` no se toca. Si una feature futura necesita el owner fuera de
+  `:composeApp`, se puede promover a `:core` sin cambiar el contrato funcional.
+- **Sin cambio de esquema ni deps:** los mutators `create`/`update`/`delete` del
+  repositorio ya existían; `schema.version` sigue en 1, sin `.sqm`. `Scaffold`,
+  `ExtendedFloatingActionButton`, `OutlinedTextField`, `AlertDialog` y `Surface`
+  (chips de `track`) vienen de `compose.material3`/`compose.foundation`; no se
+  agregó `kotlinx-coroutines-core`.
+- **Validación y borrado:** `Guardar` se deshabilita con `body.isBlank()`; el
+  borrado sólo existe en modo edición y pasa por un `AlertDialog` de
+  confirmación. El `status` no se edita (una nota nueva queda `capturada`; editar
+  el cuerpo no lo revierte).
+- **Accesibilidad:** la selección de `track` se comunica con marca textual "✓",
+  borde y color (no sólo color); las tarjetas usan
+  `clickable(onClickLabel = "Editar nota", role = Role.Button)`.
+- **Verificación:** el path de datos del CRUD y el orden `updated_at DESC,
+  id DESC` siguen cubiertos por `verifyNoteCrud` en `:core` (Android/JVM e iOS);
+  la UI se verificó con smoke manual. En iOS no hubo input automation disponible
+  (`idb`/`cliclick` ausentes; `osascript`/System Events bloqueado), así que el
+  CRUD interactivo se ejercitó en Android sobre el mismo `commonMain` y en iOS se
+  verificaron build, launch y render (OCR).
