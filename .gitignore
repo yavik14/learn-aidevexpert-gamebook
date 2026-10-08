@@ -1,5 +1,8 @@
 .DS_Store
 
+# Worktrees (ejecución paralela por feature)
+/worktree/
+
 # Gradle
 .gradle/
 build/
