@@ -2,8 +2,9 @@
 
 Mapa de la base KMP. `local-persistence-sqldelight` agregó la capa de
 persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
-`Note` y su CRUD, y `notes-list-ui` la primera pantalla real (lista de notas)
-con el repositorio cableado a la app.
+`Note` y su CRUD, `notes-list-ui` la primera pantalla real (lista de notas) y
+`create-text-note` el CRUD de notas de texto desde la UI (crear/editar/borrar +
+refresco).
 
 ## Modules
 
@@ -88,18 +89,39 @@ composeApp (Android app / commonMain) ──▶ core
 ## UI
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository)` es
-  la raíz de la UI. Lee la lista una vez por composición con
-  `remember(noteRepository) { noteRepository.getAll() }` y delega en
-  `NotesListScreen(notes)`. Sin DI, sin `ViewModel`/`Lifecycle`, sin
-  coroutines/Flow.
-- **`NotesListScreen`**: pantalla sólo de lectura con estado vacío ("Todavía no
-  hay notas", sin CTA) y estado con notas (título "Notas" + `LazyColumn` de
-  `Card`s). Cada tarjeta muestra `body` (máx. 2 líneas, ellipsis) y una fila de
-  chips de texto con `track.code` (o "Sin track" si es `null`) y `status.code`.
-  El `track`/`status` se comunican con texto, no sólo color (`DESIGN.md`).
-- **Sin refresco tras mutaciones:** la lectura es estática por composición;
-  `create-text-note` introducirá la relectura o un estado observable. No hay
-  crear/editar/borrar, tags, adjuntos, IA ni GDD en esta superficie.
+  la raíz de la UI y dueña del estado. Hoistea `notes` (`mutableStateOf`),
+  `destination` (`NotesDestination`: `List`/`Create`/`Edit(noteId)`) y `refreshKey`.
+  La lectura ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
+  composición; tras cada mutación se incrementa `refreshKey` (`reload()`), lo que
+  dispara la relectura y refleja los cambios sin reiniciar la app. Sin DI, sin
+  `ViewModel`/`Lifecycle`, sin coroutines fuera de Compose y sin Flow ni librería
+  de navegación.
+- **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
+  la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
+- **`NotesListScreen`**: `Scaffold` con `ExtendedFloatingActionButton` "Nueva
+  nota"; estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"; y
+  estado con notas (título "Notas" + `LazyColumn` de `Card`s clickeables que
+  llaman `onEdit(note.id)`). Cada tarjeta muestra `body` (máx. 2 líneas, ellipsis)
+  y una fila de chips de texto con `track.code` (o "Sin track" si es `null`) y
+  `status.code`. El `track`/`status` se comunican con texto, no sólo color
+  (`DESIGN.md`).
+- **`NoteEditorScreen`** (nuevo): editor de texto para crear (`isEditing = false`)
+  y editar (`isEditing = true`). `OutlinedTextField` multilínea para `body`;
+  selector de `track` ("Sin track" + `Track.entries`) que comunica la selección
+  con marca textual "✓", borde y color; `Guardar` deshabilitado si `body.isBlank()`;
+  `Cancelar`; y en edición `Borrar` con `AlertDialog` de confirmación. La pantalla
+  mantiene el borrador local y emite callbacks; la persistencia y el refresco los
+  maneja `App`.
+- **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
+  track))` (status default `CAPTURED`); editar → `update(note.copy(body =
+  body.trim(), track = ...))` (re-sella `updatedAt`, preserva
+  `owner`/`createdAt`/`status`); borrar → `delete(id)`; siempre `reload()` y
+  vuelta a la lista. El `status` no se edita desde la UI. Si el `id` en
+  `Edit(noteId)` ya no existe en `notes`, se vuelve a la lista.
+- **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
+  refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
+  `refreshKey`. No hay crear/editar/borrar de tags, adjuntos, IA ni GDD en esta
+  superficie.
 
 ## Runtime surfaces
 
@@ -140,7 +162,7 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Mutaciones de la lista (`create-text-note`): crear/editar/borrar y refresco.
 - Etiquetas, adjuntos, enlaces, embeddings e IA (features posteriores).
-- Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota.
+- Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
+- Manejo del back físico Android/iOS en el editor (hoy sólo "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

@@ -1,5 +1,6 @@
 package com.playbook.app
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,20 +11,25 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.playbook.core.model.Note
 
 /**
- * Lista de notas locales. Pantalla **solo de lectura**: no crea, edita ni borra
- * (eso llega en `create-text-note`). Lista plana, sin agrupar por `track`.
+ * Lista de notas locales. Permite crear (FAB y CTA del estado vacío) y abrir una
+ * tarjeta para editarla. El refresco tras la mutación lo maneja [App]: esta
+ * pantalla sólo emite intenciones.
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
@@ -32,21 +38,38 @@ import com.playbook.core.model.Note
 @Composable
 fun NotesListScreen(
     notes: List<Note>,
+    onCreate: () -> Unit,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            ExtendedFloatingActionButton(onClick = onCreate) {
+                Text(text = "Nueva nota")
+            }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
+        ) {
             Text(text = "Notas", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(16.dp))
             if (notes.isEmpty()) {
-                EmptyNotes(modifier = Modifier.fillMaxSize())
+                EmptyNotes(
+                    onCreate = onCreate,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteCard(note = note)
+                        NoteCard(note = note, onClick = { onEdit(note.id) })
                     }
                 }
             }
@@ -55,7 +78,10 @@ fun NotesListScreen(
 }
 
 @Composable
-private fun EmptyNotes(modifier: Modifier = Modifier) {
+private fun EmptyNotes(
+    onCreate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -70,12 +96,20 @@ private fun EmptyNotes(modifier: Modifier = Modifier) {
             text = "Tus ideas capturadas van a aparecer acá.",
             style = MaterialTheme.typography.bodyMedium,
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onCreate) {
+            Text(text = "Crear primera nota")
+        }
     }
 }
 
 @Composable
-private fun NoteCard(note: Note) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun NoteCard(note: Note, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = "Editar nota", role = Role.Button, onClick = onClick),
+    ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
                 text = note.body,
