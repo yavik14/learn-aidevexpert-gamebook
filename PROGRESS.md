@@ -5,11 +5,11 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `create-text-note` y `ai-client-interface` (2026-10-08; Sessions 011-014, ejecución paralela).
-- `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
-- Current next ready feature: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); ambas requieren spec.
+- Última feature `accepted`: `embeddings-generation` (2026-10-09; Session 016, validator independiente).
+- `embeddings-generation` `accepted`: generación + persistencia de embeddings como BLOB (esquema v2 con `1.sqm`), `EmbeddingRepository` y `NoteIndexingService` como primer consumidor de `AiClient`.
+- Current next ready feature: `semantic-linking` (depende de `embeddings-generation`, ya `accepted`), `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); las tres requieren spec.
 - Current blocker: none.
-- Last verified at: 2026-10-08.
+- Last verified at: 2026-10-09.
 
 ## Session Log
 
@@ -277,3 +277,45 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales). Sin wiring de `AiClient` a la app (intencional; no hay consumidor todavía). El runtime real/dimensión del embedding siguen abiertos para `ai-runtime-decision`.
 - Next best step: crear spec de `create-text-note` con `$feature-spec` e implementarla con `$feature-implementer`.
+
+### Session 015
+
+- Date: 2026-10-09
+- Goal: implementar `embeddings-generation` (spec `docs/specs/embeddings-generation.md`).
+- Completed:
+  - Esquema **v2**: nueva tabla `embedding` 1:0..1 con FK `note(id) ON DELETE CASCADE` en `core/src/commonMain/sqldelight/com/playbook/core/db/embedding.sq` y primera migración `1.sqm` (v1 → v2). `PlaybookDatabase.Schema.version` pasa a 2; los drivers migran automáticamente por `user_version`.
+  - `NoteEmbedding` + `NoteEmbeddingMappers` (alias `Embedding as EmbeddingRow`, `check` de dimensión) y `EmbeddingBlobCodec` (internal, big-endian explícito con `Float.toBits()`/`fromBits()`, 4 bytes/valor, `decode` exige múltiplo de 4).
+  - `EmbeddingRepository` + `SqlDelightEmbeddingRepository(database, clock)` (upsert/select/getAll/deleteByNoteId; `INSERT OR REPLACE`, `rowsAffected > 0`).
+  - `NoteIndexingService` + `IndexingResult` (primer consumidor de `AiClient`): valida 1 vector no vacío, persiste vía `EmbeddingRepository`; fallo/respuesta inválida → `Failed` sin escribir ni pisar; no toca `NoteStatus`.
+  - `createDatabase` agrega `PRAGMA foreign_keys = ON` (con `execute`, después del `PRAGMA user_version`) para habilitar el cascade.
+  - Tests compartidos `commonTest`: `verifyEmbeddingRepository`, `verifyNoteIndexing`, `verifyDatabaseMigration` (+ `EmptySqlSchema` para el driver nativo vacío) con `@Test` Android/JVM (`JdbcSqliteDriver.IN_MEMORY`) e iOS (`inMemoryDriver`).
+  - `ARCHITECTURE.md`, `docs/technical-discovery.md` y `docs/risks-and-open-questions.md` actualizados; tasks de la spec marcadas; `AGENTS.md` (línea "Próxima feature en cola").
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; nuevos EmbeddingRepository 1/1 + NoteIndexing 1/1 + DatabaseMigration 1/1 + previos NotePersistence 2/2, NoteRepository 1/1, AiClient 3/3, Greeting 1/1; 0 failures.
+  - `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; mismos 10 tests en iOS, 0 failures.
+  - `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (63 tasks junto al test Android con `--rerun-tasks`).
+  - `Schema.version = 2`; `1.sqm` presente; `Note.sq` sin cambios; sin cambios en `:composeApp`/`iosApp`/`init.sh`/`libs.versions.toml`.
+  - Control negativo reproducido y restaurado: endianness invertido en `EmbeddingBlobCodec.encode` → `EmbeddingRepositoryAndroidTest` falla con `AssertionError` de round-trip bit-exacto; restaurado a big-endian → verde 1/1.
+  - Smoke real de migración v1 → v2: iOS (iPhone 15, iOS 17.2) e Android (emulator-5556) con `user_version=2`, tabla `embedding` creada y Nota legacy preservada, sin crashes/FATAL.
+  - `./init.sh` → exit 0, sin dev servers ni simuladores.
+- Evidence captured: arreglo `evidence` y `verification` de `embeddings-generation` en `feature_list.json` (9 líneas).
+- Files or artifacts updated: `core/src/commonMain/sqldelight/com/playbook/core/db/{embedding.sq,1.sqm}`, `core/src/commonMain/kotlin/com/playbook/core/model/{NoteEmbedding,NoteEmbeddingMappers}.kt`, `core/src/commonMain/kotlin/com/playbook/core/repository/{EmbeddingBlobCodec,EmbeddingRepository,SqlDelightEmbeddingRepository}.kt`, `core/src/commonMain/kotlin/com/playbook/core/ai/NoteIndexingService.kt`, `core/src/commonMain/kotlin/com/playbook/core/db/DatabaseDriverFactory.kt`, `core/src/commonTest/kotlin/com/playbook/core/{repository/EmbeddingRepositoryCheck,ai/NoteIndexingCheck,db/DatabaseMigrationCheck}.kt`, `core/src/{androidUnitTest,iosTest}/kotlin/com/playbook/core/{repository/EmbeddingRepository*,ai/NoteIndexing*,db/DatabaseMigration*}.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `docs/specs/embeddings-generation.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: sin UI ni wiring de `AiClient`/`NoteIndexingService` a la app (intencional; no hay disparador de ciclo de vida ni superficie observable todavía, llega con `note-enrichment-status-ui`/`offline-pending-retry`). No se transiciona `NoteStatus` (decisión de scope: `indexada` exige también los Enlaces de `semantic-linking`). El runtime/dimensión reales del embedding siguen abiertos (`ai-runtime-decision`); se usa `FakeAiClient`. No hay E2E persistente (la spec lo justifica). Los emuladores Android son compartidos con otras sesiones paralelas: el primer intento en `emulator-5554` fue interrumpido por reinstalaciones concurrentes; el smoke se completó en `emulator-5556` con el APK de esta feature.
+- Next best step: validación independiente de `embeddings-generation` con `$feature-validator`; tras el `accept`, crear spec de `semantic-linking` (depende de esta feature) o de `note-category-and-tags`/`ai-runtime-decision` (ya listas, requieren spec) con `$feature-spec`.
+
+### Session 016
+
+- Date: 2026-10-09
+- Goal: validación independiente de `embeddings-generation` (spec `docs/specs/embeddings-generation.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `embeddings-generation` promovida a `accepted` en `feature_list.json` con evidencia de validación y registro en `docs/validations/embeddings-generation.md`.
+- Verification run:
+  - `./init.sh` → exit 0 con el gate real, sin dev servers.
+  - `:core:testDebugUnitTest --rerun-tasks` y `:core:iosSimulatorArm64Test --rerun-tasks` → 10 tests / 0 failures en cada plataforma (conteos de `core/build/test-results/*/TEST-*.xml`).
+  - `:composeApp:assembleDebug` + link del framework iOS con `--rerun-tasks` → BUILD SUCCESSFUL.
+  - `Schema.version == 2` con `1.sqm`; `CREATE TABLE embedding` idéntico entre `embedding.sq`, `1.sqm` y `Schema.create`; `Note.sq`/`init.sh`/`libs.versions.toml`/`:composeApp`/`iosApp` sin cambios; sin hallazgos de seguridad.
+  - Controles negativos propios del validador, cada uno reproducido y restaurado: persistir antes de validar (falla `NoteIndexingAndroidTest`), quitar `PRAGMA foreign_keys = ON` (falla el cascade), endianness invertido (falla el round-trip del codec); suite re-ejecutada en verde.
+  - Smoke iOS real corroborado sobre el `playbook.db` del simulador: `user_version=2`, tablas `note`+`embedding` con FK cascade, fila legacy `legacy-ios` preservada.
+- Evidence captured: línea de validación en el arreglo `evidence` de `embeddings-generation` en `feature_list.json`; `docs/validations/embeddings-generation.md`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `docs/validations/embeddings-generation.md`.
+- Known risk or unresolved issue: hallazgo Low no bloqueante — el smoke de migración real en Android no se reprodujo de forma independiente por contaminación del emulador compartido (`emulator-5556` con el esquema de otra feature en paralelo); la migración Android queda cubierta por `DatabaseMigrationAndroidTest` en JVM. Persisten los scope decisions: sin UI/wiring, sin transición de `NoteStatus`, sin runtime real.
+- Next best step: `semantic-linking` (depende de `embeddings-generation`, ya `accepted`) es la próxima feature ready; crear su spec con `$feature-spec`. Alternativas ready que requieren spec: `note-category-and-tags` y `ai-runtime-decision`.

@@ -1,0 +1,25 @@
+-- Esquema v2 de Playbook: tabla `embedding` (1:0..1 con `note`).
+-- El vector se guarda como BLOB big-endian (`EmbeddingBlobCodec`); `dimension` se
+-- duplica para poder validar la integridad al leer. `ON DELETE CASCADE` evita
+-- huérfanos al borrar la Nota (requiere `PRAGMA foreign_keys = ON`).
+CREATE TABLE embedding (
+  note_id TEXT NOT NULL PRIMARY KEY REFERENCES note(id) ON DELETE CASCADE,
+  dimension INTEGER NOT NULL,
+  vector BLOB NOT NULL,
+  indexed_at INTEGER NOT NULL
+);
+
+-- `INSERT OR REPLACE` en vez de `ON CONFLICT DO UPDATE`: el UPSERT de SQLite
+-- requiere 3.24 (Android 11+) y minSdk = 24 (SQLite 3.9).
+upsertEmbedding:
+INSERT OR REPLACE INTO embedding (note_id, dimension, vector, indexed_at)
+VALUES (?, ?, ?, ?);
+
+selectEmbeddingByNoteId:
+SELECT * FROM embedding WHERE note_id = ?;
+
+selectAllEmbeddings:
+SELECT * FROM embedding ORDER BY note_id;
+
+deleteEmbeddingByNoteId:
+DELETE FROM embedding WHERE note_id = ?;
