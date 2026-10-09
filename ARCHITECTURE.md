@@ -9,10 +9,11 @@ desde la UI (crear/editar/borrar + refresco), `ai-client-interface` el puerto
 `ai-runtime-decision` la estrategia de runtime decidida (híbrida por fases,
 cloud-first) junto con su spike y ADR, `android-release-pipeline` la configuración
 de release/signing de Android (keystore externo) y el runbook de publicación,
-`embeddings-generation` la tabla `embedding` (esquema **v2** con `1.sqm`),
+`embeddings-generation` la tabla `embedding` (esquema v2 con `1.sqm`),
 `EmbeddingRepository` y `NoteIndexingService` como primer consumidor real de
-`AiClient`, y `voice-capture-stt` la captura por voz nativa (puerto
-`VoiceTranscriber` + adaptadores Android/iOS).
+`AiClient`, `voice-capture-stt` la captura por voz nativa (puerto
+`VoiceTranscriber` + adaptadores Android/iOS), y `note-category-and-tags` las
+Etiquetas libres (esquema **v3** con `note_tag` y la migración `2.sqm` v2→v3).
 
 ## Modules
 
@@ -40,24 +41,30 @@ composeApp (Android app / commonMain) ──▶ core
 ## Persistence
 
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
-  `com.playbook.core.db`) generada desde
-  `core/src/commonMain/sqldelight/com/playbook/core/db/{Note,embedding}.sq`.
-- **Esquema v2:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+  `com.playbook.core.db`) generada desde los `.sq` de
+  `core/src/commonMain/sqldelight/com/playbook/core/db/`.
+- **Esquema v3:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
-  `selectNoteById`, `updateNote`, `deleteNoteById`) y tabla `embedding`
-  (`note_id` PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector`
-  BLOB, `indexed_at`; queries `upsertEmbedding`, `selectEmbeddingByNoteId`,
-  `selectAllEmbeddings`, `deleteEmbeddingByNoteId`). `embeddings-generation`
-  introdujo la migración `1.sqm` (v1 → v2) al crear la primera tabla vecina: los
-  drivers aplican create/migrate por `user_version` automáticamente y una
-  instalación nueva crea el esquema final. `INSERT OR REPLACE` en lugar de
+  `selectNoteById`, `updateNote`, `deleteNoteById`), tabla `embedding` (`note_id`
+  PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
+  `indexed_at`; queries `upsertEmbedding`, `selectEmbeddingByNoteId`,
+  `selectAllEmbeddings`, `deleteEmbeddingByNoteId`) y tabla `note_tag` (`note_id`,
+  `label`, PK compuesta `(note_id, label)`; N—N sin FK, limpieza explícita en el
+  repositorio). La tabla `note` no cambió en estas features.
+- **Migraciones (v1 → v2 → v3):** `embeddings-generation` introdujo `1.sqm`
+  (v1 → v2, crea `embedding`) y `note-category-and-tags` `2.sqm` (v2 → v3, crea
+  `note_tag`). Los `.sq` describen el esquema más reciente y los `.sqm` hacen
+  upgrade; los drivers (`AndroidSqliteDriver`/`NativeSqliteDriver` con
+  `PlaybookDatabase.Schema`) detectan `user_version` y ejecutan `Schema.migrate`.
+  `PlaybookDatabase.Schema.version = 3`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
-  `minSdk = 24`. Las tablas vecinas restantes (etiquetas, adjuntos, enlaces)
-  llegan en features posteriores.
+  `minSdk = 24`. Las tablas vecinas restantes (adjuntos, enlaces) llegan en
+  features posteriores.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
-  `verifySqlDelightMigration`; la equivalencia entre `1.sqm` y el `CREATE TABLE`
-  de `embedding.sq` se cubre con un test portable
-  (`DatabaseMigrationCheck`) que corre en Android/JVM e iOS.
+  `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
+  de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`, y la
+  migración de etiquetas en `NoteTagCheck.verifyNoteTagMigration`) que corren en
+  Android/JVM e iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
 - **Entry point:** `createDatabase(factory)` en `:core` construye la base y fuerza
@@ -79,13 +86,18 @@ composeApp (Android app / commonMain) ──▶ core
 ## Domain
 
 - **Modelo** (`com.playbook.core.model`): `Note` (id, owner, body, `track`
-  nullable, `status` no nulo, `createdAt`, `updatedAt`), `NoteDraft` (entrada de
-  `create`, `status` default `CAPTURED`) y los enums `Track`
-  (`MECHANICS`/`CHARACTERS`/`STORY`) y `NoteStatus`
+  nullable, `status` no nulo, `createdAt`, `updatedAt`, `tags`), `NoteDraft`
+  (entrada de `create`, `status` default `CAPTURED`, `tags` default vacío) y los
+  enums `Track` (`MECHANICS`/`CHARACTERS`/`STORY`) y `NoteStatus`
   (`CAPTURED`/`PENDING`/`INDEXED`/`FAILED`) con `code`/`fromCode`. Los
   identificadores Kotlin están en inglés; el `code` persistido usa el valor de
   dominio canónico en español (`"mecánicas"`, `"personajes"`, `"historia"`,
   `"capturada"`, `"pendiente"`, `"indexada"`, `"fallida"`).
+- **Etiquetas** (`Tags.kt`): `normalizeTags(raw: List<String>)` aplica `trim`,
+  descarta vacías, deduplica sin distinguir mayúsculas/minúsculas conservando la
+  **primera** grafía y ordena case-insensitive. `tags` se agrega al final con
+  `emptyList()` por defecto (no rompe el código/tests previos). `Track` (fijo y
+  único) y `Etiqueta` (libre y múltiple) **no** son sinónimos (`CONTEXT.md`).
 - `Track.fromCode(null | desconocido)` → `null` (edge case "Nota sin `track`").
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.
@@ -94,8 +106,14 @@ composeApp (Android app / commonMain) ──▶ core
   `SqlDelightNoteRepository(database, idFactory, clock)`. `update` re-sella
   `updated_at` con `clock()` (ignora el del argumento) y preserva
   `owner`/`created_at`; `update`/`delete` devuelven `rowsAffected > 0`.
+  - Etiquetas: `create` normaliza y persiste `insertNote` + `insertNoteTag` en
+    una transacción; `getById` lee `selectTagsByNoteId`; `getAll` usa
+    `selectAllNoteTags` agrupado en memoria (evita N+1); `update` reemplaza el
+    conjunto completo (delete + insert) en la misma transacción que la nota y
+    sólo si la fila existía; `delete` limpia `note_tag` junto con la nota.
 - **Mapper** (`NoteMappers.kt`): importa `com.playbook.core.db.Note as NoteRow`
-  para evitar la colisión con el modelo de dominio.
+  para evitar la colisión con el modelo de dominio;
+  `NoteRow.toDomain(tags = emptyList())` recibe las etiquetas ya resueltas.
 - **Embedding** (`com.playbook.core.model`): `NoteEmbedding(noteId, values,
   indexedAt)` es la entidad persistida (relación 1:0..1 con `Note`).
   `NoteEmbeddingMappers.kt` importa `com.playbook.core.db.Embedding as
@@ -233,15 +251,22 @@ composeApp (Android app / commonMain) ──▶ core
   "Crear primera nota"; y estado con notas (título "Notas" + `LazyColumn` de
   `Card`s clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra `body`
   (máx. 2 líneas, ellipsis) y una fila de chips de texto con `track.code` (o "Sin
-  track" si es `null`) y `status.code`. El `track`/`status` se comunican con texto,
-  no sólo color (`DESIGN.md`).
+  track" si es `null`) y `status.code`; si `note.tags` no está vacía, agrega una
+  fila de chips de etiqueta (misma `LabelChip`, en `Row` con `horizontalScroll`).
+  El `track`/`status`/etiquetas se comunican con texto, no sólo color (`DESIGN.md`).
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`)
   y editar (`isEditing = true`). `OutlinedTextField` multilínea para `body`;
   selector de `track` ("Sin track" + `Track.entries`) que comunica la selección
-  con marca textual "✓", borde y color; `Guardar` deshabilitado si `body.isBlank()`;
-  `Cancelar`; y en edición `Borrar` con `AlertDialog` de confirmación. La pantalla
-  mantiene el borrador local y emite callbacks; la persistencia y el refresco los
-  maneja `App`.
+  con marca textual "✓", borde y color; campo "Nueva etiqueta" + botón "Agregar"
+  (habilitado con texto no vacío) que aplica `normalizeTags` y limpia el campo;
+  chips de etiqueta con control de quitar "×" (`clickable` con
+  `onClickLabel = "Quitar etiqueta <label>"`, `role = Role.Button`, sin íconos
+  nuevos); `Guardar` deshabilitado si `body.isBlank()`; `Cancelar`; y en edición
+  `Borrar` con `AlertDialog` de confirmación. La pantalla mantiene el borrador
+  local (`body`/`track`/`tags`) y emite
+  `onSave(body, track, tags)`/`onDelete`/`onCancel`; la persistencia y el
+  refresco los maneja `App`. No hay control de Categoría/Tipo/Nivel: el `track`
+  ya cubre la clasificación fija.
 - **`VoiceCaptureScreen`** (nuevo): pantalla "tonta" de dictado. Recibe
   `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
   `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
@@ -255,15 +280,16 @@ composeApp (Android app / commonMain) ──▶ core
   `reload()`; un final vacío se trata como `NO_MATCH`. Al salir del destino un
   `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el micrófono).
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
-  track))` (status default `CAPTURED`); editar → `update(note.copy(body =
-  body.trim(), track = ...))` (re-sella `updatedAt`, preserva
-  `owner`/`createdAt`/`status`); borrar → `delete(id)`; siempre `reload()` y
-  vuelta a la lista. El `status` no se edita desde la UI. Si el `id` en
-  `Edit(noteId)` ya no existe en `notes`, se vuelve a la lista.
+  track, tags = tags))` (status default `CAPTURED`); editar → `update(note.copy(
+  body = body.trim(), track = ..., tags = tags))` (re-sella `updatedAt`, y
+  reemplaza el conjunto de etiquetas, preservando `owner`/`createdAt`/`status`);
+  borrar → `delete(id)`; siempre `reload()` y vuelta a la lista. El `status` no
+  se edita desde la UI. Si el `id` en `Edit(noteId)` ya no existe en `notes`, se
+  vuelve a la lista.
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
-  `refreshKey`. No hay crear/editar/borrar de tags, adjuntos, IA ni GDD en esta
-  superficie.
+  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas; siguen
+  fuera de esta superficie los adjuntos, la IA y el GDD.
 
 ## Runtime surfaces
 
@@ -333,7 +359,7 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Etiquetas, adjuntos y enlaces (features posteriores). El wiring de
+- Adjuntos y enlaces (features posteriores). El wiring de
   `AiClient`/`NoteIndexingService` a la app (`note-enrichment-status-ui`,
   `offline-pending-retry`) y la similitud coseno / enlaces (`semantic-linking`)
   siguen pendientes; los embeddings ya se generan y persisten
