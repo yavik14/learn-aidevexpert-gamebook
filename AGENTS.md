@@ -14,12 +14,13 @@ del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 `notes-list-ui`, el CRUD de texto desde la UI (crear/editar/borrar + refresco)
 con `create-text-note`, el puerto de IA con `ai-client-interface`, la decisión de
 runtime de IA con `ai-runtime-decision` (ADR + spike test-only, decisión híbrida
-cloud-first) y la publicación de Android con `android-release-pipeline`
-(release/signing con keystore externo + runbook; ver `docs/release/android.md`),
-todas `accepted`. **Nunca** versionar keystores ni secrets.
+cloud-first), la publicación de Android con `android-release-pipeline`
+(release/signing con keystore externo + runbook; ver `docs/release/android.md`) y
+la generación/persistencia de embeddings con `embeddings-generation` (esquema v2
+y `1.sqm`), todas `accepted`. **Nunca** versionar keystores ni secrets.
 Próximas features en cola: `note-category-and-tags` (depende de `create-text-note`,
-ya `accepted`) y `embeddings-generation` (depende de `ai-client-interface` y
-`note-model-crud-core`, ya `accepted`); ambas requieren spec.
+ya `accepted`) y `semantic-linking` (depende de `embeddings-generation`, ya
+`accepted`); requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
