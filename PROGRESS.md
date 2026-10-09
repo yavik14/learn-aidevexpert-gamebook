@@ -5,11 +5,11 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `create-text-note` y `ai-client-interface` (2026-10-08; Sessions 011-014, ejecución paralela).
-- `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
-- Current next ready feature: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); ambas requieren spec.
+- Última feature `accepted`: `android-release-pipeline` (2026-10-09; Sessions 015-016; validación independiente `accept`).
+- `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo), modo degradado sin secrets, override de `versionCode`/`versionName` y runbook `docs/release/android.md`; `init.sh` sin cambios. Subida real a Play internal testing (Scenario 6) queda como paso manual/externo.
+- Current next ready feature: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) e `ios-release-pipeline` (depende de `create-text-note`, ya `accepted`); `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); requieren spec.
 - Current blocker: none.
-- Last verified at: 2026-10-08.
+- Last verified at: 2026-10-09.
 
 ## Session Log
 
@@ -277,3 +277,49 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales). Sin wiring de `AiClient` a la app (intencional; no hay consumidor todavía). El runtime real/dimensión del embedding siguen abiertos para `ai-runtime-decision`.
 - Next best step: crear spec de `create-text-note` con `$feature-spec` e implementarla con `$feature-implementer`.
+
+### Session 015
+
+- Date: 2026-10-09
+- Goal: implementar `android-release-pipeline` (spec `docs/specs/android-release-pipeline.md`).
+- Completed:
+  - `composeApp/build.gradle.kts`: carga de credenciales con precedencia **env > `keystore.properties`** (`PLAYBOOK_KEYSTORE_FILE`/`_PASSWORD`, `PLAYBOOK_KEY_ALIAS`/`_PASSWORD`), `hasReleaseSigning` y registro condicional de `signingConfigs.create("release")` asignado al build type `release` (`isMinifyEnabled = false`). Si falta alguna de las 4, no se registra el signing config y el release queda **sin firmar** (modo degradado) sin fallar.
+  - Override de `versionCode`/`versionName` vía `-Pplaybook.versionCode`/`-Pplaybook.versionName` con defaults `1`/`"1.0"`.
+  - `.gitignore`: ignora `keystore.properties`, `*.jks`, `*.keystore`. Nuevo `keystore.properties.example` (plantilla sin secrets).
+  - Nuevo runbook `docs/release/android.md` (generación de keystore, config por archivo/env, build, verificación de firma, Play App Signing y subida manual a internal testing; deja explícito local vs Play Console).
+  - `ARCHITECTURE.md` (nueva sección "Android release"), `docs/technical-discovery.md` ("Deployment Decisions (android-release-pipeline)") y `AGENTS.md` (estado + puntero al runbook) actualizados; tasks de la spec marcadas.
+- Verification run:
+  - Modo degradado (sin secrets): `./gradlew :composeApp:assembleRelease` → BUILD SUCCESSFUL; `composeApp-release-unsigned.apk` (6.88 MB). Re-confirmado desde estado limpio.
+  - Firma por env (keystore descartable): `assembleRelease`+`bundleRelease` BUILD SUCCESSFUL; `composeApp-release.apk` y `composeApp-release.aab`. `apksigner verify --print-certs` → exit 0, cert `CN=Playbook Verify...` SHA-256 `e1187c9d…`; `jarsigner -verify` AAB → `jar verified.`
+  - Firma por `keystore.properties` (storeFile relativo, resuelto contra la raíz): mismo resultado firmado; `apksigner` cert SHA-256 `2a7069bd…` (coincide con el keystore descartable; distinto del de debug) y AAB `jar verified.`
+  - Precedencia env > archivo: con env apuntando a un keystore (`CN=Playbook ENV`, SHA-256 `53fede45…`) y `keystore.properties` a otro distinto (`CN=Playbook FILE`, SHA-256 `71e592a0…`), el APK queda firmado con el de env (`53fede45…`).
+  - Instalabilidad (opcional): `adb -s emulator-5554 install -r` del APK release → Success; launch → PID vivo, sin `FATAL EXCEPTION`.
+  - Secretos: `git check-ignore -v` matchea `keystore.properties`/`*.jks`/`*.keystore`; `git status --porcelain` sin secrets.
+  - Versionado: default `1`/`"1.0"`; con `-Pplaybook.versionCode=7 -Pplaybook.versionName=1.2.3` → `output-metadata.json` 7 / `"1.2.3"`.
+  - No regresión: `./init.sh` → exit 0; tests del core 7/7 en Android/JVM e iOS, 0 failures; sin cambios en `core/**`, `gradle/libs.versions.toml`, `iosApp/**`, `init.sh` ni `Note.sq`; esquema v1, sin `.sqm`.
+  - Limpieza: se borraron `keystore.properties`, el keystore copiado a `composeApp/build/verify-release/` y el keystore descartable externo; no queda ningún keystore en el repo.
+- Evidence captured: arreglo `evidence` de `android-release-pipeline` en `feature_list.json` (10 líneas).
+- Files or artifacts updated: `composeApp/build.gradle.kts`, `.gitignore`, `keystore.properties.example` (nuevo), `docs/release/android.md` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `docs/specs/android-release-pipeline.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: Scenario 6 (subida real al track internal testing de Play Console e instalación desde el canal) **no ejecutado**: requiere cuenta de Play Console y no es verificable en el repo; documentado como paso manual. `apksigner` vive en `build-tools` (presente 37.0.0) y `adb` no está en `PATH` (se usó la ruta del SDK). iOS/TestFlight fuera de alcance (`ios-release-pipeline`).
+- Next best step: validación independiente de `android-release-pipeline` con `$feature-validator`; tras el `accept`, crear spec de `note-category-and-tags` con `$feature-spec`.
+
+### Session 016
+
+- Date: 2026-10-09
+- Goal: validación independiente de `android-release-pipeline` (spec `docs/specs/android-release-pipeline.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `android-release-pipeline` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `build: complete android-release-pipeline` creado por el orquestador y PR draft contra `develop`.
+- Verification run:
+  - Alcance: `git diff HEAD` de `init.sh`/`core/**`/`gradle/libs.versions.toml`/`iosApp/**`/`Note.sq` vacío; `Note.sq`/esquema intactos.
+  - Scenario 1 (degradado): sin secrets, `./gradlew :composeApp:assembleRelease` → BUILD SUCCESSFUL (84 tasks); `composeApp-release-unsigned.apk` (6.88 MB); `apksigner` → `DOES NOT VERIFY: Missing META-INF/MANIFEST.MF`.
+  - Scenario 3 (env, keystore propio del validador `CN=Playbook ENV`): `assembleRelease`+`bundleRelease` BUILD SUCCESSFUL; `apksigner --print-certs` exit 0 con el cert del keystore; `jarsigner -verify` del AAB → `jar verified.`
+  - Scenario 2 (file, keystore `CN=Playbook FILE`, `storeFile` relativo): BUILD SUCCESSFUL; cert = keystore del archivo; AAB `jar verified.`
+  - Precedencia env > archivo reproducida (cert del APK = keystore de env). Certificados ≠ debug (`~/.android/debug.keystore`).
+  - Versionado: `-Pplaybook.versionCode=7 -Pplaybook.versionName=1.2.3` → `7`/`1.2.3`; default `1`/`"1.0"`; inválido `abc` → `1`.
+  - Scenario 5 (secretos): `git check-ignore -v` matchea `.gitignore:21/22/23`; `git status --porcelain` sin secrets; `keystore.properties.example` sólo placeholders y no ignorado.
+  - Scenario 7 (gate): `./init.sh` exit 0 sin procesos de larga duración; `:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test --rerun-tasks` 7/7 en cada plataforma, 0 failures.
+  - Scenario 6 (Play Console): verificado que está marcado honestamente como **no ejecutado/manual** en spec, `feature_list.json` y runbook; sin evidencia fabricada.
+  - Limpieza: keystores descartables y `keystore.properties` eliminados; `git status --porcelain` idéntico al baseline.
+- Evidence captured: línea de validación en el arreglo `evidence` de `android-release-pipeline` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md` (por el orquestador al persistir la aceptación).
+- Known risk or unresolved issue: hallazgos Low no bloqueantes — los hashes exactos de certificados de keystores descartables ya borrados no son replays exactos (el mecanismo sí es reproducible); el runbook deriva `APKSIGNER` de `$ANDROID_HOME` (adaptar si sólo hay `sdk.dir` en `local.properties`); `jarsigner` emite warnings benignos de self-signed/no-timestamp. La subida real a Play internal testing sigue siendo un paso externo manual.
+- Next best step: crear spec de `note-category-and-tags` (o `ios-release-pipeline`/`ai-runtime-decision`) con `$feature-spec` e implementarla con `$feature-implementer`.
