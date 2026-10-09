@@ -15,7 +15,7 @@ import com.playbook.core.model.toDomain
  *
  * Las etiquetas (`note_tag`) se persisten en la misma transacción que la nota y
  * se normalizan con [normalizeTags]. `update` reemplaza el conjunto completo de
- * etiquetas; `delete` limpia las filas de etiquetas de la nota.
+ * etiquetas; `delete` limpia las filas de etiquetas y de adjuntos de la nota.
  */
 class SqlDelightNoteRepository(
     private val database: PlaybookDatabase,
@@ -77,6 +77,7 @@ class SqlDelightNoteRepository(
     }
 
     override fun delete(id: String): Boolean = database.transactionWithResult {
+        database.attachmentQueries.deleteAttachmentsByNoteId(id)
         val rowsAffected = database.noteQueries.deleteNoteById(id).value
         database.noteTagQueries.deleteTagsByNoteId(id)
         rowsAffected > 0

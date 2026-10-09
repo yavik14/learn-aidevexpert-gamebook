@@ -169,8 +169,8 @@ fun verifyNoteTagMigration(driver: SqlDriver) {
     )
     driver.execute(identifier = null, sql = "PRAGMA user_version = 1", parameters = 0).value
 
-    // Corre la migración real v1 -> v3 (aplica 1.sqm y 2.sqm).
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 3)
+    // Corre la migración real v1 -> v4 (aplica 1.sqm, 2.sqm y 3.sqm).
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 4)
 
     val database = PlaybookDatabase(driver)
     val migrated = database.noteQueries.selectNoteById("note-v1").executeAsOneOrNull()

@@ -16,9 +16,11 @@
 ## Implementation-Time Questions
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
-- Modelo de **cámara** por plataforma, más manejo de permisos (el **STT ya se
-  resolvió** en `voice-capture-stt`: `SpeechRecognizer` en Android y
-  `SFSpeechRecognizer` en iOS, ver `ARCHITECTURE.md`).
+- El **STT** (`voice-capture-stt`) y la **cámara** (`image-capture-camera`) ya se
+  resolvieron: `SpeechRecognizer`/`SFSpeechRecognizer` para voz; `CAMERA` +
+  `FileProvider`/`PickVisualMedia` en Android y
+  `UIImagePickerController`/`PHPickerViewController` en iOS (galería sin permiso)
+  para imagen.
 - Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
   (usuario vs build) — follow-ups del ADR 0001.
 - Runtime on-device concreto para la fase 2 (híbrida).
@@ -27,6 +29,22 @@
 - Orden final y granularidad de las features del MVP (fase harness). Requiere
   **re-derivar `feature_list.json`** tras el cambio de alcance (se descartó el
   enriquecimiento/clasificación IA y se introdujeron los tracks).
+
+## Resolved / Tooling Limitations
+- **Migración de esquema sin precedentes:** la v1 → v2 (`1.sqm` + `Attachment.sq`)
+  quedó cubierta por `verifyMigrationV1ToV2` en Android/JVM e iOS, y verificada en
+  el simulador iOS real (`user_version` 1→2 con notas preservadas y tabla
+  `attachment`). Sin bloqueos.
+- **`FileProvider` + cámara Android:** `ActivityResultContracts.TakePicture` no
+  agrega los flags de grant de URI y la app de cámara no podía escribir el output;
+  resuelto con un intent `ACTION_IMAGE_CAPTURE` explícito con
+  `FLAG_GRANT_READ/WRITE_URI_PERMISSION` + `clipData`.
+- **Cámara iOS fuera del harness:** el simulador no expone cámara; la captura real
+  de cámara en iOS sólo se valida en dispositivo físico → se mapea a
+  `CAMERA_UNAVAILABLE` y no se fabrica evidencia. La galería (`PHPicker`) queda
+  verificada por build/link/launch, sin input automation iOS disponible
+  (`idb`/`cliclick` ausentes; `osascript`/System Events bloqueado), igual que en
+  features previas de UI.
 
 ## Later / Not MVP
 - Multi-usuario, cuentas, sync y backend.

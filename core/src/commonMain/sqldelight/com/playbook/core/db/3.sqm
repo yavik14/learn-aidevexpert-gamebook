@@ -1,0 +1,15 @@
+-- Migración v3 -> v4: agrega la tabla `attachment` y su índice.
+-- `embeddings-generation` (`1.sqm`, v1→v2) y `note-category-and-tags` (`2.sqm`,
+-- v2→v3) ya ocupaban las versiones previas; esta feature es la cuarta.
+-- No se toca la tabla `note`: los datos previos se conservan intactos.
+CREATE TABLE attachment (
+  id TEXT NOT NULL PRIMARY KEY,
+  note_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX attachment_note_id ON attachment (note_id);

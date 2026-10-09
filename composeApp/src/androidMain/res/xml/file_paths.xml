@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rutas que el FileProvider puede exponer a la app de cámara. La foto se
+     escribe en cacheDir/images/ (temporal hasta que se guarda la nota). -->
+<paths>
+    <cache-path name="images" path="images/" />
+</paths>
