@@ -1,19 +1,25 @@
 # Risks and Open Questions
 
 ## Blocking Next Phase
-- **Runtime de IA (cloud / on-device / híbrido) y proveedor.** El puerto
-  `AiClient` ya existe en `:core` (feature `ai-client-interface`), pero sigue
-  **sin decidirse** el runtime/proveedor, así que el flujo de IA (embeddings +
-  RAG) no se puede validar. Es el riesgo principal del proyecto, hoy postergado
-  a propósito a `ai-runtime-decision`.
 - **¿Los Adjuntos sin texto entran al RAG?** Definir si un audio sin transcribir
   o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
+
+## Resolved
+- **Runtime de IA (cloud / on-device / híbrido):** **decidido** en
+  `ai-runtime-decision` (2026-10-09). Estrategia **híbrida por fases, cloud-first**
+  detrás del puerto `AiClient`; decisión y trade-offs en
+  `docs/adr/0001-ai-runtime-decision.md`, evidencia en
+  `docs/spikes/ai-runtime-spike.md`. Ya no bloquea el flujo de IA; el primer
+  adaptador real lo materializa `embeddings-generation`/`rag-query`. Proveedor,
+  modelo, dimensión y gestión de keys quedan como follow-ups del ADR.
 
 ## Implementation-Time Questions
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
 - Modelo de STT y cámara por plataforma, más manejo de permisos.
-- Modelo y dimensión del embedding concreto.
+- Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
+  (usuario vs build) — follow-ups del ADR 0001.
+- Runtime on-device concreto para la fase 2 (híbrida).
 - ¿Los enlaces son bidireccionales? ¿Cuándo se recalculan y con qué umbral?
 - Comportamiento al cambiar el `track` de una Nota ya indexada.
 - Orden final y granularidad de las features del MVP (fase harness). Requiere
@@ -35,9 +41,6 @@
   auto-organización no es un requisito del MVP.
 
 ## Risks
-- **Postergar el runtime de IA** mantiene abierto el riesgo principal; si se
-  deja para el final, el flujo de IA (embeddings + RAG) puede no llegar a
-  validarse.
 - **Android + iOS en paralelo** duplica esfuerzo nativo y puede retrasar el
   primer flujo end-to-end.
 - **Alcance amplio del MVP** (texto + voz + imagen + GDD + RAG): sin respetar la
@@ -49,6 +52,10 @@
   mientras el equipo de UI/UX no entregue la dirección.
 
 ## Research Tasks
-- Spike comparativo cloud vs on-device para clasificación y embeddings.
+- **Hecho (2026-10-09):** spike comparativo de arquetipos cloud vs on-device
+  detrás de `AiClient` → `docs/spikes/ai-runtime-spike.md`; decisión en
+  `docs/adr/0001-ai-runtime-decision.md`.
+- **Pendiente:** verificar latencia/calidad/costo cloud reales con la sonda
+  key-gated del ADR (fuera del gate) al elegir proveedor/modelo.
 - Evaluar `sqlite-vec` u otra extensión vectorial si el volumen de notas crece
   y la similitud en memoria deja de alcanzar.
