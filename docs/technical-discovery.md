@@ -236,3 +236,47 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## Voice / STT Decisions (voice-capture-stt)
+
+Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
+
+- **Puerto + adaptadores, no `expect`/`actual`:** `VoiceTranscriber` vive en
+  `:composeApp/commonMain` porque la integración es nativa y sólo la consume la UI
+  (con contexto de plataforma en el constructor), igual que `DatabaseDriverFactory`
+  o `AiClient`. `:core` no se toca.
+- **Android (`SpeechRecognizer`):** se usa el servicio del sistema con
+  `RecognizerIntent` (`LANGUAGE_MODEL_FREE_FORM`, resultados parciales) y el
+  idioma por defecto; `RECORD_AUDIO` se pide con
+  `registerForActivityResult(RequestPermission())` registrado en el constructor
+  del adaptador (por eso se construye en `onCreate`). `isRecognitionAvailable`
+  falso → `UNAVAILABLE`. Los errores del `RecognitionListener` se mapean por
+  código (`NO_MATCH`/`SPEECH_TIMEOUT` → `NO_MATCH`, `NETWORK*` → `NETWORK`,
+  `RECOGNIZER_BUSY` → `BUSY`, `INSUFFICIENT_PERMISSIONS` → `PERMISSION_DENIED`,
+  resto → `UNKNOWN`).
+- **iOS (`SFSpeechRecognizer` + `AVAudioEngine`):** se piden ambas autorizaciones
+  (`SFSpeechRecognizer.requestAuthorization` y `AVAudioSession.requestRecordPermission`);
+  si el recognizer no existe o `isAvailable()` es falso → `UNAVAILABLE`. Los
+  callbacks de `Speech`/AVFoundation llegan en colas secundarias y se despachan al
+  main queue con `dispatch_async(dispatch_get_main_queue())` antes de tocar el
+  estado de Compose. `cancel()` cancela la tarea, quita el tap, detiene el engine
+  y desactiva la sesión (evita "remove tap" sobre un nodo sin tap usando un flag
+  `tapInstalled`). `AVAudioSession.setActive(...)` es una **función de extensión**
+  de `platform.AVFAudio` y requiere import explícito (`import platform.AVFAudio.setActive`).
+- **`Info.plist`:** `NSMicrophoneUsageDescription` y
+  `NSSpeechRecognitionUsageDescription` son obligatorias; sin la segunda, iOS
+  termina el proceso al primer uso del reconocimiento.
+- **Sin dependencias nuevas:** `SpeechRecognizer`/`RecognizerIntent` son framework
+  Android; `activity-compose` ya estaba para el permission launcher;
+  `Speech`/`AVFAudio`/`dispatch` son platform libs de Kotlin/Native. No se agregan
+  coroutines ni Flow a `:composeApp`; `schema.version` sigue en 1, sin `.sqm`.
+- **Reconocimiento en la nube vs. on-device:** no se fija; `SpeechRecognizer`
+  puede usar el servicio del sistema y `SFSpeechRecognizer` por defecto usa red.
+  No afecta el contrato (la Nota se crea igual).
+- **Verificación:** no hay forma determinista de simular el motor de voz nativo ni
+  de inyectar audio en el emulador/simulador, así que la integración se verifica
+  con smoke manual. En Android (emulador `sdk_gphone64_arm64`, Google APIs) se
+  verificaron el lanzamiento del reconocedor ("Escuchando…"), el permiso denegado
+  y el "sin habla" (`NO_MATCH`); el happy path de audio real → Nota no pudo
+  ejecutarse por falta de entrada de audio inyectable. El path de datos (crear
+  Nota) está cubierto por los tests de `:core`.

@@ -3,6 +3,7 @@ package com.playbook.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.playbook.app.voice.AndroidVoiceTranscriber
 import com.playbook.core.db.AndroidDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
@@ -24,8 +25,11 @@ class MainActivity : ComponentActivity() {
             idFactory = ::randomNoteId,
             clock = ::currentTimeMillis,
         )
+        // El adaptador registra el permission launcher, por eso se construye aquí
+        // (onCreate) y no dentro del composable.
+        val voiceTranscriber = AndroidVoiceTranscriber(this)
         setContent {
-            App(noteRepository)
+            App(noteRepository, voiceTranscriber)
         }
     }
 }

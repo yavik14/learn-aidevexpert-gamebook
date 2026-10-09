@@ -12,7 +12,9 @@
 ## Implementation-Time Questions
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
-- Modelo de STT y cámara por plataforma, más manejo de permisos.
+- Modelo de **cámara** por plataforma, más manejo de permisos (el **STT ya se
+  resolvió** en `voice-capture-stt`: `SpeechRecognizer` en Android y
+  `SFSpeechRecognizer` en iOS, ver `ARCHITECTURE.md`).
 - Modelo y dimensión del embedding concreto.
 - ¿Los enlaces son bidireccionales? ¿Cuándo se recalculan y con qué umbral?
 - Comportamiento al cambiar el `track` de una Nota ya indexada.
@@ -47,6 +49,12 @@
   GDD; el diseño de UI debe hacer fácil elegir y corregir el track.
 - **Sin tokens visuales definitivos**, drift visual en las features de UI
   mientras el equipo de UI/UX no entregue la dirección.
+- **Verificación del STT no determinista:** no hay harness de UI/E2E ni forma de
+  inyectar audio o simular el motor de voz nativo; el emulador/simulador puede no
+  tener entrada de audio o servicio de reconocimiento. La integración se verifica
+  con smoke manual (permiso concedido/denegado, cancelar, sin habla) y el happy
+  path de audio real → Nota puede requerir dispositivo físico. Se documenta como
+  limitación de entorno, no como fallo del código (`voice-capture-stt`).
 
 ## Research Tasks
 - Spike comparativo cloud vs on-device para clasificación y embeddings.

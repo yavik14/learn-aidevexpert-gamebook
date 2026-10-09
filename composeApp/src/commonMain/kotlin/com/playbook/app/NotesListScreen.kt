@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -27,9 +28,9 @@ import androidx.compose.ui.unit.dp
 import com.playbook.core.model.Note
 
 /**
- * Lista de notas locales. Permite crear (FAB y CTA del estado vacío) y abrir una
- * tarjeta para editarla. El refresco tras la mutación lo maneja [App]: esta
- * pantalla sólo emite intenciones.
+ * Lista de notas locales. Permite crear (FAB y CTA del estado vacío), dictar una
+ * nota de voz ("Dictar nota") y abrir una tarjeta para editarla. El refresco tras
+ * la mutación lo maneja [App]: esta pantalla sólo emite intenciones.
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
@@ -40,6 +41,7 @@ fun NotesListScreen(
     notes: List<Note>,
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
+    onDictate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -57,6 +59,13 @@ fun NotesListScreen(
                 .padding(24.dp),
         ) {
             Text(text = "Notas", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            FilledTonalButton(
+                onClick = onDictate,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "Dictar nota")
+            }
             Spacer(modifier = Modifier.height(16.dp))
             if (notes.isEmpty()) {
                 EmptyNotes(
