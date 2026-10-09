@@ -5,7 +5,7 @@ import kotlin.test.Test
 
 class DatabaseMigrationIosTest {
     @Test
-    fun migratesV1ToV3AndMatchesCreate() {
+    fun migratesV1ToV4AndMatchesCreate() {
         val migrated = inMemoryDriver(EmptySqlSchema)
         val fresh = inMemoryDriver(PlaybookDatabase.Schema)
         try {

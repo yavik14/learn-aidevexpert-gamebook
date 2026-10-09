@@ -5,14 +5,15 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `note-category-and-tags` (2026-10-09; Sessions 015-024, ejecución paralela; validación independiente `accept`).
+- Última feature `accepted`: `image-capture-camera` (2026-10-09; Sessions 015-026, ejecución paralela; validación independiente `accept`).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
 - `embeddings-generation` `accepted`: tabla `embedding` (esquema v2 con `1.sqm`, FK cascade) + `EmbeddingRepository` + `NoteIndexingService` como primer consumidor de `AiClient`.
 - `voice-capture-stt` `accepted`: puerto `VoiceTranscriber` + adaptadores nativos (`SpeechRecognizer` en Android; `SFSpeechRecognizer`+`AVAudioEngine` en iOS) en `:composeApp`; el dictado crea una `Note` transcripta vía `create(NoteDraft(...))`. Sin cambios en `:core`.
-- `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota; esquema **v3** (`note_tag`, migración `2.sqm` v2→v3); clasificación fija por `Track` ya existente, sin Categoría/Tipo/Nivel.
-- Current next ready features: `semantic-linking`, `image-capture-camera`, `ios-release-pipeline` y `voice-attachment-storage` (dependencias ya `accepted`); todas requieren spec.
+- `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota; esquema v3 (`note_tag`, migración `2.sqm` v2→v3); clasificación fija por `Track` ya existente.
+- `image-capture-camera` `accepted` (2026-10-09): captura de imagen (cámara/galería) → Nota con Adjunto; tabla `attachment` (esquema **v4**, migración `3.sqm` v3→v4) + `AttachmentRepository` + integración nativa Android/iOS.
+- Current next ready features: `semantic-linking`, `ios-release-pipeline` y `voice-attachment-storage` (dependencias ya `accepted`); todas requieren spec.
 - Current blocker: none.
 - Last verified at: 2026-10-09.
 
@@ -483,3 +484,43 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — CRUD interactivo iOS no automatizado (limitación de tooling, declarada honestamente) y orden de etiquetas case-insensitive en memoria vs `ORDER BY label` (BINARY) en SQL (respeta el contrato de la spec; determinista en cada lectura). Términos obsoletos "categoría/tipo" persisten en entradas fuera de alcance (`ai-enrichment-classify-tags-type`, `note-enrichment-status-ui`, `gdd-view`), señalados para re-derivar.
 - Next best step: crear spec de la próxima feature dependency-ready con `$feature-spec` (p. ej. `ai-runtime-decision` o captura por voz/imagen).
+
+### Session 025
+
+- Date: 2026-10-09
+- Goal: implementar `image-capture-camera` (spec `docs/specs/image-capture-camera.md`).
+- Completed:
+  - `:core`: `Attachment.sq` (tabla `attachment` + índice `attachment_note_id`) y migración `3.sqm` (v3 → v4); `PlaybookDatabase.Schema.version == 4`. Modelo `Attachment`/`AttachmentKind` (`IMAGE` → `"imagen"`, `fromCode` fail-fast) + `AttachmentMappers` (alias `Attachment as AttachmentRow`); `AttachmentRepository` + `SqlDelightAttachmentRepository(database, idFactory, clock)`.
+  - `SqlDelightNoteRepository.delete(id)` pasa a borrar las filas `attachment` (y las `note_tag`) y la `note` en una transacción (`transactionWithResult`), sin huérfanos; la semántica pública no cambia.
+  - Tests nuevos en `commonTest`: `verifyAttachmentCrud` (CRUD + `AttachmentKind.fromCode` + cascade) y `verifyMigrationV1ToV4` (construye v1, aplica `Schema.migrate(1,4)`, verifica notas preservadas y `attachment` usable); `@Test` por plataforma (`AttachmentRepositoryAndroidTest`, `MigrationAndroidTest`, `AttachmentRepositoryIosTest`, `MigrationIosTest`).
+  - `:composeApp`: contrato `ImageCapture.kt` (`ImageSource`/`PickedImage`/`ImageCaptureError`/`ImagePicker`/`AttachmentFileStore`/`decodeImageBitmap`) con `expect`; `actual` Android (permiso `CAMERA` runtime + intent `ACTION_IMAGE_CAPTURE` con grant de URI + `FileProvider` + `PickVisualMedia`, `BitmapFactory`, `filesDir/images/`) y iOS (`AVCaptureDevice` + `UIImagePickerController` + `PHPickerViewController`, re-encode JPEG, Skia, `Application Support/images/`). Permisos: `CAMERA` + `<provider>` + `res/xml/file_paths.xml` (Android), `NSCameraUsageDescription` (iOS). `MainActivity`/`MainViewController` construyen y pasan el segundo repositorio.
+  - UI: `App(noteRepository, attachmentRepository, voiceTranscriber)` carga adjuntos, resuelve `NotesDestination.CreateWithImage`, diálogo de fuente (Cámara/Galería/Cancelar) y diálogo de error; `NotesListScreen` con FABs "Nueva nota"+"Foto", botón "Dictar nota", CTA "Agregar foto", chip "Imagen" y placeholder "Imagen adjunta"; `NoteEditorScreen` con previsualización, "Quitar imagen", etiquetas y `canSave = body.isNotBlank() || image != null`. Guardado con archivo antes de la nota (borra el archivo si falla después); borrado de nota borra adjuntos y archivos.
+  - Docs: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`; spec con findings de implementación y tasks marcadas.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 1m34s (66 tareas). Android/JVM: AttachmentRepository 1/1, Migration 1/1, NotePersistence 2/2, NoteRepository 3/3, AiClient 3/3, Greeting 1/1; iOS idem; 0 failures.
+  - `PlaybookDatabase.Schema.version = 4`; `find core/src -name '*.sqm'` → `1.sqm`, `2.sqm`, `3.sqm`; sin dependencias Gradle nuevas.
+  - `./init.sh` → exit 0, sin procesos de larga duración.
+  - `xcodebuild` scheme `iosApp` (iPhone 15, iOS 17.2) → BUILD SUCCEEDED; `NSCameraUsageDescription` presente en el Info.plist construido.
+  - Smoke Android (emulator-5556 API 35): DB on-device `user_version=4` + `note`+`embedding`+`note_tag`+`attachment`+índice; **galería** → preview → guardar con body vacío → lista con chip "Imagen"; fila `attachment` con ruta relativa `images/<uuid>.jpg` y archivo en `files/images/`; persistencia tras force-stop/relaunch; **borrado** con `AlertDialog` → `notes=0`/`attachments=0` y archivo eliminado; **cámara** (grant + FileProvider) → captura/guardar → adjunto `image/jpeg`; **permiso denegado** → diálogo accionable, 0 filas, sin crash.
+  - Smoke iOS (simulador iPhone 15, iOS 17.2): install/launch con PID vivo; DB `user_version=4` + tablas; **migración real v1→v4** (seed v1 → relaunch) preserva la nota y agrega `attachment`. Galería/cámara interactivas iOS no automatizables; cámara iOS en simulador → `CAMERA_UNAVAILABLE`.
+  - **Finding reproducible:** `ActivityResultContracts.TakePicture` no agrega los flags de grant de URI y la app de cámara fallaba al guardar (`RemoteException`); se reemplazó por `ACTION_IMAGE_CAPTURE` con `FLAG_GRANT_READ/WRITE_URI_PERMISSION` + `clipData`, tras lo cual funciona.
+- Evidence captured: arreglo `evidence` de `image-capture-camera` en `feature_list.json` (10 líneas); UI dumps en `composeApp/build/smoke-evidence/android-*`.
+- Files or artifacts updated: `core/src/commonMain/sqldelight/com/playbook/core/db/{Attachment.sq,3.sqm}`, `core/src/commonMain/kotlin/com/playbook/core/model/{Attachment,AttachmentMappers}.kt`, `core/src/commonMain/kotlin/com/playbook/core/repository/{AttachmentRepository,SqlDelightAttachmentRepository,SqlDelightNoteRepository}.kt`, `core/src/commonTest/kotlin/com/playbook/core/{repository/AttachmentRepositoryCheck,db/MigrationCheck}.kt`, `core/src/{androidUnitTest,iosTest}/kotlin/com/playbook/core/{repository/AttachmentRepository*,db/Migration*}.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/{ImageCapture,App,NotesListScreen,NoteEditorScreen}.kt`, `composeApp/src/{androidMain,iosMain}/kotlin/com/playbook/app/ImageCapture.*.kt`, `composeApp/src/androidMain/AndroidManifest.xml`, `composeApp/src/androidMain/res/xml/file_paths.xml`, `composeApp/src/{androidMain,iosMain}/kotlin/com/playbook/app/Main*.kt`, `iosApp/iosApp/Info.plist`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `docs/specs/image-capture-camera.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la cámara iOS real sólo se valida en dispositivo físico (simulador → `CAMERA_UNAVAILABLE`) y no hubo input automation iOS; se declara honestamente. "Quitar imagen" vuelve a `Create` (descarta el borrador del editor). Los adjuntos de una nota existente no se editan (fuera de alcance). El archivo físico se borra desde la UI: si falla el borrado queda un huérfano tolerado y documentado.
+- Next best step: validación independiente de `image-capture-camera` con `$feature-validator`; tras el `accept`, crear spec de `note-category-and-tags` con `$feature-spec`.
+
+### Session 026
+
+- Date: 2026-10-09
+- Goal: validación independiente de `image-capture-camera` (spec `docs/specs/image-capture-camera.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `image-capture-camera` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: complete image-capture-camera` creado por el orquestador.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks); 9/9 Android/JVM y 9/9 iOS, 0 failures; `./init.sh` → exit 0 con `init.sh` sin cambios.
+  - `PlaybookDatabase.Schema.version == 2`; `1.sqm` presente; sin dependencias nuevas; sin cambios en `init.sh`/`Note.sq`/build files.
+  - Controles negativos propios del validador (restaurados al byte original): comentar `deleteAttachmentsByNoteId` en `SqlDelightNoteRepository.delete` hace fallar `attachmentCrudAndCascade`; romper `1.sqm` (`attachment_broken`) hace fallar `migratesV1ToV2PreservingNotes`.
+  - Verificación independiente de artefactos: DB on-device `user_version=2` + `note`+`attachment`, fila con `file_path=images/<uuid>.jpg` (relativa) y post-borrado `note=0`/`attachment=0`; `NSCameraUsageDescription` en el Info.plist construido; UI dumps de diálogo de fuente, preview/quitar/guardar y chip "Imagen".
+  - Alcance/arquitectura: sin `ViewModel`/Flow/DI/navegación/`BLOB`, sin editar adjuntos existentes, sin audio/OCR/render/IA/GDD. Límites de tooling iOS (sin `idb`/`cliclick`, `osascript` bloqueado, cámara iOS en simulador) confirmados reales y declarados honestamente.
+- Evidence captured: línea de validación (accept) en el arreglo `evidence` de `image-capture-camera` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: hallazgos Low no bloqueantes (L1–L5): comentarios obsoletos sobre `TakePicture` en `ImageCapture.android.kt`/`AndroidManifest.xml`, KDoc de `createDatabase` que dice 'v1', fallo parcial improbable en `saveNoteWithImage`, temporal de cámara en `cacheDir/images/` y artefacto de smoke de permiso denegado no guardado. La cámara iOS real sólo se valida en dispositivo físico.
+- Next best step: crear spec de `note-category-and-tags` con `$feature-spec` e implementarla con `$feature-implementer` (primera feature no-`accepted` dependency-ready en orden).
