@@ -6,6 +6,8 @@ persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
 el repositorio cableado a la app, `create-text-note` el CRUD de notas de texto
 desde la UI (crear/editar/borrar + refresco), y `ai-client-interface` el puerto
 `AiClient` hacia el runtime de IA más un adaptador fake por defecto.
+`android-release-pipeline` agregó la configuración de release/signing de Android
+(keystore externo) y el runbook de publicación.
 
 ## Modules
 
@@ -175,6 +177,34 @@ composeApp (Android app / commonMain) ──▶ core
 - compileSdk **36**, minSdk **24**, targetSdk **36**, JVM target **11**, JDK **21**.
 - Versiones centralizadas en `gradle/libs.versions.toml`.
 - Android SDK en `local.properties` (`sdk.dir=...`), no versionado.
+
+## Android release
+
+- **Superficie:** `:composeApp` es el único módulo que produce artefactos de
+  release. `assembleRelease` genera `composeApp-release.apk` (o
+  `composeApp-release-unsigned.apk` sin credenciales) y `bundleRelease` genera
+  `composeApp-release.aab` (artefacto de subida a Play).
+- **Signing config condicional:** `composeApp/build.gradle.kts` carga las
+  credenciales con precedencia **variables de entorno > `keystore.properties`**
+  (raíz, gitignored). Sólo si las cuatro (`storeFile`/`storePassword`/`keyAlias`/
+  `keyPassword`, o sus equivalentes `PLAYBOOK_*`) están presentes se registra
+  `signingConfigs.create("release")` y se asigna al build type `release`. Si
+  falta alguna, no se registra el signing config y el release queda **sin firmar**
+  (modo degradado) en vez de fallar: así `init.sh` y cualquier entorno sin
+  secretos siguen funcionando.
+- **Keystore fuera del repo:** el keystore de release es la *upload key* del
+  desarrollador (Play App Signing custodia la *app signing key*). `.gitignore`
+  cubre `keystore.properties`, `*.jks` y `*.keystore`; **nunca** se versionan
+  secrets ni keystores.
+- **Versión overrideable:** `versionCode`/`versionName` se pueden pasar como
+  `-Pplaybook.versionCode=N` / `-Pplaybook.versionName=X` con los defaults
+  actuales (`1` / `"1.0"`); no requiere editar el script.
+- **R8/ProGuard:** `release` mantiene `isMinifyEnabled = false` (sin minificación
+  ni shrinking) para no arriesgar Compose en release; la optimización de tamaño
+  es trabajo posterior.
+- **Runbook:** `docs/release/android.md` (generación de keystore, build firmado,
+  verificación con `apksigner`/`jarsigner` e subida manual a Play internal
+  testing). La subida real requiere Play Console y no es parte de `init.sh`.
 
 ## Verification
 

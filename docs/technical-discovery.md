@@ -236,3 +236,35 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## Deployment Decisions (android-release-pipeline)
+
+Implementado 2026-10-09. Detalles en `ARCHITECTURE.md` y runbook en
+`docs/release/android.md`.
+
+- **Signing de release condicional:** `composeApp/build.gradle.kts` resuelve las
+  credenciales con precedencia **env > `keystore.properties`**. Sólo con las
+  cuatro presentes se registra `signingConfigs.create("release")` y se asigna al
+  build type `release`; si falta alguna, no se registra y `assembleRelease`
+  produce un APK **sin firmar** (modo degradado) sin fallar. Decisión clave: el
+  build de release nunca exige secrets, por lo que `init.sh` y los entornos
+  limpios siguen funcionando.
+- **Secrets fuera del repo:** `keystore.properties`, `*.jks` y `*.keystore`
+  quedan ignorados por git; `keystore.properties.example` documenta la plantilla
+  sin secrets. El keystore de release es la *upload key* (Play App Signing
+  custodia la *app signing key*).
+- **Artefactos:** `assembleRelease` → APK instalable (`composeApp-release.apk`;
+  `composeApp-release-unsigned.apk` en degradado); `bundleRelease` →
+  `composeApp-release.aab` para Play. Verificación con `apksigner` (APK) y
+  `jarsigner -verify` (AAB, firma JAR).
+- **Versión overrideable:** `-Pplaybook.versionCode=N` y
+  `-Pplaybook.versionName=X` con defaults `1` / `"1.0"`; Play exige incrementar
+  `versionCode` por subida sin editar el script.
+- **Sin R8/minificación:** `isMinifyEnabled = false` en release para no arriesgar
+  Compose; la optimización de tamaño queda fuera de alcance.
+- **Límite honesto:** la subida real al track *internal testing* de Play Console
+  requiere cuenta/app/testers y **no** es verificable en el repo; se documenta
+  como paso manual y su evidencia es externa (o declarada como no ejecutada). No
+  se agregan plugins de Play/fastlane (evitan service-account JSON) ni CI.
+- **`init.sh` sin cambios:** no corre tareas ni requiere secrets; sigue siendo el
+  gate no bloqueante de debug.
