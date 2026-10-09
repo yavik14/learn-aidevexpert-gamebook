@@ -58,8 +58,14 @@ class SqlDelightNoteRepository(
         return rowsAffected > 0
     }
 
-    override fun delete(id: String): Boolean {
-        val rowsAffected = database.noteQueries.deleteNoteById(id).value
-        return rowsAffected > 0
-    }
+    /**
+     * Borra la Nota y, en la misma transacción, sus filas `attachment` para no
+     * dejar huérfanas. La semántica pública no cambia: devuelve si la Nota
+     * existía (`rowsAffected > 0`).
+     */
+    override fun delete(id: String): Boolean =
+        database.transactionWithResult {
+            database.attachmentQueries.deleteAttachmentsByNoteId(id)
+            database.noteQueries.deleteNoteById(id).value > 0
+        }
 }

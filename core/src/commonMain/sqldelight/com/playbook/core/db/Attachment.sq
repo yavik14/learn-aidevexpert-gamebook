@@ -1,0 +1,30 @@
+-- Esquema v2 de Playbook: tabla `attachment` (adjuntos de una nota).
+-- Los bytes NO se guardan en la base: sólo metadatos + ruta relativa al
+-- contenedor de la app (un BLOB grande rompe en Android por el límite del
+-- `CursorWindow`, y en iOS la ruta absoluta cambia entre instalaciones).
+-- `kind` sólo vale "imagen" en image-capture-camera; `AUDIO` llegará con
+-- voice-attachment-storage sin cambiar el esquema (mismo valor de columna).
+CREATE TABLE attachment (
+  id TEXT NOT NULL PRIMARY KEY,
+  note_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX attachment_note_id ON attachment (note_id);
+
+insertAttachment:
+INSERT INTO attachment (id, note_id, kind, mime_type, file_path, byte_size, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+selectAttachmentsByNoteId:
+SELECT * FROM attachment WHERE note_id = ? ORDER BY created_at ASC, id ASC;
+
+selectAllAttachments:
+SELECT * FROM attachment ORDER BY created_at ASC, id ASC;
+
+deleteAttachmentsByNoteId:
+DELETE FROM attachment WHERE note_id = ?;

@@ -236,3 +236,52 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## Attachment & Image Capture Decisions (image-capture-camera)
+
+Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
+
+- **Archivo en disco + ruta relativa (no BLOB):** los bytes de la imagen no se
+  guardan en SQLite. Un BLOB puede superar el límite del `CursorWindow` de Android
+  (~2 MB) y lanzar `SQLiteBlobTooBigException`, y cargar BLOBs encarece cada
+  lectura de la lista. Se escribe el archivo en almacenamiento privado y la fila
+  `attachment` guarda **metadatos + ruta relativa** (`images/<uuid>.jpg`). La ruta
+  es relativa porque en iOS el path absoluto del sandbox cambia entre
+  instalaciones/updates.
+- **Esquema v2 + primera migración del repo:** `Attachment.sq` (tabla `attachment`
+  + índice `attachment_note_id`) y `1.sqm` (`CREATE TABLE attachment` + índice).
+  SQLDelight deriva `PlaybookDatabase.Schema.version = 2` de la migración más alta;
+  `AndroidSqliteDriver`/`NativeSqliteDriver` aplican create/migrate al abrir.
+  `createDatabase(...)` sigue forzando la apertura con el `PRAGMA`. No se toca
+  `note`, así que los datos v1 se conservan.
+- **Cascade sin huérfanos:** `SqlDelightNoteRepository.delete(id)` corre una
+  transacción (`transactionWithResult`) que borra `attachment` de la nota y luego
+  la `note`; devuelve `rowsAffected > 0`. Los archivos físicos los borra la UI con
+  el `AttachmentFileStore` (si el borrado físico falla, queda un huérfano de
+  archivo tolerado y documentado).
+- **Android cámara (finding):** `ActivityResultContracts.TakePicture` **no** agrega
+  `FLAG_GRANT_READ/WRITE_URI_PERMISSION`; la app de cámara fallaba al escribir el
+  output con `RemoteException` en `ContentResolver.openOutputStream`
+  (`checkAssociationAndPermissionLocked`). Se reemplaza por un intent
+  `ACTION_IMAGE_CAPTURE` lanzado con `StartActivityForResult` que agrega ambos
+  flags + `clipData`. `FileProvider` (`androidx.core:core`, transitivo por
+  `activity-compose`) requiere `<provider>` con `${applicationId}.fileprovider` y
+  `res/xml/file_paths.xml` (`<cache-path path="images/" />`). `CAMERA` se pide en
+  runtime; la galería usa `PickVisualMedia` (sin permiso).
+- **iOS pickers:** cámara con `AVCaptureDevice` (chequeo de availability +
+  `authorizationStatusForMediaType`/`requestAccessForMediaType`) y
+  `UIImagePickerController` presentado desde el controller superior; en simulador
+  no hay cámara → `CAMERA_UNAVAILABLE`. Galería con `PHPickerViewController`
+  (sin permiso). `loadObjectOfClass(UIImage)` no resuelve en el binding (espera
+  `NSItemProviderReadingProtocol`), así que la carga se hace con
+  `loadDataRepresentationForTypeIdentifier("public.image")` → `NSData` →
+  `UIImage.imageWithData`. La imagen se re-encodea a JPEG
+  (`UIImageJPEGRepresentation`, 0.9). Delegates de UIKit son weak: se retienen en
+  un holder. `decodeImageBitmap` usa `org.jetbrains.skia.Image`; el file store usa
+  `Application Support/images/`.
+- **Tests nuevos:** `verifyAttachmentCrud(driver)` (create/getByNoteId/getAll/
+  deleteByNoteId + `AttachmentKind.fromCode` + cascade al borrar la nota) y
+  `verifyMigrationV1ToV2(driver)` (construye v1, aplica `Schema.migrate(1, 2)`,
+  verifica que las notas v1 se conservan y `attachment` queda usable) en
+  `commonTest`; corren en Android/JVM (`AttachmentRepositoryAndroidTest`,
+  `MigrationAndroidTest`) e iOS (`AttachmentRepositoryIosTest`, `MigrationIosTest`).

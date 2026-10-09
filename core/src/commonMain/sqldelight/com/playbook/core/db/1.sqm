@@ -1,0 +1,16 @@
+-- Migración v1 -> v2: agrega la tabla `attachment` y su índice.
+-- SQLDelight deriva `Schema.version = 2` de este archivo; los drivers existentes
+-- (`AndroidSqliteDriver`/`NativeSqliteDriver`) aplican create/migrate al abrir la
+-- conexión. `createDatabase(...)` sigue forzando la apertura con el `PRAGMA`.
+-- No se toca la tabla `note`: los datos v1 se conservan intactos.
+CREATE TABLE attachment (
+  id TEXT NOT NULL PRIMARY KEY,
+  note_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX attachment_note_id ON attachment (note_id);
