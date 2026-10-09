@@ -6,6 +6,9 @@ persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
 el repositorio cableado a la app, `create-text-note` el CRUD de notas de texto
 desde la UI (crear/editar/borrar + refresco), y `ai-client-interface` el puerto
 `AiClient` hacia el runtime de IA más un adaptador fake por defecto.
+`embeddings-generation` agrega la tabla `embedding` (esquema **v2** con `1.sqm`),
+`EmbeddingRepository` y `NoteIndexingService` como primer consumidor real de
+`AiClient`.
 
 ## Modules
 
@@ -34,13 +37,23 @@ composeApp (Android app / commonMain) ──▶ core
 
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde
-  `core/src/commonMain/sqldelight/com/playbook/core/db/Note.sq`.
-- Esquema v1: tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
-  `created_at`, `updated_at`) y queries `insertNote`, `selectAllNotes`,
-  `selectNoteById`, `updateNote`, `deleteNoteById`. Sigue en v1 (sin `.sqm`):
-  `note-model-crud-core` sólo agregó queries, no cambió la tabla. Las tablas
-  vecinas (etiquetas, adjuntos, enlaces, embeddings) llegan en features
-  posteriores.
+  `core/src/commonMain/sqldelight/com/playbook/core/db/{Note,embedding}.sq`.
+- **Esquema v2:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+  `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
+  `selectNoteById`, `updateNote`, `deleteNoteById`) y tabla `embedding`
+  (`note_id` PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector`
+  BLOB, `indexed_at`; queries `upsertEmbedding`, `selectEmbeddingByNoteId`,
+  `selectAllEmbeddings`, `deleteEmbeddingByNoteId`). `embeddings-generation`
+  introdujo la migración `1.sqm` (v1 → v2) al crear la primera tabla vecina: los
+  drivers aplican create/migrate por `user_version` automáticamente y una
+  instalación nueva crea el esquema final. `INSERT OR REPLACE` en lugar de
+  `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
+  `minSdk = 24`. Las tablas vecinas restantes (etiquetas, adjuntos, enlaces)
+  llegan en features posteriores.
+- **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
+  `verifySqlDelightMigration`; la equivalencia entre `1.sqm` y el `CREATE TABLE`
+  de `embedding.sq` se cubre con un test portable
+  (`DatabaseMigrationCheck`) que corre en Android/JVM e iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
 - **Entry point:** `createDatabase(factory)` en `:core` construye la base y fuerza
@@ -48,7 +61,10 @@ composeApp (Android app / commonMain) ──▶ core
   aplicar el esquema al arrancar. Esto es necesario en iOS: `NativeSqliteDriver`
   abre la conexión de forma perezosa, por lo que sólo instanciar el driver no crea
   el archivo ni el esquema. El `PRAGMA` retorna filas: debe ir con `executeQuery`,
-  no con `execute` (que sólo admite statements sin resultado).
+  no con `execute` (que sólo admite statements sin resultado). Después ejecuta
+  `PRAGMA foreign_keys = ON` (sin filas → `execute`): SQLite trae las foreign keys
+  **OFF** por defecto y el `ON DELETE CASCADE` de `embedding` no aplicaría sin
+  esto. Es por conexión e idempotente.
 - **Wiring:** `MainActivity` (Android) y `MainViewController` (iOS, en
   `:composeApp`) llaman a `createDatabase(...)` al arrancar y construyen
   `SqlDelightNoteRepository(database, ::randomNoteId, ::currentTimeMillis)`, que
@@ -76,6 +92,20 @@ composeApp (Android app / commonMain) ──▶ core
   `owner`/`created_at`; `update`/`delete` devuelven `rowsAffected > 0`.
 - **Mapper** (`NoteMappers.kt`): importa `com.playbook.core.db.Note as NoteRow`
   para evitar la colisión con el modelo de dominio.
+- **Embedding** (`com.playbook.core.model`): `NoteEmbedding(noteId, values,
+  indexedAt)` es la entidad persistida (relación 1:0..1 con `Note`).
+  `NoteEmbeddingMappers.kt` importa `com.playbook.core.db.Embedding as
+  EmbeddingRow`, decodifica el BLOB y hace `check` de que `dimension ==
+  values.size` (fail-fast ante corrupción).
+- **Codec BLOB** (`com.playbook.core.repository.EmbeddingBlobCodec`): `internal
+  object` que serializa `List<Float>` a `ByteArray` con **big-endian explícito**
+  (`Float.toBits()`/`fromBits()`, 4 bytes por valor, puro Kotlin common y estable
+  entre plataformas). `decode` exige longitud múltiplo de 4.
+- **Repositorio de embeddings** (`com.playbook.core.repository`): interfaz
+  `EmbeddingRepository` (`upsert`/`getByNoteId`/`getAll`/`deleteByNoteId`) e
+  implementación `SqlDelightEmbeddingRepository(database, clock)`. `upsert`
+  `require(values.isNotEmpty())`, sella `indexedAt` con `clock()` y hace
+  `INSERT OR REPLACE`; `deleteByNoteId` devuelve `rowsAffected > 0`.
 - **IDs y tiempo** (`com.playbook.core.platform`): `expect`/`actual`
   `randomNoteId()`/`currentTimeMillis()` (Android `UUID`/`System`; iOS
   `NSUUID`/`NSDate`). En tests se inyectan fakes deterministas; no se usa
@@ -106,10 +136,21 @@ composeApp (Android app / commonMain) ──▶ core
   distintos salvo colisión de hash. `embed(emptyList()) == emptyList()`,
   `require(dimension > 0)` y `generate` devuelve una respuesta no vacía. Al
   vivir en `commonMain` (no en test) es inyectable desde el composition root.
-- **Sin wiring todavía:** no hay consumidor de IA (`embeddings-generation` será
-  el primero), por lo que `AiClient` **no** se cablea a `App` ni a los entry
-  points; sería una dependencia muerta. La inyección se materializa en los tests
-  del contrato (dos implementaciones por el mismo puerto).
+- **Primer consumidor real** (`com.playbook.core.ai.NoteIndexingService`):
+  `index(note: Note): IndexingResult` (`suspend`) llama
+  `aiClient.embed(listOf(note.body))`; si es válido (exactamente 1 vector no
+  vacío) hace `embeddingRepository.upsert(note.id, values)`. Un `AiClientException`
+  o una respuesta inválida (0 vectores, >1 vector, dimensión 0) devuelve
+  `IndexingResult.Failed` **sin escribir ni pisar** el embedding previo. **No
+  toca `NoteStatus`**: un fallo de IA no degrada la Nota (la captura nunca se
+  bloquea por IA). La fuente de verdad de "tiene embedding" es la fila en
+  `embedding`.
+- **Sin wiring a la UI todavía:** `NoteIndexingService`/`EmbeddingRepository`
+  existen y están cubiertos por tests, pero `AiClient` **no** se cablea a `App`
+  ni a los entry points; no hay superficie observable ni token de ciclo de vida
+  que lo dispare (llegará con `note-enrichment-status-ui`/`offline-pending-retry`).
+  La inyección se materializa en los tests del contrato (dos implementaciones por
+  el mismo puerto) y en `NoteIndexingService`.
 - **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato
   `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
   **1.10.1**, compatible con Kotlin 2.1.21.
@@ -190,9 +231,11 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Etiquetas, adjuntos, enlaces y embeddings (features posteriores). El runtime
-  de IA concreto (`ai-runtime-decision`) y el wiring de `AiClient` a su primer
-  consumidor (`embeddings-generation`) también quedan pendientes.
+- Etiquetas, adjuntos y enlaces (features posteriores). El runtime de IA concreto
+  (`ai-runtime-decision`), el wiring de `AiClient`/`NoteIndexingService` a la app
+  (`note-enrichment-status-ui`, `offline-pending-retry`) y la similitud coseno /
+  enlaces (`semantic-linking`) siguen pendientes. Los embeddings ya se generan y
+  persisten (`embeddings-generation`).
 - Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
 - Manejo del back físico Android/iOS en el editor (hoy sólo "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

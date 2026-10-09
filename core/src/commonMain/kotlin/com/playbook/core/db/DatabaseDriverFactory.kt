@@ -23,6 +23,11 @@ interface DatabaseDriverFactory {
  * El `PRAGMA user_version` retorna una fila, por lo que debe ejecutarse con
  * `executeQuery(...)` y no con `execute(...)`: SQLite (Jdbc y nativo) rechaza
  * `execute` sobre una sentencia que devuelve resultados.
+ *
+ * SQLite trae las foreign keys **OFF** por defecto, así que `ON DELETE CASCADE`
+ * no aplicaría sin habilitarlas. `PRAGMA foreign_keys = ON` se ejecuta después
+ * de la apertura, por conexión e idempotente; no retorna filas → va con
+ * `execute(...)`.
  */
 fun createDatabase(driverFactory: DatabaseDriverFactory): PlaybookDatabase {
     val driver = driverFactory.createDriver()
@@ -33,6 +38,11 @@ fun createDatabase(driverFactory: DatabaseDriverFactory): PlaybookDatabase {
             cursor.next()
             QueryResult.Unit
         },
+        parameters = 0,
+    )
+    driver.execute(
+        identifier = null,
+        sql = "PRAGMA foreign_keys = ON",
         parameters = 0,
     )
     return PlaybookDatabase(driver)

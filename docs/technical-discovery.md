@@ -236,3 +236,51 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## Embedding Decisions (embeddings-generation)
+
+Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
+
+- **Tabla separada `embedding` (1:0..1) + esquema v2.** Se descartó una columna
+  `embedding BLOB` en `note`: habría obligado a tocar la tabla y el CRUD
+  aceptados, y `selectAllNotes()` cargaría todos los BLOBs al pintar la lista.
+  La tabla separada mantiene las lecturas de Notas livianas y permite que
+  `semantic-linking` pida sólo `embedding.getAll()`.
+- **Primera migración `1.sqm` (v1 → v2).** Al crear la primera tabla vecina, el
+  esquema cambia: `PlaybookDatabase.Schema.version` pasa a **2**. Los drivers
+  (Android/Native) ya construidos con `Schema` migran automáticamente por
+  `user_version`; `Schema.create` en instalación nueva crea el esquema final. No
+  se cambió v1 "en el lugar" para no romper instalaciones existentes. Sin
+  `schemaOutputDirectory` ni `.db` versionado: el repo no usa
+  `verifySqlDelightMigration`; la equivalencia entre `1.sqm` y el `CREATE TABLE`
+  de `embedding.sq` (y la preservación de datos) se cubre con un test portable
+  (`DatabaseMigrationCheck`) que corre en Android/JVM e iOS. Limitación
+  documentada: `1.sqm` debe replicar el `CREATE TABLE` de `.sq`.
+- **FK con cascade.** `note_id ... REFERENCES note(id) ON DELETE CASCADE` evita
+  huérfanos. Como SQLite trae las foreign keys **OFF**, `createDatabase(...)`
+  agrega `PRAGMA foreign_keys = ON` después del `PRAGMA user_version` existente
+  (statement sin filas → `execute`). Sin esto, `ON DELETE CASCADE` no se aplica.
+- **`INSERT OR REPLACE` en vez de `ON CONFLICT DO UPDATE`:** el UPSERT de SQLite
+  requiere 3.24 (Android 11+) y `minSdk = 24` (SQLite 3.9). Se guarda un único
+  `indexed_at` (re-indexar lo actualiza); no hace falta `created_at` para datos
+  derivados.
+- **Codec BLOB big-endian explícito.** `EmbeddingBlobCodec` (puro Kotlin common,
+  sin dependencias) serializa `List<Float>` con `Float.toBits()`/`fromBits()` y
+  4 bytes por valor; `decode` exige longitud múltiplo de 4. Un cambio de
+  endianness rompe el round-trip (control negativo reproducible).
+- **Primer consumidor real de `AiClient`:** `NoteIndexingService` genera el
+  embedding de `note.body` y lo persiste vía `EmbeddingRepository`. Es `suspend`
+  para correrlo fuera del camino de captura; un fallo (`AiClientException`) o una
+  respuesta inválida (0 vectores, >1 vector, dimensión 0) devuelve
+  `IndexingResult.Failed` **sin escribir ni pisar** datos. **No transiciona
+  `NoteStatus`**: solo el embedding y sus Enlaces definen `indexada`, y los
+  Enlaces llegan con `semantic-linking`; la política de `pendiente`/`fallida` es
+  `offline-pending-retry`. La fuente de verdad de "tiene embedding" es la fila en
+  `embedding`.
+- **Tests:** `verifyEmbeddingRepository` (codec, persistencia, overwrite,
+  cascade, corrupción), `verifyNoteIndexing` (generación, overwrite, fallo,
+  respuesta inválida) y `verifyDatabaseMigration` (v1 → v2 + equivalencia con
+  `Schema.create`) en `commonTest`, corridos en Android/JVM
+  (`JdbcSqliteDriver.IN_MEMORY`) e iOS (`inMemoryDriver`). Smoke real de
+  migración v1 → v2 en Android (emulador) e iOS (simulador): `user_version = 2`,
+  tabla `embedding` creada y Notas preservadas, sin crashes.

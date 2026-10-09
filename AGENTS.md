@@ -13,8 +13,9 @@ del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 `docs/technical-discovery.md`. La primera UI real (lista de notas) llegó con
 `notes-list-ui` y el CRUD de texto desde la UI (crear/editar/borrar + refresco)
 con `create-text-note` (implementada y `accepted`).
-Próxima feature en cola: `note-category-and-tags` (depende de `create-text-note`,
-ya `accepted`; requiere spec).
+Próxima feature en cola: `note-category-and-tags` y `ai-runtime-decision`
+(dependencias `accepted`; requieren spec). `embeddings-generation` está
+`passing` (implementada y auto-verificada), pendiente de validación independiente.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
