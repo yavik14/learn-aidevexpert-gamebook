@@ -18,12 +18,12 @@ cloud-first), la publicación de Android con `android-release-pipeline`
 (release/signing con keystore externo + runbook; ver `docs/release/android.md`),
 la generación/persistencia de embeddings con `embeddings-generation` (esquema v2
 y `1.sqm`), la captura por voz nativa con `voice-capture-stt` (puerto
-`VoiceTranscriber` + adaptadores Android/iOS) y las Etiquetas libres con
-`note-category-and-tags` (esquema v3, migración `2.sqm`), todas `accepted`.
-**Nunca** versionar keystores ni secrets.
+`VoiceTranscriber` + adaptadores Android/iOS), las Etiquetas libres con
+`note-category-and-tags` (esquema v3, migración `2.sqm`) y la captura de imagen
+(cámara/galería → Nota con Adjunto) con `image-capture-camera` (esquema v4,
+migración `3.sqm`), todas `accepted`. **Nunca** versionar keystores ni secrets.
 Próximas features en cola: `semantic-linking` (depende de `embeddings-generation`,
-ya `accepted`) y las de captura por imagen / release de iOS (dependen de
-`create-text-note`, ya `accepted`); requieren spec.
+ya `accepted`); requiere spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

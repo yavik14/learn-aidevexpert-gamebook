@@ -26,6 +26,8 @@
 	<string>Playbook usa el reconocimiento de voz para transcribir tus dictados en texto.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Playbook usa la cámara para adjuntar una foto de tu boceto a una nota.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

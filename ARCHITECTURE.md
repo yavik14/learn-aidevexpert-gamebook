@@ -12,8 +12,10 @@ de release/signing de Android (keystore externo) y el runbook de publicación,
 `embeddings-generation` la tabla `embedding` (esquema v2 con `1.sqm`),
 `EmbeddingRepository` y `NoteIndexingService` como primer consumidor real de
 `AiClient`, `voice-capture-stt` la captura por voz nativa (puerto
-`VoiceTranscriber` + adaptadores Android/iOS), y `note-category-and-tags` las
-Etiquetas libres (esquema **v3** con `note_tag` y la migración `2.sqm` v2→v3).
+`VoiceTranscriber` + adaptadores Android/iOS), `note-category-and-tags` las
+Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`), y
+`image-capture-camera` el primer Adjunto: tabla `attachment` (esquema v4 con
+`3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería).
 
 ## Modules
 
@@ -43,27 +45,29 @@ composeApp (Android app / commonMain) ──▶ core
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde los `.sq` de
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
-- **Esquema v3:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+- **Esquema v4:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
   `selectNoteById`, `updateNote`, `deleteNoteById`), tabla `embedding` (`note_id`
   PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
-  `indexed_at`; queries `upsertEmbedding`, `selectEmbeddingByNoteId`,
-  `selectAllEmbeddings`, `deleteEmbeddingByNoteId`) y tabla `note_tag` (`note_id`,
-  `label`, PK compuesta `(note_id, label)`; N—N sin FK, limpieza explícita en el
-  repositorio). La tabla `note` no cambió en estas features.
-- **Migraciones (v1 → v2 → v3):** `embeddings-generation` introdujo `1.sqm`
-  (v1 → v2, crea `embedding`) y `note-category-and-tags` `2.sqm` (v2 → v3, crea
-  `note_tag`). Los `.sq` describen el esquema más reciente y los `.sqm` hacen
-  upgrade; los drivers (`AndroidSqliteDriver`/`NativeSqliteDriver` con
-  `PlaybookDatabase.Schema`) detectan `user_version` y ejecutan `Schema.migrate`.
-  `PlaybookDatabase.Schema.version = 3`. `INSERT OR REPLACE` en lugar de
+  `indexed_at`), tabla `note_tag` (`note_id`, `label`, PK `(note_id, label)`; N—N
+  sin FK, limpieza explícita en el repositorio) y tabla `attachment` (`id`,
+  `note_id`, `kind`, `mime_type`, `file_path`, `byte_size`, `created_at` + índice
+  `attachment_note_id`). La tabla `note` no cambió en estas features; los bytes de
+  la imagen **no** se guardan en la base (sólo metadatos + ruta relativa).
+- **Migraciones (v1 → v2 → v3 → v4):** `embeddings-generation` introdujo `1.sqm`
+  (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 → v3, `note_tag`) e
+  `image-capture-camera` `3.sqm` (v3 → v4, `attachment`). Los `.sq` describen el
+  esquema más reciente y los `.sqm` hacen upgrade; los drivers
+  (`AndroidSqliteDriver`/`NativeSqliteDriver` con `PlaybookDatabase.Schema`)
+  detectan `user_version` y ejecutan `Schema.migrate`.
+  `PlaybookDatabase.Schema.version = 4`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
-  `minSdk = 24`. Las tablas vecinas restantes (adjuntos, enlaces) llegan en
-  features posteriores.
+  `minSdk = 24`. Las tablas vecinas restantes (enlaces) llegan en features
+  posteriores.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
   `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
-  de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`, y la
-  migración de etiquetas en `NoteTagCheck.verifyNoteTagMigration`) que corren en
+  de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`,
+  `NoteTagCheck.verifyNoteTagMigration` y `verifyMigrationV1ToV4`) que corren en
   Android/JVM e iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
@@ -78,8 +82,9 @@ composeApp (Android app / commonMain) ──▶ core
   esto. Es por conexión e idempotente.
 - **Wiring:** `MainActivity` (Android) y `MainViewController` (iOS, en
   `:composeApp`) llaman a `createDatabase(...)` al arrancar y construyen
-  `SqlDelightNoteRepository(database, ::randomNoteId, ::currentTimeMillis)`, que
-  pasan a `App(noteRepository)`.
+  `SqlDelightNoteRepository(database, ::randomNoteId, ::currentTimeMillis)` y
+  `SqlDelightAttachmentRepository(database, ::randomNoteId, ::currentTimeMillis)`,
+  que pasan a `App(noteRepository, attachmentRepository)`.
 - **iOS host:** la app Xcode enlaza `libsqlite3` (`OTHER_LDFLAGS = -lsqlite3`)
   porque el driver nativo referencia los símbolos de SQLite del sistema.
 
@@ -110,7 +115,16 @@ composeApp (Android app / commonMain) ──▶ core
     una transacción; `getById` lee `selectTagsByNoteId`; `getAll` usa
     `selectAllNoteTags` agrupado en memoria (evita N+1); `update` reemplaza el
     conjunto completo (delete + insert) en la misma transacción que la nota y
-    sólo si la fila existía; `delete` limpia `note_tag` junto con la nota.
+    sólo si la fila existía; `delete` limpia `note_tag` y las filas `attachment`
+    de la nota en la misma transacción (`transactionWithResult`), sin huérfanos.
+- **Adjunto** (`com.playbook.core.model`): `Attachment` (id, noteId, kind,
+  mimeType, filePath, byteSize, createdAt) + enum `AttachmentKind` (`IMAGE` →
+  `"imagen"`; `AUDIO` llegará con `voice-attachment-storage` sin cambiar el
+  esquema) con `code`/`fromCode` fail-fast. `AttachmentMappers.kt` aliasa
+  `com.playbook.core.db.Attachment as AttachmentRow`. `AttachmentRepository`
+  (`create`/`getByNoteId`/`getAll`/`deleteByNoteId`) +
+  `SqlDelightAttachmentRepository(database, idFactory, clock)`. `filePath` es
+  relativo al contenedor de la app.
 - **Mapper** (`NoteMappers.kt`): importa `com.playbook.core.db.Note as NoteRow`
   para evitar la colisión con el modelo de dominio;
   `NoteRow.toDomain(tags = emptyList())` recibe las etiquetas ya resueltas.
@@ -138,6 +152,45 @@ composeApp (Android app / commonMain) ──▶ core
   cubierto por `verifyNoteCrud`.
 - El repositorio se instancia en los entry points de plataforma y se pasa a la
   UI; no hay DI.
+
+## Attachments y captura nativa
+
+- **Contrato común** (`composeApp/src/commonMain/.../ImageCapture.kt`):
+  `ImageSource` (`CAMERA`/`GALLERY`), `PickedImage` (bytes + mimeType, en
+  memoria), `ImageCaptureError` (`PERMISSION_DENIED`, `CAMERA_UNAVAILABLE`,
+  `READ_FAILED`, `UNKNOWN`), `ImagePicker` + `rememberImagePicker(...)`,
+  `StoredImage`/`AttachmentFileStore` + `rememberAttachmentFileStore()`, y
+  `decodeImageBitmap(bytes)`. Son `expect`; las implementaciones viven en
+  `androidMain`/`iosMain`.
+- **Regla durable:** los bytes de imagen **nunca** se guardan en la base; se
+  escribe el archivo en almacenamiento privado y la fila `attachment` guarda la
+  **ruta relativa** (`images/<uuid>.jpg`). En iOS la ruta absoluta del sandbox
+  cambia entre instalaciones/updates; por eso es relativa.
+- **Android:** cámara con permiso `CAMERA` en runtime + intent
+  `ACTION_IMAGE_CAPTURE` (`StartActivityForResult`) sobre un `Uri` de
+  `FileProvider` en `cacheDir/images/`. No se usa
+  `ActivityResultContracts.TakePicture` porque no agrega los flags de grant de
+  URI y la app de cámara falla al escribir el output; el intent se arma con
+  `FLAG_GRANT_READ/WRITE_URI_PERMISSION` + `clipData`. Galería con
+  `PickVisualMedia` (sin permiso). `AndroidAttachmentFileStore` usa
+  `filesDir/images/`; `decodeImageBitmap` usa `BitmapFactory`.
+  `AndroidManifest.xml` declara `CAMERA`, `uses-feature camera required=false` y
+  el `<provider>` `FileProvider` (`${applicationId}.fileprovider` +
+  `res/xml/file_paths.xml`).
+- **iOS:** cámara con `AVCaptureDevice` (availability + permission) y
+  `UIImagePickerController` presentado desde el controller superior; si el
+  simulador no expone cámara → `CAMERA_UNAVAILABLE`. Galería con
+  `PHPickerViewController` (sin permiso). La imagen se re-encodea a JPEG
+  (`UIImageJPEGRepresentation`, calidad 0.9). `IosAttachmentFileStore` usa
+  `Application Support/images/`; `decodeImageBitmap` usa
+  `org.jetbrains.skia.Image`. `Info.plist` incluye `NSCameraUsageDescription`.
+  Los delegates de UIKit son weak: se retienen en un holder para no liberarlos
+  mientras el picker está presentado.
+- **Ciclo de vida del archivo:** al guardar se escribe el archivo **antes** de
+  crear la nota y el adjunto; si algo falla después, se borra el archivo
+  recién guardado (sin huérfanos). Al borrar la nota, las filas se borran en
+  cascade dentro del repositorio y los archivos con el `AttachmentFileStore`
+  desde la UI.
 
 ## AI
 
@@ -234,39 +287,45 @@ composeApp (Android app / commonMain) ──▶ core
 ## UI
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
-  voiceTranscriber: VoiceTranscriber)` es la raíz de la UI y dueña del estado.
-  Hoistea `notes` (`mutableStateOf`), `destination` (`NotesDestination`:
-  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`), `refreshKey` y `voiceState`
-  (`VoiceUiState`: `Idle`/`Listening(partial)`/`Processing`/`Error`).
-  La lectura ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
-  composición; tras cada mutación se incrementa `refreshKey` (`reload()`), lo que
-  dispara la relectura y refleja los cambios sin reiniciar la app. Sin DI, sin
+  attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber)`
+  es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
+  (`mutableStateOf`), `destination` (`NotesDestination`:
+  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`),
+  `refreshKey`, `voiceState` (`VoiceUiState`) y el estado de captura de imagen
+  (`showImageSourceDialog`/`imageError`). La lectura ocurre en un
+  `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de composición; tras cada
+  mutación se incrementa `refreshKey` (`reload()`). Sin DI, sin
   `ViewModel`/`Lifecycle`, sin coroutines fuera de Compose y sin Flow ni librería
-  de navegación.
+  de navegación. Obtiene el `ImagePicker` y el `AttachmentFileStore` por
+  `remember`; la acción de imagen abre un `AlertDialog` "Agregar imagen"
+  (Cámara/Galería/Cancelar), `onResult` navega a `CreateWithImage` y `onError`
+  muestra un `AlertDialog` accionable.
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
-- **`NotesListScreen`**: `Scaffold` con `ExtendedFloatingActionButton` "Nueva
-  nota"; acción secundaria `FilledTonalButton` "Dictar nota" (`onDictate`) visible
-  en el estado vacío y con notas; estado vacío ("Todavía no hay notas") con CTA
-  "Crear primera nota"; y estado con notas (título "Notas" + `LazyColumn` de
-  `Card`s clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra `body`
-  (máx. 2 líneas, ellipsis) y una fila de chips de texto con `track.code` (o "Sin
-  track" si es `null`) y `status.code`; si `note.tags` no está vacía, agrega una
-  fila de chips de etiqueta (misma `LabelChip`, en `Row` con `horizontalScroll`).
-  El `track`/`status`/etiquetas se comunican con texto, no sólo color (`DESIGN.md`).
-- **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`)
-  y editar (`isEditing = true`). `OutlinedTextField` multilínea para `body`;
-  selector de `track` ("Sin track" + `Track.entries`) que comunica la selección
-  con marca textual "✓", borde y color; campo "Nueva etiqueta" + botón "Agregar"
-  (habilitado con texto no vacío) que aplica `normalizeTags` y limpia el campo;
-  chips de etiqueta con control de quitar "×" (`clickable` con
-  `onClickLabel = "Quitar etiqueta <label>"`, `role = Role.Button`, sin íconos
-  nuevos); `Guardar` deshabilitado si `body.isBlank()`; `Cancelar`; y en edición
-  `Borrar` con `AlertDialog` de confirmación. La pantalla mantiene el borrador
-  local (`body`/`track`/`tags`) y emite
-  `onSave(body, track, tags)`/`onDelete`/`onCancel`; la persistencia y el
-  refresco los maneja `App`. No hay control de Categoría/Tipo/Nivel: el `track`
-  ya cubre la clasificación fija.
+- **`NotesListScreen`**: `Scaffold` con una fila de `ExtendedFloatingActionButton`
+  ("Nueva nota" + "Foto"); acción secundaria `FilledTonalButton` "Dictar nota"
+  (`onDictate`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
+  + "Agregar foto"; y estado con notas (título "Notas" + `LazyColumn` de `Card`s
+  clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra
+  `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
+  "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
+  (o "Sin track") y `status.code`, y —si `note.tags` no está vacía— una fila de
+  chips de etiqueta (misma `LabelChip`, en `Row` con `horizontalScroll`). Todo se
+  comunica con texto, no sólo color (`DESIGN.md`).
+- **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
+  (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de
+  `track` ("Sin track" + `Track.entries`) que comunica la selección con marca
+  textual "✓", borde y color; campo "Nueva etiqueta" + botón "Agregar" (aplica
+  `normalizeTags`) y chips de etiqueta con control de quitar "×" (`clickable` con
+  `onClickLabel`/`role = Role.Button`); `Guardar` deshabilitado si `body.isBlank()`
+  **y** no hay `initialImage` (una nota sólo-imagen es válida); `Cancelar`; y en
+  edición `Borrar` con `AlertDialog`. Cuando llega `initialImage` muestra la
+  previsualización decodificada (`decodeImageBitmap`), "Quitar imagen" y el
+  placeholder de fallo si no decodifica. Mantiene el borrador local
+  (`body`/`track`/`tags`) y emite
+  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`; la
+  persistencia y el refresco los maneja `App`. No hay control de
+  Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
 - **`VoiceCaptureScreen`** (nuevo): pantalla "tonta" de dictado. Recibe
   `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
   `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
@@ -280,26 +339,34 @@ composeApp (Android app / commonMain) ──▶ core
   `reload()`; un final vacío se trata como `NO_MATCH`. Al salir del destino un
   `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el micrófono).
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
-  track, tags = tags))` (status default `CAPTURED`); editar → `update(note.copy(
-  body = body.trim(), track = ..., tags = tags))` (re-sella `updatedAt`, y
-  reemplaza el conjunto de etiquetas, preservando `owner`/`createdAt`/`status`);
-  borrar → `delete(id)`; siempre `reload()` y vuelta a la lista. El `status` no
-  se edita desde la UI. Si el `id` en `Edit(noteId)` ya no existe en `notes`, se
-  vuelve a la lista.
+  track, tags = tags))` (status default `CAPTURED`); **crear con imagen** →
+  `fileStore.saveImage(bytes, mime)` → `create(NoteDraft(...))` →
+  `attachmentRepository.create(note.id, IMAGE, mime, relativePath, byteSize)` →
+  `reload()`; si algo falla después de guardar el archivo, se borra (sin
+  huérfanos). Editar → `update(note.copy(body = body.trim(), track = ...,
+  tags = tags))` (re-sella `updatedAt`, reemplaza el conjunto de etiquetas y
+  preserva `owner`/`createdAt`/`status`); borrar → se leen los adjuntos de la
+  nota, `delete(id)` (limpia `note_tag` y las filas `attachment` en la misma
+  transacción) y se borran los archivos con el `AttachmentFileStore`; siempre
+  `reload()` y vuelta a la lista. El `status` no se edita desde la UI. Si el `id`
+  en `Edit(noteId)` ya no existe en `notes`, se vuelve a la lista.
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
-  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas; siguen
-  fuera de esta superficie los adjuntos, la IA y el GDD.
+  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas e
+  `image-capture-camera` la captura/adjunto de imagen (sólo al **crear**; sin
+  edición de adjuntos existentes ni render en la lista/detalle). Siguen fuera de
+  esta superficie la IA y el GDD.
 
 ## Runtime surfaces
 
 - **Android:** `MainActivity` (`com.playbook.app`) monta `App(noteRepository,
-  AndroidVoiceTranscriber(this))`, aplica el esquema local con
-  `createDatabase(AndroidDatabaseDriverFactory(...))` y construye el
-  `SqlDelightNoteRepository`.
+  attachmentRepository, AndroidVoiceTranscriber(this))`, aplica el esquema local v4
+  con `createDatabase(AndroidDatabaseDriverFactory(...))` y construye
+  `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository`.
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
-  local, construye el repositorio y `IosVoiceTranscriber()`, y envuelve
-  `App(repository, transcriber)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
+  local, construye los dos repositorios y `IosVoiceTranscriber()`, y envuelve
+  `App(notes, attachments, transcriber)`; lo llama `ComposeView` (SwiftUI) en
+  `iosApp`.
 
 ## Identifiers
 
@@ -359,12 +426,15 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Adjuntos y enlaces (features posteriores). El wiring de
-  `AiClient`/`NoteIndexingService` a la app (`note-enrichment-status-ui`,
-  `offline-pending-retry`) y la similitud coseno / enlaces (`semantic-linking`)
-  siguen pendientes; los embeddings ya se generan y persisten
-  (`embeddings-generation`). El proveedor/modelo/dimensión y la gestión de keys
-  son follow-ups del ADR 0001 (`docs/adr/0001-ai-runtime-decision.md`).
+- Adjuntos de audio (`voice-attachment-storage`), OCR del boceto
+  (`image-ocr-optional`), edición de adjuntos de una nota existente y render de la
+  imagen en la lista/detalle (hoy sólo chip "Imagen" + previsualización al crear).
+- Enlaces (features posteriores). El wiring de `AiClient`/`NoteIndexingService` a
+  la app (`note-enrichment-status-ui`, `offline-pending-retry`) y la similitud
+  coseno / enlaces (`semantic-linking`) siguen pendientes; los embeddings ya se
+  generan y persisten (`embeddings-generation`). El proveedor/modelo/dimensión y
+  la gestión de keys son follow-ups del ADR 0001
+  (`docs/adr/0001-ai-runtime-decision.md`).
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).
 - Guardar el audio original del dictado como `Adjunto`
   (`voice-attachment-storage`): `voice-capture-stt` sólo persiste la transcripción.
