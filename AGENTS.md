@@ -15,9 +15,11 @@ del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 con `create-text-note`, el puerto de IA con `ai-client-interface`, la decisión de
 runtime de IA con `ai-runtime-decision` (ADR + spike test-only, decisión híbrida
 cloud-first), la publicación de Android con `android-release-pipeline`
-(release/signing con keystore externo + runbook; ver `docs/release/android.md`) y
+(release/signing con keystore externo + runbook; ver `docs/release/android.md`),
 la generación/persistencia de embeddings con `embeddings-generation` (esquema v2
-y `1.sqm`), todas `accepted`. **Nunca** versionar keystores ni secrets.
+y `1.sqm`) y la captura por voz nativa con `voice-capture-stt` (puerto
+`VoiceTranscriber` + adaptadores Android/iOS), todas `accepted`. **Nunca**
+versionar keystores ni secrets.
 Próximas features en cola: `note-category-and-tags` (depende de `create-text-note`,
 ya `accepted`) y `semantic-linking` (depende de `embeddings-generation`, ya
 `accepted`); requieren spec.
