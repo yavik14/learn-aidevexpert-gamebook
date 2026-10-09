@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,26 +28,34 @@ import androidx.compose.ui.unit.dp
 import com.playbook.core.model.Note
 
 /**
- * Lista de notas locales. Permite crear (FAB y CTA del estado vacío) y abrir una
- * tarjeta para editarla. El refresco tras la mutación lo maneja [App]: esta
- * pantalla sólo emite intenciones.
+ * Lista de notas locales. Permite crear una nota de texto, capturar/adjuntar una
+ * imagen y abrir una tarjeta para editarla. El refresco tras la mutación lo
+ * maneja [App]: esta pantalla sólo emite intenciones.
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
- * regla de accesibilidad de `DESIGN.md`.
+ * regla de accesibilidad de `DESIGN.md`; las notas con adjuntos muestran un chip
+ * textual "Imagen".
  */
 @Composable
 fun NotesListScreen(
     notes: List<Note>,
+    attachmentCounts: Map<String, Int>,
     onCreate: () -> Unit,
+    onCaptureImage: () -> Unit,
     onEdit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onCreate) {
-                Text(text = "Nueva nota")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ExtendedFloatingActionButton(onClick = onCreate) {
+                    Text(text = "Nueva nota")
+                }
+                ExtendedFloatingActionButton(onClick = onCaptureImage) {
+                    Text(text = "Foto")
+                }
             }
         },
     ) { innerPadding ->
@@ -61,6 +70,7 @@ fun NotesListScreen(
             if (notes.isEmpty()) {
                 EmptyNotes(
                     onCreate = onCreate,
+                    onCaptureImage = onCaptureImage,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             } else {
@@ -69,7 +79,11 @@ fun NotesListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(notes, key = { it.id }) { note ->
-                        NoteCard(note = note, onClick = { onEdit(note.id) })
+                        NoteCard(
+                            note = note,
+                            hasAttachment = (attachmentCounts[note.id] ?: 0) > 0,
+                            onClick = { onEdit(note.id) },
+                        )
                     }
                 }
             }
@@ -80,6 +94,7 @@ fun NotesListScreen(
 @Composable
 private fun EmptyNotes(
     onCreate: () -> Unit,
+    onCaptureImage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -97,14 +112,19 @@ private fun EmptyNotes(
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onCreate) {
-            Text(text = "Crear primera nota")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onCreate) {
+                Text(text = "Crear primera nota")
+            }
+            OutlinedButton(onClick = onCaptureImage) {
+                Text(text = "Agregar foto")
+            }
         }
     }
 }
 
 @Composable
-private fun NoteCard(note: Note, onClick: () -> Unit) {
+private fun NoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -112,13 +132,16 @@ private fun NoteCard(note: Note, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                text = note.body,
+                text = note.body.ifBlank { "Imagen adjunta" },
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasAttachment) {
+                    LabelChip(text = "Imagen")
+                }
                 LabelChip(text = note.track?.code ?: "Sin track")
                 LabelChip(text = note.status.code)
             }

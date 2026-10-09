@@ -12,7 +12,9 @@ corre el gate real no bloqueante: Android `assembleDebug`, tests del core y link
 del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 `docs/technical-discovery.md`. La primera UI real (lista de notas) llegó con
 `notes-list-ui` y el CRUD de texto desde la UI (crear/editar/borrar + refresco)
-con `create-text-note` (implementada y `accepted`).
+con `create-text-note` (implementada y `accepted`), y la captura de imagen
+(cámara/galería → Nota con Adjunto) con `image-capture-camera` (implementada y
+`accepted`).
 Próxima feature en cola: `note-category-and-tags` (depende de `create-text-note`,
 ya `accepted`; requiere spec).
 
