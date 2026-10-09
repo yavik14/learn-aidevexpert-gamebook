@@ -236,3 +236,40 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## Tags & Migration Decisions (note-category-and-tags)
+
+Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
+
+- **Etiquetas vs `Track`:** una `Etiqueta` es vocabulario libre, múltiple y del
+  usuario (relación N—N `Nota N—N Etiqueta`); el `track` es clasificación fija,
+  única y ya existente. No se agrega Categoría/Tipo/Nivel.
+- **Esquema v2 + primer `.sqm`:** la tabla `note_tag` (`note_id`, `label`, PK
+  `(note_id, label)`) exige un cambio de esquema. Se agregó
+  `core/src/commonMain/sqldelight/migrations/1.sqm` (v1→v2) y
+  `PlaybookDatabase.Schema.version = 2`. Los `.sqm` se ubican en
+  `sqldelight/migrations/`; SQLDelight los detecta y `Schema.migrate` los aplica.
+  La tabla `note` no cambió.
+- **Sin FK ni cascade:** la etiqueta se identifica por su `label` (sin tabla
+  `tag` ni id sintético) y la limpieza es explícita en el repositorio. Si una
+  feature futura necesita renombrar/autocompletar etiquetas globalmente, se
+  normaliza a `tag` + `note_tag` sin cambiar el contrato `Note.tags`.
+- **Normalización:** `normalizeTags` recorta, descarta vacías, deduplica
+  case-insensitive conservando la primera grafía y ordena case-insensitive. La
+  UI reutiliza el helper; el repositorio lo aplica en `create`/`update`. Sin
+  tope de cantidad/largo (decisión explícita) y sin orden de ingreso (se
+  devuelven ordenadas por `label`).
+- **Transacciones:** `create`/`update`/`delete` agrupan nota + etiquetas en
+  `database.transaction`. `update` reemplaza el conjunto (delete + insert) sólo
+  si la nota existía; `getAll` agrupa `selectAllNoteTags` en memoria para evitar
+  N+1.
+- **Migración verificada:** test compartido `verifyNoteTagMigration(driver)` en
+  `commonTest` simula una base v1 con `NoteV1Schema` (SqlSchema sintético v1),
+  corre `Schema.migrate(driver, 1, 2)` y valida que la nota sobrevive y
+  `note_tag` queda operable. Corre en Android/JVM e iOS. Además se verificó la
+  migración real sobre `playbook.db` v1 en emulador Android y simulador iOS
+  (`user_version` 1→2, notas y `track`/`status` intactos).
+- **UI:** el editor suma campo "Nueva etiqueta" + "Agregar" y chips con "×";
+  la lista muestra una fila de chips de etiqueta. Sin dependencias nuevas
+  (texto, no íconos) y sin cambio de `init.sh`.
+

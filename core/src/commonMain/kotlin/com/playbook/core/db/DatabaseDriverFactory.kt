@@ -13,7 +13,7 @@ interface DatabaseDriverFactory {
 
 /**
  * Construye la [PlaybookDatabase] a partir del driver de la plataforma y fuerza
- * la apertura de la conexión para que el esquema v1 quede aplicado al arrancar.
+ * la apertura de la conexión para que el esquema local quede aplicado al arrancar.
  *
  * El driver nativo de SQLDelight (`NativeSqliteDriver`) abre la conexión de forma
  * perezosa: crear el driver sólo crea el directorio de la base, no el archivo ni

@@ -1,0 +1,22 @@
+-- Esquema v2: tabla N—N `note_tag` (Nota N—N Etiqueta) para las etiquetas libres.
+-- La etiqueta se identifica por su `label` (sin tabla `tag` ni id sintético):
+-- suficiente para el MVP, sin gestión global de etiquetas. La limpieza de las
+-- etiquetas es explícita en el repositorio (sin FK ni ON DELETE CASCADE).
+CREATE TABLE note_tag (
+  note_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  PRIMARY KEY (note_id, label)
+);
+
+insertNoteTag:
+INSERT OR IGNORE INTO note_tag (note_id, label)
+VALUES (?, ?);
+
+selectTagsByNoteId:
+SELECT label FROM note_tag WHERE note_id = ? ORDER BY label;
+
+selectAllNoteTags:
+SELECT note_id, label FROM note_tag ORDER BY note_id, label;
+
+deleteTagsByNoteId:
+DELETE FROM note_tag WHERE note_id = ?;

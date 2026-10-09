@@ -59,13 +59,15 @@ fun App(noteRepository: NoteRepository) {
             NotesDestination.Create -> NoteEditorScreen(
                 initialBody = "",
                 initialTrack = null,
+                initialTags = emptyList(),
                 isEditing = false,
-                onSave = { body, track ->
+                onSave = { body, track, tags ->
                     noteRepository.create(
                         NoteDraft(
                             owner = LOCAL_OWNER_ID,
                             body = body.trim(),
                             track = track,
+                            tags = tags,
                         ),
                     )
                     goToList()
@@ -84,9 +86,12 @@ fun App(noteRepository: NoteRepository) {
                     NoteEditorScreen(
                         initialBody = note.body,
                         initialTrack = note.track,
+                        initialTags = note.tags,
                         isEditing = true,
-                        onSave = { body, track ->
-                            noteRepository.update(note.copy(body = body.trim(), track = track))
+                        onSave = { body, track, tags ->
+                            noteRepository.update(
+                                note.copy(body = body.trim(), track = track, tags = tags),
+                            )
                             goToList()
                             reload()
                         },
