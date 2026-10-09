@@ -1,6 +1,7 @@
 package com.playbook.app
 
 import androidx.compose.ui.window.ComposeUIViewController
+import com.playbook.app.voice.IosVoiceTranscriber
 import com.playbook.core.db.IosDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
@@ -14,6 +15,7 @@ import platform.UIKit.UIViewController
 // esquema v1. La UI compartida los consume vía App(noteRepository).
 private var playbookDatabase: PlaybookDatabase? = null
 private var noteRepository: NoteRepository? = null
+private var voiceTranscriber: IosVoiceTranscriber? = null
 
 fun MainViewController(): UIViewController {
     val repository = noteRepository ?: run {
@@ -26,5 +28,6 @@ fun MainViewController(): UIViewController {
             clock = ::currentTimeMillis,
         ).also { noteRepository = it }
     }
-    return ComposeUIViewController { App(repository) }
+    val transcriber = voiceTranscriber ?: IosVoiceTranscriber().also { voiceTranscriber = it }
+    return ComposeUIViewController { App(repository, transcriber) }
 }

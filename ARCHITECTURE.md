@@ -4,8 +4,10 @@ Mapa de la base KMP. `local-persistence-sqldelight` agregó la capa de
 persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
 `Note` y su CRUD, `notes-list-ui` la primera pantalla real (lista de notas) con
 el repositorio cableado a la app, `create-text-note` el CRUD de notas de texto
-desde la UI (crear/editar/borrar + refresco), y `ai-client-interface` el puerto
-`AiClient` hacia el runtime de IA más un adaptador fake por defecto.
+desde la UI (crear/editar/borrar + refresco), `ai-client-interface` el puerto
+`AiClient` hacia el runtime de IA más un adaptador fake por defecto, y
+`voice-capture-stt` la captura por voz nativa (puerto `VoiceTranscriber` +
+adaptadores Android/iOS) que crea una Nota con el texto transcripto.
 
 ## Modules
 
@@ -114,11 +116,49 @@ composeApp (Android app / commonMain) ──▶ core
   `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
   **1.10.1**, compatible con Kotlin 2.1.21.
 
+## Voice capture (STT)
+
+- **Puerto** (`com.playbook.app.voice`, en `:composeApp/commonMain`):
+  `VoiceTranscriber` con `start(onPartialResult, onFinalResult, onError)`,
+  `stop()` y `cancel()`, más `VoiceCaptureError`
+  (`PERMISSION_DENIED`/`UNAVAILABLE`/`NO_MATCH`/`NETWORK`/`BUSY`/`UNKNOWN`). Vive
+  en `:composeApp` (no en `:core`): es una integración nativa que sólo consume la
+  UI y necesita contexto de plataforma; `:core` no cambia.
+- **Adaptadores por plataforma** (mismo patrón que `DatabaseDriverFactory`, **sin**
+  `expect`/`actual`):
+  - `AndroidVoiceTranscriber(ComponentActivity)` (`androidMain`): `SpeechRecognizer`
+    + `RecognizerIntent` con resultados parciales; pide `RECORD_AUDIO` con
+    `registerForActivityResult(RequestPermission())` en el constructor (debe
+    construirse en `onCreate`). Mapea `onResults`/`onError` del
+    `RecognitionListener` a los callbacks del puerto y recrea el recognizer por
+    sesión.
+  - `IosVoiceTranscriber()` (`iosMain`): `SFSpeechRecognizer` +
+    `SFSpeechAudioBufferRecognitionRequest` + `AVAudioEngine`; pide
+    `requestAuthorization` y `requestRecordPermission` y, como los callbacks de
+    `Speech`/AVFoundation llegan en colas secundarias, los despacha al main queue
+    (`dispatch_async(dispatch_get_main_queue())`). `cancel()` cancela la tarea,
+    quita el tap, detiene el engine y desactiva la `AVAudioSession`.
+- **Wiring sin DI:** `MainActivity` construye `AndroidVoiceTranscriber(this)` y
+  `MainViewController` construye `IosVoiceTranscriber()`; ambos se pasan a
+  `App(noteRepository, voiceTranscriber)`.
+- **Permisos:** `AndroidManifest.xml` declara `android.permission.RECORD_AUDIO`;
+  `iosApp/iosApp/Info.plist` declara `NSMicrophoneUsageDescription` y
+  `NSSpeechRecognitionUsageDescription` (sin la segunda, iOS termina el proceso al
+  primer uso).
+- **Resultado:** el texto final no vacío se persiste como `body` de una Nota con
+  `track = null`/`status = CAPTURED` por el mismo `noteRepository.create(...)` del
+  texto; el audio original **no** se guarda (lo hará `voice-attachment-storage`).
+- **Dependencias:** ninguna nueva (`SpeechRecognizer`/`RecognizerIntent` son
+  framework Android; `activity-compose` ya estaba; `Speech`/`AVFAudio`/`dispatch`
+  vienen de Kotlin/Native). No se agregan coroutines ni Flow.
+
 ## UI
 
-- **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository)` es
-  la raíz de la UI y dueña del estado. Hoistea `notes` (`mutableStateOf`),
-  `destination` (`NotesDestination`: `List`/`Create`/`Edit(noteId)`) y `refreshKey`.
+- **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
+  voiceTranscriber: VoiceTranscriber)` es la raíz de la UI y dueña del estado.
+  Hoistea `notes` (`mutableStateOf`), `destination` (`NotesDestination`:
+  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`), `refreshKey` y `voiceState`
+  (`VoiceUiState`: `Idle`/`Listening(partial)`/`Processing`/`Error`).
   La lectura ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`), lo que
   dispara la relectura y refleja los cambios sin reiniciar la app. Sin DI, sin
@@ -127,19 +167,32 @@ composeApp (Android app / commonMain) ──▶ core
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
 - **`NotesListScreen`**: `Scaffold` con `ExtendedFloatingActionButton` "Nueva
-  nota"; estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"; y
-  estado con notas (título "Notas" + `LazyColumn` de `Card`s clickeables que
-  llaman `onEdit(note.id)`). Cada tarjeta muestra `body` (máx. 2 líneas, ellipsis)
-  y una fila de chips de texto con `track.code` (o "Sin track" si es `null`) y
-  `status.code`. El `track`/`status` se comunican con texto, no sólo color
-  (`DESIGN.md`).
-- **`NoteEditorScreen`** (nuevo): editor de texto para crear (`isEditing = false`)
+  nota"; acción secundaria `FilledTonalButton` "Dictar nota" (`onDictate`) visible
+  en el estado vacío y con notas; estado vacío ("Todavía no hay notas") con CTA
+  "Crear primera nota"; y estado con notas (título "Notas" + `LazyColumn` de
+  `Card`s clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra `body`
+  (máx. 2 líneas, ellipsis) y una fila de chips de texto con `track.code` (o "Sin
+  track" si es `null`) y `status.code`. El `track`/`status` se comunican con texto,
+  no sólo color (`DESIGN.md`).
+- **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`)
   y editar (`isEditing = true`). `OutlinedTextField` multilínea para `body`;
   selector de `track` ("Sin track" + `Track.entries`) que comunica la selección
   con marca textual "✓", borde y color; `Guardar` deshabilitado si `body.isBlank()`;
   `Cancelar`; y en edición `Borrar` con `AlertDialog` de confirmación. La pantalla
   mantiene el borrador local y emite callbacks; la persistencia y el refresco los
   maneja `App`.
+- **`VoiceCaptureScreen`** (nuevo): pantalla "tonta" de dictado. Recibe
+  `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
+  `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
+  "Detener" (Listening) o "Reintentar" (Error); "Cancelar" vuelve a la lista.
+  Los estados y los errores se comunican con texto (nunca sólo color). No mantiene
+  el `VoiceTranscriber`.
+- **Orquestación de voz (`App`):** la sesión se inicia sólo al tocar "Grabar"
+  (para que el prompt de permiso sea explícito); `onPartialResult` actualiza el
+  parcial; `onError` pasa a `Error`; `onFinalResult` no vacío crea la Nota
+  (`NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null)`) y vuelve a la lista con
+  `reload()`; un final vacío se trata como `NO_MATCH`. Al salir del destino un
+  `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el micrófono).
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
   track))` (status default `CAPTURED`); editar → `update(note.copy(body =
   body.trim(), track = ...))` (re-sella `updatedAt`, preserva
@@ -153,12 +206,13 @@ composeApp (Android app / commonMain) ──▶ core
 
 ## Runtime surfaces
 
-- **Android:** `MainActivity` (`com.playbook.app`) monta `App(noteRepository)`,
-  aplica el esquema local con `createDatabase(AndroidDatabaseDriverFactory(...))`
-  y construye el `SqlDelightNoteRepository`.
+- **Android:** `MainActivity` (`com.playbook.app`) monta `App(noteRepository,
+  AndroidVoiceTranscriber(this))`, aplica el esquema local con
+  `createDatabase(AndroidDatabaseDriverFactory(...))` y construye el
+  `SqlDelightNoteRepository`.
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
-  local, construye el repositorio y envuelve `App(noteRepository)`; lo llama
-  `ComposeView` (SwiftUI) en `iosApp`.
+  local, construye el repositorio y `IosVoiceTranscriber()`, y envuelve
+  `App(repository, transcriber)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
 
 ## Identifiers
 
@@ -193,6 +247,9 @@ Comandos manuales equivalentes:
 - Etiquetas, adjuntos, enlaces y embeddings (features posteriores). El runtime
   de IA concreto (`ai-runtime-decision`) y el wiring de `AiClient` a su primer
   consumidor (`embeddings-generation`) también quedan pendientes.
+- Guardar el audio original del dictado como `Adjunto`
+  (`voice-attachment-storage`): `voice-capture-stt` sólo persiste la transcripción.
 - Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
-- Manejo del back físico Android/iOS en el editor (hoy sólo "Cancelar").
+- Manejo del back físico Android/iOS en el editor y en la captura de voz (hoy sólo
+  "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).
