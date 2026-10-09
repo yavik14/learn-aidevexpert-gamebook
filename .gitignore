@@ -17,6 +17,11 @@ local.properties
 *.aab
 captures/
 
+# Release signing (nunca versionar keystores ni credenciales)
+keystore.properties
+*.jks
+*.keystore
+
 # IDE
 .idea/
 *.iml
