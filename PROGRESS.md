@@ -5,11 +5,12 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `create-text-note` y `ai-client-interface` (2026-10-08; Sessions 011-014, ejecución paralela).
+- Última feature `accepted`: `ai-runtime-decision` (2026-10-09; Session 016, validación independiente).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
-- Current next ready feature: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); ambas requieren spec.
+- `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
+- Current next ready features: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `embeddings-generation` (depende de `ai-client-interface` y `note-model-crud-core`, ya `accepted`); ambas requieren spec.
 - Current blocker: none.
-- Last verified at: 2026-10-08.
+- Last verified at: 2026-10-09.
 
 ## Session Log
 
@@ -277,3 +278,40 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales). Sin wiring de `AiClient` a la app (intencional; no hay consumidor todavía). El runtime real/dimensión del embedding siguen abiertos para `ai-runtime-decision`.
 - Next best step: crear spec de `create-text-note` con `$feature-spec` e implementarla con `$feature-implementer`.
+
+### Session 015
+
+- Date: 2026-10-09
+- Goal: implementar `ai-runtime-decision` (spec `docs/specs/ai-runtime-decision.md`).
+- Completed:
+  - ADR `docs/adr/0001-ai-runtime-decision.md` (formato MADR-lite): contexto, 7 criterios, 3 alternativas (cloud-only / on-device-only / híbrido por fases) con trade-offs puntuados, decisión **híbrida por fases, cloud-first** detrás de `AiClient`, consecuencias, evidencia y preguntas abiertas; política durable de no versionar keys y sonda manual key-gated (`AI_RUNTIME_PROBE_KEY`, fuera del gate).
+  - Harness test-only en `:core`: `core/src/commonTest/kotlin/com/playbook/core/ai/spike/AiRuntimeSpike.kt` con `LocalSpikeAiClient` (on-device-like), `RemoteSpikeAiClient` (cloud-like sin red, `failMode`), `runAiRuntimeSpike(): String` (contrato, offline, mapeo de fallo a `AiClientException` + degradación, sustituibilidad, control negativo y latencia local informativa) y `verifyContractRejectsBrokenClient()`.
+  - Runners `@Test` con `runTest` en `core/src/androidUnitTest/.../spike/AiRuntimeSpikeAndroidTest.kt` y `core/src/iosTest/.../spike/AiRuntimeSpikeIosTest.kt` (imprimen el reporte).
+  - Reporte `docs/spikes/ai-runtime-spike.md`: metodología, cómo reproducir, stdout capturado (Android/JVM e iOS), medido vs estimado (con fuentes fechadas), control negativo y límites.
+  - `ARCHITECTURE.md` (sección AI: runtime decidido + política de secrets + evidencia), `docs/technical-discovery.md` (nueva "AI Decisions (ai-runtime-decision)"), `docs/risks-and-open-questions.md` (riesgo principal movido a "Resolved"; research task del spike marcado hecho) y `AGENTS.md` (estado/próxima feature) actualizados; tasks de la spec marcadas.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 1m45s (66 tasks executed); Android/JVM `AiRuntimeSpikeAndroidTest` 2/2 + AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 (0 failures); iOS `AiRuntimeSpikeIosTest` 2/2 + AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 (0 failures).
+  - Reporte del spike capturado de `core/build/test-results/*/TEST-*.xml`: contrato OK en ambos arquetipos, offline/determinismo OK, mapeo de fallo + degradación OK, control negativo OK, sustituibilidad OK; latencia local informativa Android/JVM `elapsed_us=683 / ns_per_note=1138`, iOS `elapsed_us=798 / ns_per_note=1330` (medida del fake, no de un modelo real).
+  - Control negativo manual: forzar `LocalSpikeAiClient.embed` a `Embedding(emptyList())` hace fallar `AiRuntimeSpikeAndroidTest.reportsRuntimeArchetypes` (`tests=2 failures=1`, `AssertionError: la dimensión del embedding debe ser > 0`); restaurado y re-ejecutado en verde.
+  - `./init.sh` → exit 0, sin dev servers/simuladores/red; `git diff -- init.sh` vacío.
+  - Sin deps nuevas (`git diff` vacío en build files/`libs.versions.toml`); `git status` sólo documentación + harness en source sets de test; sin keys/secrets; `:composeApp`/`iosApp`/`core/src/commonMain`/esquema SQLDelight/puerto/UI sin cambios.
+- Evidence captured: arreglo `evidence` de `ai-runtime-decision` en `feature_list.json`; reporte en `docs/spikes/ai-runtime-spike.md`; salida XML en `core/build/test-results/`.
+- Files or artifacts updated: `docs/adr/0001-ai-runtime-decision.md` (nuevo), `docs/spikes/ai-runtime-spike.md` (nuevo), `core/src/commonTest/kotlin/com/playbook/core/ai/spike/AiRuntimeSpike.kt` (nuevo), `core/src/androidUnitTest/kotlin/com/playbook/core/ai/spike/AiRuntimeSpikeAndroidTest.kt` (nuevo), `core/src/iosTest/kotlin/com/playbook/core/ai/spike/AiRuntimeSpikeIosTest.kt` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `docs/specs/ai-runtime-decision.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la latencia local mide el fake determinista, no un modelo on-device real; latencia/calidad/costo cloud reales no son ejecutables en el gate (documentados como estimación, no medición). Proveedor/modelo/dimensión, gestión de keys y runtime on-device concreto quedan como follow-ups del ADR. ADR en `status: propuesto` hasta la validación independiente.
+- Next best step: validación independiente de `ai-runtime-decision` con `$feature-validator`; tras el `accept`, crear spec de `note-category-and-tags` con `$feature-spec`.
+
+### Session 016
+
+- Date: 2026-10-09
+- Goal: validación independiente de `ai-runtime-decision` (spec `docs/specs/ai-runtime-decision.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `ai-runtime-decision` promovida a `accepted` en `feature_list.json` con evidencia de validación; ADR 0001 promovido de `propuesto` a `accepted`; commit `feature: complete ai-runtime-decision` creado por el orquestador.
+- Verification run:
+  - `./init.sh` → exit 0, sin dev servers/simuladores/red; `init.sh` sin cambios.
+  - `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks); AiRuntimeSpike 2/2 + AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 en cada plataforma, 0 failures.
+  - Reporte del spike reproducido: contrato OK en ambos arquetipos, offline/determinismo OK, mapeo de fallo + degradación OK, control negativo OK, sustituibilidad OK; latencia local informativa (varía por corrida, no asertada).
+  - Control negativo propio del validador (forzar `LocalSpikeAiClient.embed` a `emptyList()`) hace fallar `reportsRuntimeArchetypes` (tests=2 failures=1); restaurado (hash idéntico) y re-verificado en verde.
+  - Confirmado el ADR (MADR-lite, 3 alternativas, trade-offs, decisión, consecuencias, evidencia, preguntas abiertas) y la separación medido vs estimado; sin wiring de IA en la app, sin deps de producción de IA, sin keys/secrets; `:composeApp`/`iosApp`/`commonMain`/`androidMain`/`iosMain`/esquema/puerto/UI sin cambios.
+- Evidence captured: línea de validación en el arreglo `evidence` de `ai-runtime-decision` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `docs/adr/0001-ai-runtime-decision.md`, `AGENTS.md`.
+- Known risk or unresolved issue: findings Low no bloqueantes — las citas de lo estimado usan categoría/fecha pero sin URLs concretas, y el `status` del ADR se promovió al persistir la aceptación. El runtime real (proveedor/modelo/dimensión, gestión de keys, on-device de fase 2) queda como follow-up de `embeddings-generation`/`rag-query`.
+- Next best step: la primera feature lista es `note-category-and-tags` (depende de `create-text-note`); crear su spec con `$feature-spec` e implementarla con `$feature-implementer`. `embeddings-generation` también está lista (depende de `ai-client-interface` y `note-model-crud-core`, ambas `accepted`).

@@ -4,8 +4,10 @@ Mapa de la base KMP. `local-persistence-sqldelight` agregó la capa de
 persistencia local (SQLDelight), `note-model-crud-core` el modelo de dominio
 `Note` y su CRUD, `notes-list-ui` la primera pantalla real (lista de notas) con
 el repositorio cableado a la app, `create-text-note` el CRUD de notas de texto
-desde la UI (crear/editar/borrar + refresco), y `ai-client-interface` el puerto
-`AiClient` hacia el runtime de IA más un adaptador fake por defecto.
+desde la UI (crear/editar/borrar + refresco), `ai-client-interface` el puerto
+`AiClient` hacia el runtime de IA más un adaptador fake por defecto, y
+`ai-runtime-decision` la estrategia de runtime decidida (híbrida por fases,
+cloud-first) junto con su spike y ADR.
 
 ## Modules
 
@@ -99,7 +101,25 @@ composeApp (Android app / commonMain) ──▶ core
   **sólo el puerto** `AiClient`; los adaptadores concretos se inyectan desde
   afuera. `:core` expone el puerto y un adaptador fake por defecto; los
   adaptadores reales (cloud/on-device) vivirán fuera de `:core` y se inyectarán
-  sin tocar la lógica de dominio. Elegir el runtime es `ai-runtime-decision`.
+  sin tocar la lógica de dominio.
+- **Runtime decidido (`ai-runtime-decision`, 2026-10-09):** estrategia
+  **híbrida por fases, cloud-first**, detrás del puerto `AiClient` sin cambiarlo
+  (ver `docs/adr/0001-ai-runtime-decision.md`). Orden: (1) primer adaptador real
+  en la **nube** (`embeddings-generation` para `embed`; `rag-query` para
+  `generate`) con indexado asíncrono tolerante a fallos
+  (`capturada → pendiente → indexada/fallida`, `offline-pending-retry`); (2)
+  adaptador **on-device** (empezando por embeddings) inyectado por el mismo
+  puerto cuando se elija el runtime nativo; (3) `FakeAiClient` como default
+  offline/determinista. `:core` no gana dependencias de IA: los adaptadores
+  reales se inyectan desde afuera.
+- **Política de secrets (durable):** ninguna API key/token/secret se versiona ni
+  se commitea; el adaptador cloud lee su credencial de configuración fuera del
+  repo (p. ej. `local.properties` ignorado o variable de entorno de build). El
+  gate (`init.sh`) no hace red.
+- **Evidencia del spike:** `docs/spikes/ai-runtime-spike.md` (test-only, sin red)
+  verifica contrato sobre dos arquetipos, offline, mapeo de fallo a
+  `AiClientException` y sustituibilidad, con latencia local informativa del fake
+  (no un modelo real).
 - **Fake por defecto** (`commonMain`): `FakeAiClient(dimension = 8)` es
   determinista y sin red. Los vectores derivan de `String.hashCode()` (estable
   entre plataformas): mismo texto → mismo vector; textos distintos → vectores
@@ -190,9 +210,11 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Etiquetas, adjuntos, enlaces y embeddings (features posteriores). El runtime
-  de IA concreto (`ai-runtime-decision`) y el wiring de `AiClient` a su primer
-  consumidor (`embeddings-generation`) también quedan pendientes.
+- Etiquetas, adjuntos, enlaces y embeddings (features posteriores). El wiring de
+  `AiClient` a su primer consumidor (`embeddings-generation`) queda pendiente; el
+  proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001
+  (`docs/adr/0001-ai-runtime-decision.md`).
+- Adaptador on-device concreto (fase 2 de la estrategia híbrida).
 - Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
 - Manejo del back físico Android/iOS en el editor (hoy sólo "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

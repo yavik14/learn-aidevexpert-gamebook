@@ -12,8 +12,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - **Búsqueda semántica:** embeddings almacenados como BLOB + similitud coseno
   calculada en memoria.
 - **IA:** interfaz `AiClient` como abstracción (puerto ya implementado en
-  `:core`; ver "AI Decisions"). Runtime (cloud / on-device / híbrido) todavía
-  **sin decidir**.
+  `:core`; ver "AI Decisions"). Runtime **decidido** en
+  `ai-runtime-decision`: estrategia **híbrida por fases, cloud-first** detrás del
+  puerto (ver "AI Decisions (ai-runtime-decision)" y `docs/adr/0001-ai-runtime-decision.md`).
 - **Integraciones nativas:** speech-to-text (voz) y cámara (foto de bocetos).
 
 ## Data and Storage
@@ -236,3 +237,36 @@ Implementado 2026-10-08. Detalles en `ARCHITECTURE.md`.
 - **Tests:** `verifyAiClientContract(client)` (contrato genérico) y
   `verifyFakeAiClient()` (comportamiento del fake) en `commonTest`; se ejecutan
   en Android/JVM (`AiClientAndroidTest`, 3) e iOS (`AiClientIosTest`, 3).
+
+## AI Decisions (ai-runtime-decision)
+
+Implementado 2026-10-09. Decisión en `docs/adr/0001-ai-runtime-decision.md`;
+evidencia en `docs/spikes/ai-runtime-spike.md`.
+
+- **Decisión:** estrategia **híbrida por fases, cloud-first**, siempre detrás del
+  puerto `AiClient` (que no cambia). (1) MVP: primer adaptador real **cloud**
+  (`embeddings-generation` para `embed`; `rag-query` para `generate`) con indexado
+  asíncrono tolerante a fallos; (2) luego: adaptador **on-device** (empezando por
+  embeddings) por el mismo puerto; (3) `FakeAiClient` como default
+  offline/determinista.
+- **Por qué no cloud-only ni on-device-only:** cloud-only es el camino más rápido
+  a un flujo real y comparte todo el código KMP, pero obliga a keys/costo y baja
+  privacidad; on-device-only da privacidad/offline pero exige deps nativas
+  pesadas por plataforma (poco compartido), app más grande y calidad/latencia de
+  generación riesgosa. La híbrida conserva lo mejor de cada una y el puerto ya
+  permite hacerlo sin refactor. Detalle y puntajes por criterio en el ADR.
+- **Política de secrets (durable):** ninguna API key/token/secret se versiona. El
+  adaptador cloud leerá su credencial de configuración de build/entorno fuera del
+  repo (`local.properties` ignorado o variable de entorno). `init.sh` no hace red.
+- **Spike (test-only, sin red):** en `core/src/commonTest/.../ai/spike/`,
+  `LocalSpikeAiClient` (on-device-like) y `RemoteSpikeAiClient` (cloud-like sin
+  red, con `failMode`) demuestran contrato, offline, mapeo de fallo →
+  `AiClientException` con degradación, sustituibilidad y un control negativo que
+  rechaza un embedding vacío. Latencia local informativa con `TimeSource.Monotonic`
+  (µs/nota), **no asertada** y medida sobre el fake, no sobre un modelo real.
+- **Sin deps de producción:** no se agregó SDK cloud ni runtime on-device; el
+  spike vive sólo en source sets de test. Sin cambios en `:composeApp`, `iosApp`,
+  esquema SQLDelight, puerto, UI ni `init.sh`.
+- **Follow-ups:** proveedor/modelo/dimensión; gestión de keys (usuario vs build);
+  sonda manual key-gated (`AI_RUNTIME_PROBE_KEY`, fuera del gate) descrita en el
+  ADR; elección del runtime on-device concreto.

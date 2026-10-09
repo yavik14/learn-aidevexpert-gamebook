@@ -206,12 +206,27 @@
     "depends_on": [
       "ai-client-interface"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: ADR creado en docs/adr/ con alternativas y trade-offs; spike ejecutado y registrado."
+      "`./gradlew :core:testDebugUnitTest` → BUILD SUCCESSFUL; `AiRuntimeSpikeAndroidTest` 2/2 (reportsRuntimeArchetypes + contractRejectsBrokenClient) + AiClientAndroidTest 3/3 + NotePersistenceAndroidTest 2/2 + NoteRepositoryAndroidTest 1/1 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; `AiRuntimeSpikeIosTest` 2/2 + AiClientIosTest 3/3 + NotePersistenceIosTest 2/2 + NoteRepositoryIosTest 1/1 + GreetingTest 1/1, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (66 tasks, sin deps nuevas).",
+      "`./init.sh` → exit 0, sin cambios, sin dev servers/simuladores/red.",
+      "Existen `docs/adr/0001-ai-runtime-decision.md` (MADR-lite, 3 alternativas, trade-offs, decisión, consecuencias, evidencia, preguntas abiertas) y `docs/spikes/ai-runtime-spike.md` (reporte capturado, medido vs estimado).",
+      "Control negativo: `RemoteSpikeAiClient(failMode=true)` lanza `AiClientException` en embed/generate y un consumidor degrada; forzar el embedding del local a vacío hace fallar el contrato con `AssertionError: la dimensión del embedding debe ser > 0` (restaurado y re-verificado en verde).",
+      "Sin wiring de IA en la app, sin deps de producción de IA, sin keys/secrets; `:composeApp`/`iosApp`/`init.sh`/esquema SQLDelight/puerto/UI sin cambios.",
+      "E2E persistente: no aplica (decisión + documentación + spike offline test-only; no hay flujo de usuario/API observable ni harness E2E; `init.sh` no levanta simuladores). Justificado en la spec."
     ],
-    "evidence": [],
-    "notes": "Riesgo principal hoy postergado (docs/risks-and-open-questions.md). Bloquea el enriquecimiento real."
+    "evidence": [
+      "2026-10-09: `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 1m45s (66 tasks executed). Android/JVM: AiRuntimeSpikeAndroidTest 2/2, AiClientAndroidTest 3/3, NotePersistenceAndroidTest 2/2, NoteRepositoryAndroidTest 1/1, GreetingTest 1/1, 0 failures. iOS: AiRuntimeSpikeIosTest 2/2, AiClientIosTest 3/3, NotePersistenceIosTest 2/2, NoteRepositoryIosTest 1/1, GreetingTest 1/1, 0 failures (conteos de core/build/test-results/*/TEST-*.xml).",
+      "2026-10-09: reporte impreso del spike (stdout en XML de test-results): 'adapter=local/on-device-like contract=OK offline=OK determinism=OK'; 'adapter=remote/cloud-like contract=OK failure-mapping=OK degrade=OK'; 'contract-negative-control=OK'; 'substitution=OK'; latencia local informativa (no asertada) Android/JVM `elapsed_us=683 ns_per_note=1138` e iOS `elapsed_us=798 ns_per_note=1330` sobre 600 llamadas (1 warm-up + 200 rounds × 3 textos).",
+      "2026-10-09: control negativo manual: `LocalSpikeAiClient.embed` forzado a `Embedding(emptyList())` → `:core:testDebugUnitTest --tests ...AiRuntimeSpikeAndroidTest` falla (`tests=2 failures=1`, `AssertionError: la dimensión del embedding debe ser > 0`); restaurado al delegado y re-ejecutado en verde 2/2.",
+      "2026-10-09: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración; `git diff -- init.sh` vacío.",
+      "2026-10-09: `git status` sólo muestra documentación + harness en source sets de test (`core/src/{commonTest,androidUnitTest,iosTest}/.../ai/spike/`) + `docs/{adr,spikes,specs}/`; `git diff -- composeApp iosApp core/src/commonMain core/src/androidMain core/src/iosMain core/build.gradle.kts gradle/libs.versions.toml core/src/commonMain/sqldelight` vacío. Sin keys/secrets (grep de patrones sólo encuentra menciones documentales y la referencia a `$AI_RUNTIME_PROBE_KEY`).",
+      "2026-10-09: ADR decisión = estrategia híbrida por fases, cloud-first, detrás de `AiClient`; política durable de no versionar keys; sonda manual key-gated documentada (nunca en el gate); docs `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md` actualizados.",
+      "2026-10-09: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` (BUILD SUCCESSFUL, 66 tasks) con AiRuntimeSpike 2/2 + AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 en cada plataforma, 0 failures; `./init.sh` exit 0. Control negativo propio del validador (forzar `LocalSpikeAiClient.embed` a `emptyList()`) hace fallar `reportsRuntimeArchetypes` (tests=2 failures=1) y se restaura (hash idéntico) re-verificado en verde. Confirmó el ADR (MADR-lite, 3 alternativas, trade-offs, decisión, consecuencias, evidencia, preguntas abiertas) y la separación medido vs estimado; sin wiring de IA en la app, sin deps de producción de IA, sin keys/secrets, `init.sh` sin cambios, `:composeApp`/`iosApp`/`commonMain`/esquema/puerto/UI sin cambios. Findings Low no bloqueantes: citas de lo estimado sin URLs concretas y `status: propuesto` del ADR (promovido a `accepted` al persistir la aceptación)."
+    ],
+    "notes": "Feature de decisión + documentación + spike test-only. Entrega ADR (`docs/adr/0001-ai-runtime-decision.md`, MADR-lite con cloud-only/on-device-only/híbrido puntuados), harness reproducible en `core/src/*Test/.../ai/spike/` y reporte `docs/spikes/ai-runtime-spike.md` (medido vs estimado). NO cablea IA real, NO agrega deps de producción de IA, NO toca `:composeApp`/`iosApp`/`init.sh`/esquema/puerto/UI. Runtime: híbrido por fases, cloud-first; primer adaptador real en `embeddings-generation`/`rag-query`; on-device como fase 2; `FakeAiClient` default. Seguridad: ninguna key versionada. Riesgo principal postergado cerrado; proveedor/modelo/dimensión/keys quedan como follow-ups."
   },
   {
     "id": "ai-enrichment-classify-tags-type",
