@@ -1,6 +1,7 @@
 package com.playbook.app
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,8 +27,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.playbook.core.model.Track
+import com.playbook.core.model.normalizeTags
 
 /**
  * Editor de nota de texto. Sirve para crear (modo `isEditing = false`) y editar
@@ -37,6 +40,9 @@ import com.playbook.core.model.Track
  *   o sólo con espacios.
  * - El `track` es opcional ("Sin track" por defecto); la selección se comunica
  *   con más que color (borde + marca textual), según `DESIGN.md`.
+ * - Las Etiquetas son libres, múltiples y se normalizan ([normalizeTags]) al
+ *   agregarlas; cada una se muestra como chip con control de quitar "×". No hay
+ *   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
  * - En modo edición se ofrece "Borrar", con `AlertDialog` de confirmación. La
  *   acción no destructiva es explícita: "Cancelar".
  *
@@ -47,14 +53,17 @@ import com.playbook.core.model.Track
 fun NoteEditorScreen(
     initialBody: String,
     initialTrack: Track?,
+    initialTags: List<String>,
     isEditing: Boolean,
-    onSave: (body: String, track: Track?) -> Unit,
+    onSave: (body: String, track: Track?, tags: List<String>) -> Unit,
     onDelete: (() -> Unit)?,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
     var selectedTrack by remember { mutableStateOf(initialTrack) }
+    var tags by remember { mutableStateOf(normalizeTags(initialTags)) }
+    var newTag by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val canSave = body.isNotBlank()
@@ -96,6 +105,42 @@ fun NoteEditorScreen(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "Etiquetas", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = newTag,
+                onValueChange = { newTag = it },
+                label = { Text(text = "Nueva etiqueta") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            Button(
+                onClick = {
+                    tags = normalizeTags(tags + newTag)
+                    newTag = ""
+                },
+                enabled = newTag.isNotBlank(),
+            ) {
+                Text(text = "Agregar")
+            }
+        }
+        if (tags.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                tags.forEach { tag ->
+                    TagChip(label = tag, onRemove = { tags = tags - tag })
+                }
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -112,7 +157,7 @@ fun NoteEditorScreen(
                 Text(text = "Cancelar")
             }
             Button(
-                onClick = { onSave(body, selectedTrack) },
+                onClick = { onSave(body, selectedTrack, tags) },
                 enabled = canSave,
             ) {
                 Text(text = "Guardar")
@@ -181,5 +226,36 @@ private fun TrackOption(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
         )
+    }
+}
+
+/**
+ * Chip de Etiqueta con control de quitar "×". Todo el chip es clickeable para
+ * quitarlo, con `onClickLabel` semántico y `role = Role.Button`. Se comunica con
+ * texto, no sólo color (`DESIGN.md`).
+ */
+@Composable
+private fun TagChip(
+    label: String,
+    onRemove: () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.clickable(
+            onClickLabel = "Quitar etiqueta $label",
+            role = Role.Button,
+            onClick = onRemove,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = label, style = MaterialTheme.typography.labelMedium)
+            Text(text = "×", style = MaterialTheme.typography.labelMedium)
+        }
     }
 }

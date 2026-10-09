@@ -27,10 +27,10 @@ internal object EmptySqlSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Escenarios 7 de la spec: migración v1 → v2 y bootstrap en ambos caminos.
+ * Escenarios 7 de la spec: migración v1 → v3 y bootstrap en ambos caminos.
  *
  * [migratedDriver] debe ser una base **vacía** (sin esquema) sobre la que se
- * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v2 creado desde
+ * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v3 creado desde
  * cero (`Schema.create` en JVM o `inMemoryDriver(Schema)` en iOS). El esquema
  * final (columnas y foreign keys de `embedding`) debe coincidir entre ambos
  * caminos.
@@ -49,9 +49,9 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         updated_at = 1_700_000_000_000L,
     )
 
-    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 2L)
+    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 3L)
 
-    assertEquals(2L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 2")
+    assertEquals(3L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 3")
 
     // La fila v1 sobrevive a la migración.
     val legacy = migratedDatabase.noteQueries.selectNoteById("legacy-1").executeAsOneOrNull()
@@ -71,7 +71,7 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "la tabla embedding debe existir y aceptar filas tras migrar",
     )
 
-    // Bootstrap desde cero produce el mismo esquema final (v2).
+    // Bootstrap desde cero produce el mismo esquema final (v3).
     assertEquals(
         embeddingColumns(migratedDriver),
         embeddingColumns(freshDriver),

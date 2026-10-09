@@ -1,0 +1,7 @@
+-- Migración v2 -> v3: agrega la tabla N—N `note_tag` para las Etiquetas libres
+-- (ver NoteTag.sq). El CREATE TABLE replica exactamente el de `NoteTag.sq`.
+CREATE TABLE note_tag (
+  note_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  PRIMARY KEY (note_id, label)
+);

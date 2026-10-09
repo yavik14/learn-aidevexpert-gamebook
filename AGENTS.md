@@ -17,12 +17,13 @@ runtime de IA con `ai-runtime-decision` (ADR + spike test-only, decisión híbri
 cloud-first), la publicación de Android con `android-release-pipeline`
 (release/signing con keystore externo + runbook; ver `docs/release/android.md`),
 la generación/persistencia de embeddings con `embeddings-generation` (esquema v2
-y `1.sqm`) y la captura por voz nativa con `voice-capture-stt` (puerto
-`VoiceTranscriber` + adaptadores Android/iOS), todas `accepted`. **Nunca**
-versionar keystores ni secrets.
-Próximas features en cola: `note-category-and-tags` (depende de `create-text-note`,
-ya `accepted`) y `semantic-linking` (depende de `embeddings-generation`, ya
-`accepted`); requieren spec.
+y `1.sqm`), la captura por voz nativa con `voice-capture-stt` (puerto
+`VoiceTranscriber` + adaptadores Android/iOS) y las Etiquetas libres con
+`note-category-and-tags` (esquema v3, migración `2.sqm`), todas `accepted`.
+**Nunca** versionar keystores ni secrets.
+Próximas features en cola: `semantic-linking` (depende de `embeddings-generation`,
+ya `accepted`) y las de captura por imagen / release de iOS (dependen de
+`create-text-note`, ya `accepted`); requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
