@@ -5,11 +5,12 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `create-text-note` y `ai-client-interface` (2026-10-08; Sessions 011-014, ejecución paralela).
+- Última feature `accepted`: `note-category-and-tags` (2026-10-09; Session 016, validación independiente).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
-- Current next ready feature: `note-category-and-tags` (depende de `create-text-note`, ya `accepted`) y `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`); ambas requieren spec.
+- `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota con esquema v2 (`note_tag`) y migración v1→v2 (primer `.sqm`); clasificación fija por `Track` ya existente, sin Categoría/Tipo/Nivel.
+- Current next ready feature: `ai-runtime-decision` (depende de `ai-client-interface`, ya `accepted`) y las de captura por voz/imagen (dependen de `create-text-note`, ya `accepted`); todas requieren spec.
 - Current blocker: none.
-- Last verified at: 2026-10-08.
+- Last verified at: 2026-10-09.
 
 ## Session Log
 
@@ -277,3 +278,41 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales). Sin wiring de `AiClient` a la app (intencional; no hay consumidor todavía). El runtime real/dimensión del embedding siguen abiertos para `ai-runtime-decision`.
 - Next best step: crear spec de `create-text-note` con `$feature-spec` e implementarla con `$feature-implementer`.
+
+### Session 015
+
+- Date: 2026-10-09
+- Goal: implementar `note-category-and-tags` (spec `docs/specs/note-category-and-tags.md`): Etiquetas libres, múltiples y editables en la Nota.
+- Completed:
+  - Modelo: `tags: List<String> = emptyList()` al final de `Note`/`NoteDraft` (no rompe código previo) y `normalizeTags` en `com.playbook.core.model.Tags` (trim, descarta vacías, dedupe case-insensitive conservando la primera grafía, orden case-insensitive).
+  - Persistencia: `NoteTag.sq` (tabla `note_tag` con PK `(note_id, label)` + queries `insertNoteTag`/`selectTagsByNoteId`/`selectAllNoteTags`/`deleteTagsByNoteId`) y `migrations/1.sqm` (primer `.sqm` del repo, v1→v2). `Schema.version = 2`; `Note.sq` sin cambios.
+  - Repositorio: `SqlDelightNoteRepository` persiste/lee etiquetas en transacción (`create`, `getById`, `getAll` sin N+1, `update` reemplaza el conjunto, `delete` limpia) y `NoteMappers.toDomain(tags)`.
+  - UI (`:composeApp`): `NoteEditorScreen` con campo "Nueva etiqueta" + "Agregar" y chips con "×" (`onClickLabel`/`Role.Button`, sin íconos); `NotesListScreen` con fila de chips de etiqueta; `App` pasa `tags` a `NoteDraft`/`copy`.
+  - Docs: `ARCHITECTURE.md` (esquema v2/migración, dominio, UI) y `docs/technical-discovery.md` (nueva sección "Tags & Migration Decisions"); `AGENTS.md` (próxima feature); `feature_list.json` reconciliado (título/comportamiento/verificación) y `passing`.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tareas). Android/JVM: NoteRepository 3/3, NotePersistence 2/2, AiClient 3/3, Greeting 1/1; iOS: NoteRepository 3/3, NotePersistence 2/2, AiClient 3/3, Greeting 1/1; 0 failures.
+  - Control negativo: `1.sqm` creando `note_tag_broken` hace fallar `migrationV1ToV2PreservesNotes` en Android/JVM con `SQLiteException: ... no such table: note_tag`; restaurado y verde.
+  - `Schema.version = 2`; existe `migrations/1.sqm`; `Note.sq`, build files, `init.sh`, `iosApp/**`, `MainActivity`/`MainViewController` sin cambios.
+  - `xcodebuild` scheme iosApp (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.
+  - Smoke Android (Pixel_3A_API_34/emulator-5556; APK md5 verificado): estado vacío; crear con `jefe`/`arte` + duplicado `JEFE` ignorado → chips; guardar → lista + DB con exactamente `arte`/`jefe`; editar (quitar `arte`, agregar `nivel`) → lista y DB con `jefe`/`nivel`; relanzar persiste; `track`/`status` intactos. Migración real v1→v2 sobre `playbook.db` v1 (`user_version` 1→2, `note`+`note_tag`, fila v1 intacta) y chips de etiqueta renderizados.
+  - Smoke iOS (iPhone 15, iOS 17.2): install/launch OK; OCR estado vacío y lista con chips `arte`/`jefe`; migración real v1→v2 sobre `playbook.db` v1 (`user_version` 1→2, fila intacta, `note_tag` creada). CRUD interactivo iOS **no** ejecutado: sin `idb`/`cliclick`/`applesimutils` y `osascript`/System Events no disponible; no se fabricó evidencia.
+  - `./init.sh` → exit 0, sin procesos de larga duración.
+- Evidence captured: arreglo `evidence` de `note-category-and-tags` en `feature_list.json` (10 líneas); capturas/UI dumps/DBs en el directorio ignorado `composeApp/build/smoke-evidence/`; datos QA limpiados de emulador y simulador.
+- Files or artifacts updated: `core/src/commonMain/sqldelight/com/playbook/core/db/NoteTag.sq` (nuevo), `core/src/commonMain/sqldelight/migrations/1.sqm` (nuevo), `core/src/commonMain/kotlin/com/playbook/core/model/Tags.kt` (nuevo), `core/src/commonMain/kotlin/com/playbook/core/model/{Note,NoteMappers}.kt`, `core/src/commonMain/kotlin/com/playbook/core/repository/{NoteRepository,SqlDelightNoteRepository}.kt`, `core/src/commonMain/kotlin/com/playbook/core/db/DatabaseDriverFactory.kt` (KDoc), `core/src/commonTest/kotlin/com/playbook/core/repository/NoteTagCheck.kt` (nuevo), `core/src/androidUnitTest/kotlin/com/playbook/core/repository/NoteRepositoryAndroidTest.kt`, `core/src/iosTest/kotlin/com/playbook/core/repository/NoteRepositoryIosTest.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/{App,NotesListScreen,NoteEditorScreen}.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la PK `(note_id, label)` no normaliza globalmente etiquetas (renombrar/autocompletar exigiría `tag` + `note_tag`, documentado); sin tope de cantidad/largo de etiquetas ni orden de ingreso (se devuelven ordenadas por `label`). El emulador Android está compartido con otros worktrees que usan el mismo `applicationId`: una instalación paralela pisó el APK en `emulator-5554`; el smoke se hizo en `emulator-5556` verificando el md5 del APK instalado. CRUD interactivo iOS no automatizable (limitación de tooling).
+- Next best step: validación independiente de `note-category-and-tags` con `$feature-validator`; tras el `accept`, crear spec de la próxima feature (p. ej. `ai-runtime-decision` o captura por voz/imagen) con `$feature-spec`.
+
+### Session 016
+
+- Date: 2026-10-09
+- Goal: validación independiente de `note-category-and-tags` (spec `docs/specs/note-category-and-tags.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `note-category-and-tags` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: complete note-category-and-tags` creado por el orquestador.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 43s (66 tareas); NoteRepository 3/3 + NotePersistence 2/2 + AiClient 3/3 + Greeting 1/1 por plataforma, 0 failures; `./init.sh` → exit 0.
+  - `Schema.version = 2`; migración compilada (`create()`/`migrateInternal` emiten `note_tag`); `Note.sq` sin cambios (`git diff` vacío); sin cambios en build files/`init.sh`/`iosApp`/`Track.kt`.
+  - Control negativo propio del validador: renombrar la tabla en `migrations/1.sqm` a `note_tag_broken` reproduce `SQLiteException: ... no such table: note_tag`; restaurado byte-idéntico y re-ejecutado en verde.
+  - Corroboración con `sqlite3` de los artefactos de smoke: `android-before-migration.db` (v1, sólo `note`), `android-after-migration.db` (v2, `note`+`note_tag`, fila v1 intacta), `android-06-interactive.db` (`arte`/`jefe`, `JEFE` deduplicado), `android-08-after-edit.db` (`jefe`/`nivel`, `track`/`status` intactos). UI dumps sin control Categoría/Tipo/Nivel.
+- Evidence captured: línea de validación en el arreglo `evidence` de `note-category-and-tags` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: hallazgos Low no bloqueantes — CRUD interactivo iOS no automatizado (limitación de tooling, declarada honestamente) y orden de etiquetas case-insensitive en memoria vs `ORDER BY label` (BINARY) en SQL (respeta el contrato de la spec; determinista en cada lectura). Términos obsoletos "categoría/tipo" persisten en entradas fuera de alcance (`ai-enrichment-classify-tags-type`, `note-enrichment-status-ui`, `gdd-view`), señalados para re-derivar.
+- Next best step: crear spec de la próxima feature dependency-ready con `$feature-spec` (p. ej. `ai-runtime-decision` o captura por voz/imagen).

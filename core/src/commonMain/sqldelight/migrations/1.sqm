@@ -1,0 +1,7 @@
+-- Migración v1 -> v2: agrega la tabla N—N `note_tag` para las Etiquetas libres.
+-- Las notas v1 sobreviven sin cambios; para los datos viejos no hay etiquetas.
+CREATE TABLE note_tag (
+  note_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  PRIMARY KEY (note_id, label)
+);
