@@ -1,0 +1,10 @@
+-- Migración v1 -> v2: crea la tabla `embedding` (ver embedding.sq).
+-- El CREATE TABLE replica exactamente el de `embedding.sq`: el repo no usa
+-- `verifySqlDelightMigration`, así que la equivalencia se cubre con el test
+-- portable DatabaseMigrationCheck (compara las columnas del esquema final).
+CREATE TABLE embedding (
+  note_id TEXT NOT NULL PRIMARY KEY REFERENCES note(id) ON DELETE CASCADE,
+  dimension INTEGER NOT NULL,
+  vector BLOB NOT NULL,
+  indexed_at INTEGER NOT NULL
+);
