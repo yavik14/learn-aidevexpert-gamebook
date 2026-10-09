@@ -5,12 +5,13 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `embeddings-generation` (2026-10-09; Sessions 015-020, ejecución paralela; validación independiente `accept`).
+- Última feature `accepted`: `voice-capture-stt` (2026-10-09; Sessions 015-022, ejecución paralela; validación independiente `accept`).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
-- `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo), modo degradado sin secrets, override de `versionCode`/`versionName` y runbook `docs/release/android.md`.
-- `embeddings-generation` `accepted`: tabla `embedding` (esquema **v2** con `1.sqm`, FK cascade) + `EmbeddingRepository` + `NoteIndexingService` como primer consumidor de `AiClient`; sin wiring a la UI todavía.
-- Current next ready features: `semantic-linking` (depende de `embeddings-generation`), `note-category-and-tags`, `voice-capture-stt`, `image-capture-camera` e `ios-release-pipeline` (dependencias ya `accepted`); todas requieren spec.
+- `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
+- `embeddings-generation` `accepted`: tabla `embedding` (esquema **v2** con `1.sqm`, FK cascade) + `EmbeddingRepository` + `NoteIndexingService` como primer consumidor de `AiClient`.
+- `voice-capture-stt` `accepted`: puerto `VoiceTranscriber` + adaptadores nativos (`SpeechRecognizer` en Android; `SFSpeechRecognizer`+`AVAudioEngine` en iOS) en `:composeApp`; el dictado crea una `Note` transcripta vía `create(NoteDraft(...))`. Sin cambios en `:core`.
+- Current next ready features: `note-category-and-tags`, `semantic-linking`, `image-capture-camera`, `ios-release-pipeline` y `voice-attachment-storage` (dependencias ya `accepted`); todas requieren spec.
 - Current blocker: none.
 - Last verified at: 2026-10-09.
 
@@ -405,3 +406,41 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `docs/validations/embeddings-generation.md`.
 - Known risk or unresolved issue: hallazgo Low no bloqueante — el smoke de migración real en Android no se reprodujo de forma independiente por contaminación del emulador compartido (`emulator-5556` con el esquema de otra feature en paralelo); la migración Android queda cubierta por `DatabaseMigrationAndroidTest` en JVM. Persisten los scope decisions: sin UI/wiring, sin transición de `NoteStatus`, sin runtime real.
 - Next best step: `semantic-linking` (depende de `embeddings-generation`, ya `accepted`) es la próxima feature ready; crear su spec con `$feature-spec`. Alternativas ready que requieren spec: `note-category-and-tags` y `ai-runtime-decision`.
+
+### Session 021
+
+- Date: 2026-10-09
+- Goal: implementar `voice-capture-stt` (spec `docs/specs/voice-capture-stt.md`), primera integración nativa (STT).
+- Completed:
+  - `VoiceTranscriber` + `VoiceCaptureError` en `composeApp/commonMain` (`com.playbook.app.voice`): puerto con `start`/`stop`/`cancel` y errores normalizados.
+  - `AndroidVoiceTranscriber` (`androidMain`): `SpeechRecognizer` + `RecognizerIntent` (parciales), permiso `RECORD_AUDIO` con `registerForActivityResult(RequestPermission())` registrado en `onCreate`, mapeo de errores del `RecognitionListener`; `RECORD_AUDIO` agregado al manifest.
+  - `IosVoiceTranscriber` (`iosMain`): `SFSpeechRecognizer` + `AVAudioEngine` + `SFSpeechAudioBufferRecognitionRequest`, autorizaciones de micrófono/reconocimiento, despacho a main queue, limpieza de tap/engine/sesión en `cancel()`; `NSMicrophoneUsageDescription` + `NSSpeechRecognitionUsageDescription` agregadas al `Info.plist`.
+  - `VoiceCaptureScreen` (commonMain) con `VoiceUiState` `Idle`/`Listening(partial)`/`Processing`/`Error`, acciones Grabar/Detener/Reintentar/Cancelar y mensajes de error en texto.
+  - `App(noteRepository, voiceTranscriber)`: `NotesDestination.VoiceCapture`, inicio manual de la sesión, parciales, error, creación de la Nota con `create(NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null))` + `goToList()` + `reload()`, final vacío → `NO_MATCH`, y `cancel()` (micrófono liberado) en `DisposableEffect` al salir.
+  - `NotesListScreen` suma `onDictate` y `FilledTonalButton` "Dictar nota"; `MainActivity`/`MainViewController` construyen y pasan el adaptador.
+  - `ARCHITECTURE.md`, `docs/technical-discovery.md` y `docs/risks-and-open-questions.md` actualizados; `AGENTS.md` (próxima feature) corregido; tasks de la spec marcadas.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks executed); Android/JVM: GreetingTest 1/1, AiClientAndroidTest 3/3, NotePersistenceAndroidTest 2/2, NoteRepositoryAndroidTest 1/1; iOS: idem, 0 failures.
+  - `xcodebuild` scheme iosApp (iPhone 15, iOS 17.2) → BUILD SUCCEEDED; `simctl install`/`launch` → PID vivo; sin crash reports.
+  - Smoke Android (emulador `sdk_gphone64_arm64`, Google APIs): lista con "Dictar nota"; pantalla de captura Idle; permiso denegado → mensaje explícito, sin Nota ni crash; "Cancelar" → lista; con permiso concedido el reconocedor arranca ("Escuchando…"); "Detener" con silencio → "No se escuchó nada" (`NO_MATCH`), sin Nota ni crash. Capturas/UI dumps en `composeApp/build/smoke-evidence/android-voice-*`.
+  - `./init.sh` → exit 0, sin procesos de larga duración.
+  - `Schema.version = 1`, sin `.sqm`; `git status` sólo con archivos de la feature; sin cambios en `core/**`/`libs.versions.toml`/`composeApp/build.gradle.kts`/`init.sh`.
+- Evidence captured: arreglo `evidence` de `voice-capture-stt` en `feature_list.json` (7 líneas); capturas/UI dumps en `composeApp/build/smoke-evidence/`.
+- Files or artifacts updated: `composeApp/src/commonMain/kotlin/com/playbook/app/voice/VoiceTranscriber.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/VoiceCaptureScreen.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/App.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/NotesListScreen.kt`, `composeApp/src/androidMain/kotlin/com/playbook/app/voice/AndroidVoiceTranscriber.kt`, `composeApp/src/androidMain/kotlin/com/playbook/app/MainActivity.kt`, `composeApp/src/androidMain/AndroidManifest.xml`, `composeApp/src/iosMain/kotlin/com/playbook/app/voice/IosVoiceTranscriber.kt`, `composeApp/src/iosMain/kotlin/com/playbook/app/MainViewController.kt`, `iosApp/iosApp/Info.plist`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `docs/specs/voice-capture-stt.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: el happy path de audio real → Nota no pudo ejecutarse en emulador (no hay forma determinista de inyectar voz); el reconocedor sí arrancó y los flujos de permiso denegado/cancelar/sin habla quedaron verificados. El emulador Android está compartido con otras sesiones paralelas: durante el smoke aparecieron ANR de una app ajena (`es.alt10.kotlin.midgt.ne.des`), un `pm clear` externo de `com.playbook.app` y, al final, el APK instalado fue reemplazado por un build de otra feature (UI de "Etiquetas", inexistente en este código), por eso el smoke se detuvo tras capturar la evidencia. La persistencia de la Nota está cubierta por tests de `:core`. No hay harness E2E (justificado en la spec).
+- Next best step: validación independiente de `voice-capture-stt` con `$feature-validator`; tras el `accept`, crear spec de `note-category-and-tags` con `$feature-spec`.
+
+### Session 022
+
+- Date: 2026-10-09
+- Goal: validación independiente de `voice-capture-stt` (spec `docs/specs/voice-capture-stt.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `voice-capture-stt` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: completa voice-capture-stt` creado por el orquestador.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks, 0 failures en Android/JVM e iOS).
+  - `./init.sh` → exit 0 con el gate real y `init.sh` sin cambios (`git diff` vacío); `xcodebuild` scheme iosApp → BUILD SUCCEEDED; `simctl install`/`launch` → PID vivo, sin crash reports.
+  - Scope: sin cambios en `core/**`, `Note.sq`, `libs.versions.toml`, `composeApp/build.gradle.kts`, `init.sh` ni `.pbxproj`; `Schema.version = 1`, sin `.sqm`; `RECORD_AUDIO` en el manifest empaquetado y ambas usage descriptions en el `Info.plist` del producto.
+  - Smoke Android independiente (emulador API 34, Google APIs): Escenario 2 (permiso denegado → mensaje explícito, sin Nota ni crash) y Escenario 4 (Cancelar → lista) reproducidos; con permiso concedido el reconocedor arranca ("Escuchando…"). El happy path de audio real no es ejecutable determinísticamente (limitación de entorno, corroborada por interferencia de otra sesión en el emulador compartido).
+- Evidence captured: línea de validación en el arreglo `evidence` de `voice-capture-stt` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: hallazgos Low no bloqueantes — happy path de audio→Nota no ejecutable en emulador/simulador (declarado honestamente), artefacto no citado `android-voice-10-happy-listening.xml` en el build dir ignorado (build ajeno) y `setCategory(..., error = null)` que ignora el error en iOS. Sin hallazgos de seguridad.
+- Next best step: crear spec de `note-category-and-tags` con `$feature-spec` e implementarla con `$feature-implementer`; alternativamente `ai-runtime-decision` o `voice-attachment-storage` (ya dependency-ready).

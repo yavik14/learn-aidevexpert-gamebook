@@ -20,6 +20,10 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Playbook necesita el micrófono para que dictes tus notas de voz.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Playbook usa el reconocimiento de voz para transcribir tus dictados en texto.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
