@@ -12,9 +12,11 @@ corre el gate real no bloqueante: Android `assembleDebug`, tests del core y link
 del framework iOS. Mapeo de módulos, ids y versiones en `ARCHITECTURE.md` y
 `docs/technical-discovery.md`. La primera UI real (lista de notas) llegó con
 `notes-list-ui`, el CRUD de texto desde la UI (crear/editar/borrar + refresco)
-con `create-text-note`, el puerto de IA con `ai-client-interface` y la decisión de
+con `create-text-note`, el puerto de IA con `ai-client-interface`, la decisión de
 runtime de IA con `ai-runtime-decision` (ADR + spike test-only, decisión híbrida
-cloud-first), todas `accepted`.
+cloud-first) y la publicación de Android con `android-release-pipeline`
+(release/signing con keystore externo + runbook; ver `docs/release/android.md`),
+todas `accepted`. **Nunca** versionar keystores ni secrets.
 Próximas features en cola: `note-category-and-tags` (depende de `create-text-note`,
 ya `accepted`) y `embeddings-generation` (depende de `ai-client-interface` y
 `note-model-crud-core`, ya `accepted`); ambas requieren spec.
