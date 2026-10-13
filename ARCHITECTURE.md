@@ -13,9 +13,11 @@ de release/signing de Android (keystore externo) y el runbook de publicación,
 `EmbeddingRepository` y `NoteIndexingService` como primer consumidor real de
 `AiClient`, `voice-capture-stt` la captura por voz nativa (puerto
 `VoiceTranscriber` + adaptadores Android/iOS), `note-category-and-tags` las
-Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`), y
+Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`),
 `image-capture-camera` el primer Adjunto: tabla `attachment` (esquema v4 con
-`3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería).
+`3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería), e
+`ios-release-pipeline` el pipeline de release de iOS (archive/export/upload a
+TestFlight) con firma, versionado y reglas de secretos.
 
 ## Modules
 
@@ -372,9 +374,13 @@ composeApp (Android app / commonMain) ──▶ core
 
 - Kotlin base package: `com.playbook`
 - Android `namespace` / `applicationId`: `com.playbook.app`
-- iOS bundle id: `com.playbook.app`
-- iOS framework `baseName`: `ComposeApp`
+- iOS bundle id: `com.playbook.app` (estable, sin sufijo de Team ID)
+- iOS framework `baseName`: `ComposeApp` (static)
 - Xcode scheme/target: `iosApp`; app display name `Playbook`
+- Scheme compartido: `iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/iosApp.xcscheme`
+- iOS marketing version: `MARKETING_VERSION` (default `1.0`); build number:
+  `CURRENT_PROJECT_VERSION` (default `1`). `Info.plist` usa
+  `$(MARKETING_VERSION)`/`$(CURRENT_PROJECT_VERSION)`.
 
 ## Build and versions
 
@@ -423,6 +429,31 @@ Comandos manuales equivalentes:
 - `./gradlew :core:iosSimulatorArm64Test`
 - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64`
 - iOS app: `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphonesimulator build`
+
+## Release / iOS distribution
+
+- **Superficie:** `scripts/ios-release/` (shell + Xcode CLI, sin `fastlane`).
+  `preflight.sh` valida prerequisitos (macOS/Xcode, scheme, `TEAM_ID`,
+  credenciales, herramienta de subida) y falla sin archivar; `archive.sh` produce
+  `build/ios/Playbook.xcarchive` en Release (firmado o con
+  `CODE_SIGNING_ALLOWED=NO` para verificación local); `export-upload.sh`
+  renderiza `ExportOptions.plist` desde
+  `scripts/ios-release/ExportOptions.plist.template`, exporta el `.ipa` y lo
+  sube con `xcrun altool --upload-app` (CLI confirmado en la Xcode instalada).
+- **Firma e identidad:** bundle id estable `${BUNDLE_ID}` = `com.playbook.app`
+  (sin `${TEAM_ID}`); `Release` usa `CODE_SIGN_IDENTITY = "Apple Distribution"`
+  con `CODE_SIGN_STYLE = Automatic`; `Debug` conserva `Apple Development`. El
+  `TEAM_ID` real no vive en el repo: `Config.xcconfig` versiona `TEAM_ID=` vacío
+  y hace `#include? "Local.xcconfig"` (gitignored); los scripts también aceptan
+  la env `TEAM_ID`.
+- **Versionado:** `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` como build
+  settings (default `1.0`/`1`); `archive.sh` los recibe por parámetro y los pasa
+  como overrides. Cada subida exige un build number nuevo (TestFlight).
+- **Gate:** `init.sh` **no** archiva ni sube (ver `CONSTRAINTS.md`). El release
+  es explícito y separado del gate.
+- **Estado:** los artefactos repo-side están verificados; el archive firmado /
+  export / upload a TestFlight queda `blocked` hasta contar con Apple Developer
+  Program + credenciales. Runbook: `docs/release/ios-testflight.md`.
 
 ## Deferred
 

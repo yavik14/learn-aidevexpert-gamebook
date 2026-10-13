@@ -13,8 +13,10 @@
 - `voice-capture-stt` `accepted`: puerto `VoiceTranscriber` + adaptadores nativos (`SpeechRecognizer` en Android; `SFSpeechRecognizer`+`AVAudioEngine` en iOS) en `:composeApp`; el dictado crea una `Note` transcripta vía `create(NoteDraft(...))`. Sin cambios en `:core`.
 - `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota; esquema v3 (`note_tag`, migración `2.sqm` v2→v3); clasificación fija por `Track` ya existente.
 - `image-capture-camera` `accepted` (2026-10-09): captura de imagen (cámara/galería) → Nota con Adjunto; tabla `attachment` (esquema **v4**, migración `3.sqm` v3→v4) + `AttachmentRepository` + integración nativa Android/iOS.
-- Current next ready features: `semantic-linking`, `ios-release-pipeline` y `voice-attachment-storage` (dependencias ya `accepted`); todas requieren spec.
-- Current blocker: none.
+- `ios-release-pipeline-scaffolding` `passing`: artefactos repo-side de release iOS verificados (scripts, scheme compartido, firma/identidad, versionado, `.gitignore`, runbook; Scenarios 1/2/7/8). Requiere validación independiente para `accepted`.
+- `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
+- Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec.
+- Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-09.
 
 ## Session Log
@@ -524,3 +526,28 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes (L1–L5): comentarios obsoletos sobre `TakePicture` en `ImageCapture.android.kt`/`AndroidManifest.xml`, KDoc de `createDatabase` que dice 'v1', fallo parcial improbable en `saveNoteWithImage`, temporal de cámara en `cacheDir/images/` y artefacto de smoke de permiso denegado no guardado. La cámara iOS real sólo se valida en dispositivo físico.
 - Next best step: crear spec de `note-category-and-tags` con `$feature-spec` e implementarla con `$feature-implementer` (primera feature no-`accepted` dependency-ready en orden).
+
+### Session 027
+
+- Date: 2026-10-09
+- Goal: implementar `ios-release-pipeline` (spec `docs/specs/ios-release-pipeline.md`): pipeline de release de iOS a TestFlight (artefactos repo-side + ejecución account-gated).
+- Completed:
+  - Firma/identidad: `PRODUCT_BUNDLE_IDENTIFIER` pasa de `${BUNDLE_ID}${TEAM_ID}` a `${BUNDLE_ID}` (bundle id estable `com.playbook.app`) y `Release` usa `CODE_SIGN_IDENTITY = "Apple Distribution"` (Debug conserva `Apple Development`).
+  - Versionado: `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` como build settings (default `1.0`/`1`); `Info.plist` usa `$(MARKETING_VERSION)`/`$(CURRENT_PROJECT_VERSION)`.
+  - `Config.xcconfig` versiona `TEAM_ID=` vacío y `#include? "Local.xcconfig"` (gitignored); `Local.xcconfig.example` creado.
+  - Scheme compartido `iosApp.xcscheme` creado para archive/export CLI deterministas.
+  - `scripts/ios-release/{preflight,archive,export-upload}.sh` + `ExportOptions.plist.template`; `preflight` no archiva, `archive` soporta `--unsigned`, `export-upload` renderiza el plist y sube con `xcrun altool --upload-app`.
+  - `.gitignore` con credenciales/artefactos de firma/release; runbook `docs/release/ios-testflight.md`; `CONSTRAINTS.md`; `ARCHITECTURE.md` (sección Release / iOS distribution + identifiers); `docs/technical-discovery.md` (Deployment + Release Decisions); `AGENTS.md`.
+- Verification run:
+  - `scripts/ios-release/preflight.sh` (sin credenciales) → exit 1; `[FAIL] TEAM_ID no definido` y `[FAIL] Sin credenciales de firma: 0 identidades de codesigning y sin App Store Connect API key`; `[OK]` macOS/Xcode/scheme/altool. No archivó ni subió (Scenario 1).
+  - `./gradlew :composeApp:linkReleaseFrameworkIosArm64` → BUILD SUCCESSFUL in 14m 54s (Scenario 2).
+  - `scripts/ios-release/archive.sh --unsigned --version 1.0 --build 1` → `xcodebuild ... CODE_SIGNING_ALLOWED=NO archive` → `** ARCHIVE SUCCEEDED **`; `build/ios/Playbook.xcarchive` con `CFBundleIdentifier=com.playbook.app`, `1.0`/`1`; binario arm64 de 27.4 MB con Compose enlazado (Scenario 2).
+  - `xcodebuild -list` → scheme `iosApp` visible.
+  - `scripts/ios-release/export-upload.sh` (sin `TEAM_ID`) → exit 1 con `ERROR: falta TEAM_ID.` (no exporta ni sube).
+  - Scenario 7: `git status` sólo con archivos de la feature; `git check-ignore` confirma `build/ios/**` e `iosApp/Configuration/Local.xcconfig`; `find` de artefactos de firma y `git grep` de claves privadas sin resultados.
+  - `./init.sh` → exit 0 (28s+41s+8s), sin dev servers ni procesos de larga duración; no archiva ni sube (Scenario 8). `init.sh` sin cambios.
+  - Scenarios 3–6 (archive firmado, export `.ipa`, upload, device real) **no ejecutados**: sin Apple Developer Program + credenciales. Bloqueo probado por preflight. No se fabricó evidencia de TestFlight.
+- Evidence captured: arreglo `evidence` de `ios-release-pipeline` en `feature_list.json` (7 líneas); logs en `/tmp/ios-archive.log` (1093 líneas) e `/tmp/ios-init.log`.
+- Files or artifacts updated: `iosApp/iosApp.xcodeproj/project.pbxproj`, `iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/iosApp.xcscheme` (nuevo), `iosApp/iosApp/Info.plist`, `iosApp/Configuration/Config.xcconfig`, `iosApp/Configuration/Local.xcconfig.example` (nuevo), `scripts/ios-release/*` (nuevos), `.gitignore`, `docs/release/ios-testflight.md` (nuevo), `CONSTRAINTS.md` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la feature queda `blocked` (no `passing`) porque su `user_visible_behavior` exige subir a TestFlight e instalar en device real, imposible sin cuenta. Recomendación honesta: dividir en `ios-release-pipeline-scaffolding` (verificable, ya cumplido) + `ios-release-pipeline-first-upload` (account-gated), en vez de declarar `accepted` sin subida. `altool` está deprecado por Apple, aunque funciona en Xcode 26.4/27.0 (27.0.5 (2.1)); fallback declarado: `iTMSTransporter`, y `fastlane pilot` como último recurso (no adoptado).
+- Next best step: decisión del owner sobre la división de la feature; en paralelo, crear spec de `note-category-and-tags` con `$feature-spec` para continuar el MVP. Cuando haya cuenta Apple Developer Program, completar Scenarios 3–6 y `accept`.

@@ -1,0 +1,9 @@
+// Plantilla de configuración local del host Xcode. NO versionar valores reales.
+// Copiá este archivo a `Local.xcconfig` (gitignored) y completá tu Team ID:
+//
+//   cp iosApp/Configuration/Local.xcconfig.example iosApp/Configuration/Local.xcconfig
+//
+// `Config.xcconfig` hace `#include? "Local.xcconfig"`, así que este archivo
+// sobreescribe el `TEAM_ID=` vacío del repo. El Team ID no es un secreto
+// criptográfico, pero se mantiene fuera de los archivos versionados por higiene.
+TEAM_ID=YOUR_TEAM_ID
