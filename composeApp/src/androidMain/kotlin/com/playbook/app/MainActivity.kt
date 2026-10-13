@@ -4,19 +4,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.playbook.app.voice.AndroidVoiceTranscriber
+import com.playbook.core.ai.FakeAiClient
+import com.playbook.core.ai.NoteIndexingService
+import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.AndroidDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
 import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.platform.randomNoteId
 import com.playbook.core.repository.AttachmentRepository
+import com.playbook.core.repository.EmbeddingRepository
 import com.playbook.core.repository.NoteRepository
 import com.playbook.core.repository.SqlDelightAttachmentRepository
+import com.playbook.core.repository.SqlDelightEmbeddingRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
 
 class MainActivity : ComponentActivity() {
-    // Se instancia al arrancar para aplicar el esquema local (v2) y alimentar los
-    // repositorios de notas y adjuntos que consume la UI.
+    // Se instancia al arrancar para aplicar el esquema local (v4) y alimentar los
+    // repositorios de notas, adjuntos y embeddings que consume la UI.
     private lateinit var database: PlaybookDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,11 +37,26 @@ class MainActivity : ComponentActivity() {
             idFactory = ::randomNoteId,
             clock = ::currentTimeMillis,
         )
+        val embeddingRepository: EmbeddingRepository = SqlDelightEmbeddingRepository(
+            database = database,
+            clock = ::currentTimeMillis,
+        )
+        // Runtime de IA por defecto: fake determinista y sin red (el adaptador real
+        // es follow-up del ADR 0001). `generate` materializa el RAG.
+        val aiClient = FakeAiClient()
+        val noteIndexingService = NoteIndexingService(aiClient, embeddingRepository)
+        val ragQueryService = RagQueryService(aiClient, noteRepository, embeddingRepository)
         // El adaptador registra el permission launcher, por eso se construye aquí
         // (onCreate) y no dentro del composable.
         val voiceTranscriber = AndroidVoiceTranscriber(this)
         setContent {
-            App(noteRepository, attachmentRepository, voiceTranscriber)
+            App(
+                noteRepository = noteRepository,
+                attachmentRepository = attachmentRepository,
+                voiceTranscriber = voiceTranscriber,
+                noteIndexingService = noteIndexingService,
+                ragQueryService = ragQueryService,
+            )
         }
     }
 }

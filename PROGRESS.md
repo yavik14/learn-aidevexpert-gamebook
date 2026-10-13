@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `voice-attachment-storage` (2026-10-13; Session 036; audio original del dictado como Adjunto `AUDIO`; validación independiente `accept`); antes `semantic-linking` (Session 034).
+- Última feature `accepted`: `rag-query` (2026-10-13; Session 038; consulta en lenguaje natural sobre las Notas; validación independiente `accept`); antes `voice-attachment-storage` (Session 036).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -20,7 +20,8 @@
 - `ai-enrichment-classify-tags-type` `accepted` (2026-10-13; validación independiente `accept` en `docs/validations/ai-enrichment-classify-tags-type.md`): indexado asíncrono + transiciones de `NoteStatus`. `NoteIndexingOrchestrator.index(note)` reutiliza `NoteIndexingService` y persiste: éxito→`INDEXED`; fallo→`PENDING` salvo Nota ya `INDEXED` (no se degrada); **nunca** escribe `FAILED`. `NoteRepository.updateStatus` (query `updateNoteStatus`, sólo `status`, sin re-sellar `updated_at`) sin cambio de esquema (sigue v4). Alcance re-derivado: la IA no clasifica ni etiqueta.
 - `semantic-linking` `accepted` (2026-10-13; validación independiente `accept`): Enlaces Nota↔Nota por similitud coseno (esquema **v5**, migración `4.sqm` v4→v5, tabla `note_link` con PK canónica `note_a_id < note_b_id` + FK cascade); `CosineSimilarity`, `NoteLink`/`NoteLinkMappers`/`otherNoteId`, `NoteLinkRepository`/`SqlDelightNoteLinkRepository` y `SemanticLinkingService.recomputeAll()` + `LinkingSummary` (umbral `0.8` inclusivo e inyectable). Core puro, sin UI ni wiring.
 - `voice-attachment-storage` `accepted` (2026-10-13; validación independiente `accept`): el audio original del dictado se graba en la misma sesión de micrófono y se persiste como Adjunto `AUDIO` (`AttachmentKind.AUDIO("audio")`, `audio/<uuid>.m4a`, `audio/mp4`) separado de la transcripción; sin cambio de esquema (sigue v4, sin `.sqm`), sin dependencias ni permisos nuevos. Chips de texto "Imagen"/"Audio" en la lista.
-- Current next ready features: `note-links-ui` (depende de `semantic-linking`, ya `accepted`) y `rag-query` (depende de `embeddings-generation`, ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
+- `rag-query` `accepted` (2026-10-13; validación independiente `accept`): consulta en lenguaje natural sobre las Notas — `cosineSimilarity` + `RagQueryService.ask(question)` en `:core` (retrieval top-K por similitud coseno en memoria + `generate(GenerateRequest(prompt, context))`), `AskNotesScreen`/`AskUiState` + acción "Preguntar", y el primer wiring del runtime de IA a la app (`FakeAiClient` + `NoteIndexingService` index-on-save best-effort + `RagQueryService`).
+- Current next ready features: `note-links-ui` (depende de `semantic-linking`, ya `accepted`) y `rag-answer-citations` (depende de `rag-query`, ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-13.
 
@@ -752,3 +753,44 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: findings Low no bloqueantes — redacción de `AGENTS.md` (resuelta al persistir `accepted`), comentario obsoleto en `Attachment.sq` (correcto por contrato: la spec exige no tocarlo), escritura AAC en iOS sin voz real y `catch (_: Throwable)` amplio en `App.onFinalResult` (consistente con el patrón existente). Sin hallazgos de seguridad.
 - Next best step: crear spec de `semantic-linking` con `$feature-spec` e implementarla con `$feature-implementer`.
+
+### Session 037
+
+- Date: 2026-10-13
+
+- Goal: implementar `rag-query` (spec `docs/specs/rag-query.md`): consulta en lenguaje natural sobre las Notas (retrieval por similitud coseno + `RagQueryService` + primer wiring del runtime de IA a la app).
+- Completed:
+  - `:core`: `cosineSimilarity(a, b)` (Kotlin common, `kotlin.math.sqrt`; `require` de igual tamaño y `0f` para denominador nulo) y `RagQueryService(aiClient, noteRepository, embeddingRepository, maxSources = 5)` con `RagAnswer` (`Answer`/`NoIndexedNotes`/`Failed`) y `RetrievedNote`. `ask(question)`: `require(isNotBlank)`, sin embeddings → `NoIndexedNotes` **sin** runtime, embebe la pregunta (try/catch), valida 1 vector no vacío, puntúa coseno descartando dimensiones incompatibles, ordena desc con desempate por `note.id`, top-K, y genera con `GenerateRequest(prompt, context = cuerpos)`.
+  - Tests compartidos `commonTest` `RagQueryCheck.kt` (helpers + stubs recording/failing/stub/fixed) con `@Test` por plataforma (`RagQueryAndroidTest`, `RagQueryIosTest`, `runTest`): similitud, retrieval, no-indexed, fallo, respuesta inválida y ranking.
+  - `:composeApp`: `AskNotesScreen` + `AskUiState`; acción "Preguntar" en `NotesListScreen`; `NotesDestination.Ask`, `askState` y `rememberCoroutineScope()` en `App` (sin `ViewModel`/Flow); indexado **best-effort** al guardar/editar (`noteIndexingService.index` en `scope.launch`, silencioso, sin tocar `NoteStatus`, sólo con `body` no vacío).
+  - Composition roots `MainActivity`/`MainViewController`: `SqlDelightEmbeddingRepository` + `FakeAiClient` + `NoteIndexingService` + `RagQueryService` pasados a `App(...)` (primer wiring de IA a la app).
+  - Docs: `ARCHITECTURE.md` (nueva sección RAG, wiring, surfaces; "Deferred" corregido), `docs/technical-discovery.md` (nueva "RAG Decisions"), `docs/risks-and-open-questions.md` (respuesta desde las Notas; runtime real/calidad siguen abiertos), `AGENTS.md` (próxima feature).
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 2m 3s (66 tareas); Android/JVM 22/22 (RagQuery 6/6) y iOS 22/22 (RagQuery 6/6), 0 failures.
+  - `xcodebuild` scheme `iosApp` (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.
+  - `PlaybookDatabase.Schema.version == 4`; sin `.sqm` nuevos ni cambios en `Note.sq`/`embedding.sq`; sin cambios en `init.sh`/`libs.versions.toml`/`composeApp/build.gradle.kts`.
+  - `./init.sh` → exit 0, sin procesos de larga duración.
+  - Controles negativos reproducidos y restaurados: `dot -=` rompe `cosineSimilarityContract` (+`retrievesAnswerAnchoredInNotes`); `ask` generando sin fuentes rompe `noIndexedNotesSkipsRuntime`.
+  - Smoke iOS (iPhone 15): lista con "Preguntar"; pantalla de consulta; respuesta real `[fake] ¿cómo diseño al jefe final? (context=1)` mostrada sólo como texto (OCR de capturas). Smoke Android interactivo **no** ejecutado: `emulator-5554`/`emulator-5556` contaminados por worktrees paralelos que reinstalan su APK (md5 distinto) y una instancia adicional no arrancó por contención; no se fabricó evidencia Android.
+- Evidence captured: arreglo `verification`/`evidence` de `rag-query` en `feature_list.json` (9/8 líneas); capturas OCR en `composeApp/build/smoke-evidence/ios-rag-0{1,2,3}-*.png`; la siembra de QA se eliminó del simulador.
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/ai/{CosineSimilarity,RagQueryService}.kt` (nuevos), `core/src/commonTest/kotlin/com/playbook/core/ai/RagQueryCheck.kt` (nuevo), `core/src/{androidUnitTest,iosTest}/kotlin/com/playbook/core/ai/RagQuery{Android,Ios}Test.kt` (nuevos), `composeApp/src/commonMain/kotlin/com/playbook/app/{AskNotesScreen,App,NotesListScreen}.kt`, `composeApp/src/androidMain/kotlin/com/playbook/app/MainActivity.kt`, `composeApp/src/iosMain/kotlin/com/playbook/app/MainViewController.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la "respuesta generada" es la de `FakeAiClient` (el adaptador cloud/on-device real es follow-up del ADR 0001), así que la verificación prueba el **pipeline** (retrieval real + petición anclada), no la calidad. El indexado best-effort no transiciona `NoteStatus` ni reintenta (deuda de `note-enrichment-status-ui`/`offline-pending-retry`). Top-K sin umbral (calibración pendiente de `semantic-linking`). Smoke Android bloqueado por emuladores compartidos (limitación de entorno, declarada honestamente).
+- Next best step: validación independiente de `rag-query` con `$feature-validator`; tras el `accept`, crear spec de `rag-answer-citations` o `semantic-linking` con `$feature-spec`.
+
+### Session 038
+
+- Date: 2026-10-13
+
+- Goal: validación independiente de `rag-query` (spec `docs/specs/rag-query.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `rag-query` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: complete rag-query` creado por el orquestador y PR draft contra `develop`.
+- Verification run:
+  - `./init.sh` → exit 0, sin dev servers ni simuladores; `init.sh` sin cambios.
+  - `:core:testDebugUnitTest --rerun-tasks` y `:core:iosSimulatorArm64Test --rerun-tasks` → RagQuery 6/6 + previos, 22/22 por plataforma, 0 failures; `assembleDebug` + link del framework iOS `--rerun-tasks` BUILD SUCCESSFUL; `xcodebuild` scheme iosApp (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.
+  - Esquema `Schema.version == 4`; sólo `1.sqm`/`2.sqm`/`3.sqm`; diffs de `Note.sq`/`embedding.sq`/`init.sh`/`libs.versions.toml`/`composeApp/build.gradle.kts` vacíos; sin dependencias nuevas ni hallazgos de seguridad.
+  - Controles negativos propios del validador, restaurados byte-idénticos (sha256 antes/después): invertir el signo del `dot product` rompe `cosineSimilarityContract` + `rankingIsDeterministicAndTopK`; forzar `generate` en la rama sin embeddings rompe `noIndexedNotesSkipsRuntime`.
+  - Smoke Android independiente (Scenario 7/8): el validador creó una Nota de texto por UI → fila `embedding` persistida (`dimension=8`, 32 bytes) con `note.status` en `capturada`; consultó por UI → respuesta `[fake] … (context=1)` mostrada sólo como texto; datos del emulador limpiados con `pm clear`. OCR independiente de las capturas iOS reproduce lista/consulta/respuesta.
+  - Scenario iOS/y Android 7–8 cerrados; Scenarios 1–6 y 9 por tests del core en dos plataformas.
+- Evidence captured: línea de validación en el arreglo `evidence` de `rag-query` en `feature_list.json`; nombre del test del control negativo corregido (`rankingIsDeterministicAndTopK`).
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md` (por el orquestador al persistir la aceptación).
+- Known risk or unresolved issue: la respuesta es la de `FakeAiClient` (el adaptador cloud/on-device real y la calidad son follow-up del ADR 0001); indexado best-effort sin `NoteStatus`/reintento (`note-enrichment-status-ui`/`offline-pending-retry`); top-K sin umbral (`semantic-linking`). Findings Low no bloqueantes: dumpos Android obsoletos en el directorio ignorado `composeApp/build/smoke-evidence/`.
+- Next best step: crear spec de `rag-answer-citations` (depende de `rag-query`, ya `accepted`) con `$feature-spec` e implementarla con `$feature-implementer`.
