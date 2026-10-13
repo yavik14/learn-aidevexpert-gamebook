@@ -27,6 +27,8 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 ## Integrations
 - **Speech-to-text nativo:** Android `SpeechRecognizer` / iOS `Speech`.
 - **Cámara / galería:** captura de bocetos; el OCR (si existe) es texto derivado.
+  **OCR descartado del MVP** (`image-ocr-optional`): ver "OCR Decision
+  (image-ocr-optional)" y `docs/adr/0002-ocr-decision.md`.
 - **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto ya
   implementado; runtime pendiente de elección (ver riesgos).
 
@@ -489,6 +491,33 @@ Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
   verifica que las notas v1 se conservan y `attachment` queda usable) en
   `commonTest`; corren en Android/JVM (`AttachmentRepositoryAndroidTest`,
   `MigrationAndroidTest`) e iOS (`AttachmentRepositoryIosTest`, `MigrationIosTest`).
+
+## OCR Decision (image-ocr-optional)
+
+Implementado 2026-10-13. Decisión en `docs/adr/0002-ocr-decision.md`.
+
+- **Decisión (feature opcional/min):** **DISCARD** del OCR para el MVP. No se
+  integró ningún motor, no se agregaron dependencias ni se tocó `:core`/UI/esquema
+  (`Schema.version == 4`, sin `.sqm` nuevo). El entregable es el registro de
+  decisión + la actualización de docs durables + el estado de la feature.
+- **Por qué no integrar:** (1) el objetivo es **texto manuscrito** y los motores
+  on-device de bajo costo (ML Kit Text Recognition, iOS Vision) están orientados a
+  **texto impreso**, con calidad incierta sobre manuscrito; (2) Android exigiría
+  una dependencia nativa pesada (ML Kit) con **poca superficie compartida KMP**,
+  creando asimetría con iOS; (3) el puerto `AiClient` es **text-only** y no acepta
+  imágenes (extenderlo a visión está fuera de alcance); (4) el OCR cloud viola
+  offline-first y la política de secrets del ADR 0001; (5) el OCR no es requisito
+  del MVP (`docs/build-brief.md`). Trade-offs por alternativa en el ADR.
+- **Patrón futuro (no creado hoy):** si se reabre, el encaje natural es un puerto
+  `TextRecognizer` + adaptadores por plataforma (análogo a `VoiceTranscriber`),
+  consumiendo la imagen ya capturada por `image-capture-camera` y persistiendo el
+  texto derivado en la **Nota** (no en el `Adjunto`).
+- **Disparadores de re-evaluación:** adaptador `AiClient` con visión disponible;
+  necesidad de texto derivado de `Adjunto` para RAG; evidencia de calidad de OCR
+  sobre **manuscrito** en una plataforma objetivo sin dependencia pesada.
+- **Límite honesto:** no se ejecutó OCR ni se midió calidad; el descarte se
+  fundamenta en la evaluación de alternativas y las restricciones del repo, no en
+  mediciones. Sin cambios de producto, dependencias ni esquema.
 
 ## Release Decisions (ios-release-pipeline)
 

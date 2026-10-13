@@ -3,8 +3,20 @@
 ## Blocking Next Phase
 - **¿Los Adjuntos sin texto entran al RAG?** Definir si un audio sin transcribir
   o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
+  Precisión tras `image-ocr-optional` (2026-10-13): el **OCR del boceto queda
+  descartado del MVP** (ver "Resolved"), así que un `Adjunto` de imagen **no**
+  aporta texto indexable; la pregunta se reduce a si un `Adjunto` sin texto
+  participa del RAG o se excluye, y la decide la feature de indexado/RAG.
 
 ## Resolved
+- **OCR del boceto (`image-ocr-optional`):** **descartado del MVP** (2026-10-13).
+  Decisión, alternativas (ML Kit / iOS Vision / `AiClient`+visión / OCR cloud /
+  descartar), trade-offs y **disparadores de re-evaluación** en
+  `docs/adr/0002-ocr-decision.md`. Motivo: el objetivo es texto **manuscrito** de
+  calidad incierta con los motores on-device de bajo costo, Android exigiría una
+  dependencia pesada (ML Kit) poco compartida, y `AiClient` es text-only. Sin
+  código/deps/esquema nuevos. Si se reabre, el patrón sería un puerto
+  `TextRecognizer` + adaptadores nativos (patrón `VoiceTranscriber`).
 - **Runtime de IA (cloud / on-device / híbrido):** **decidido** en
   `ai-runtime-decision` (2026-10-09). Estrategia **híbrida por fases, cloud-first**
   detrás del puerto `AiClient`; decisión y trade-offs en

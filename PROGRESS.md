@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `image-capture-camera` (2026-10-09; Sessions 015-026, ejecución paralela; validación independiente `accept`).
+- Última feature `accepted`: `image-ocr-optional` (2026-10-13; decisión de descarte del OCR en el MVP + docs durables; validación independiente `accept`).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -13,11 +13,12 @@
 - `voice-capture-stt` `accepted`: puerto `VoiceTranscriber` + adaptadores nativos (`SpeechRecognizer` en Android; `SFSpeechRecognizer`+`AVAudioEngine` en iOS) en `:composeApp`; el dictado crea una `Note` transcripta vía `create(NoteDraft(...))`. Sin cambios en `:core`.
 - `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota; esquema v3 (`note_tag`, migración `2.sqm` v2→v3); clasificación fija por `Track` ya existente.
 - `image-capture-camera` `accepted` (2026-10-09): captura de imagen (cámara/galería) → Nota con Adjunto; tabla `attachment` (esquema **v4**, migración `3.sqm` v3→v4) + `AttachmentRepository` + integración nativa Android/iOS.
+- `image-ocr-optional` `accepted` (2026-10-13): feature **opcional/min** resuelta como **decisión + documentación** — **DISCARD del OCR para el MVP** (validación independiente `accept`). Entregable: `docs/adr/0002-ocr-decision.md` (MADR-lite, promovido a `accepted`) + docs durables actualizados; sin código/deps/esquema.
 - `ios-release-pipeline-scaffolding` `passing`: artefactos repo-side de release iOS verificados (scripts, scheme compartido, firma/identidad, versionado, `.gitignore`, runbook; Scenarios 1/2/7/8). Requiere validación independiente para `accepted`.
 - `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
 - Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
-- Last verified at: 2026-10-09.
+- Last verified at: 2026-10-13.
 
 ## Session Log
 
@@ -551,3 +552,41 @@
 - Files or artifacts updated: `iosApp/iosApp.xcodeproj/project.pbxproj`, `iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/iosApp.xcscheme` (nuevo), `iosApp/iosApp/Info.plist`, `iosApp/Configuration/Config.xcconfig`, `iosApp/Configuration/Local.xcconfig.example` (nuevo), `scripts/ios-release/*` (nuevos), `.gitignore`, `docs/release/ios-testflight.md` (nuevo), `CONSTRAINTS.md` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: la feature queda `blocked` (no `passing`) porque su `user_visible_behavior` exige subir a TestFlight e instalar en device real, imposible sin cuenta. Recomendación honesta: dividir en `ios-release-pipeline-scaffolding` (verificable, ya cumplido) + `ios-release-pipeline-first-upload` (account-gated), en vez de declarar `accepted` sin subida. `altool` está deprecado por Apple, aunque funciona en Xcode 26.4/27.0 (27.0.5 (2.1)); fallback declarado: `iTMSTransporter`, y `fastlane pilot` como último recurso (no adoptado).
 - Next best step: decisión del owner sobre la división de la feature; en paralelo, crear spec de `note-category-and-tags` con `$feature-spec` para continuar el MVP. Cuando haya cuenta Apple Developer Program, completar Scenarios 3–6 y `accept`.
+
+### Session 028
+
+- Date: 2026-10-13
+- Goal: implementar `image-ocr-optional` (spec `docs/specs/image-ocr-optional.md`): feature **opcional/min** resuelta como decisión de viabilidad + documentación.
+- Completed:
+  - `docs/adr/0002-ocr-decision.md` (nuevo, MADR-lite consistente con `docs/adr/0001-ai-runtime-decision.md`): contexto, 7 criterios, **5 alternativas** (ML Kit Text Recognition v2, iOS Vision `VNRecognizeTextRequest`, `AiClient`/visión, OCR cloud dedicado, descartar) con tabla de trade-offs por criterio, decisión **DISCARD para el MVP** con fundamento, consecuencias (positivas/negativas/neutras), **disparadores de re-evaluación**, evidencia y límites honestos (no se ejecutó OCR ni se midió calidad).
+  - `docs/technical-discovery.md`: Integrations marca el OCR como descartado + nueva sección "OCR Decision (image-ocr-optional)".
+  - `docs/risks-and-open-questions.md`: nueva entrada en "Resolved" (OCR descartado del MVP) + pregunta de RAG de adjuntos sin texto **precisada**.
+  - `ARCHITECTURE.md`: línea introductoria + sección "Deferred" declaran el descarte con puntero al ADR y disparador de re-evaluación.
+  - Tasks de la spec marcadas (`docs/specs/image-ocr-optional.md`).
+- Verification run:
+  - `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración; `init.sh` sin cambios.
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks --console=plain` → BUILD SUCCESSFUL in 2m 51s (66 actionable tasks: 66 executed). 16 tests Android/JVM y 16 iOS, 0 failures / 0 errors (Greeting 1, AiClient 3, NoteIndexing 1, AiRuntimeSpike 2, DatabaseMigration 1, Migration 1, NotePersistence 2, AttachmentRepository 1, EmbeddingRepository 1, NoteRepository 3 por plataforma).
+  - Esquema sin cambios: `PlaybookDatabaseImpl.Schema.version = 4`; `find core/src -name '*.sqm'` → `1.sqm`/`2.sqm`/`3.sqm` (sin `.sqm` nuevo).
+  - Sin deps nuevas ni cambios de producto: `git diff` vacío en `gradle/libs.versions.toml`, `build.gradle.kts`, `core/build.gradle.kts`, `composeApp/build.gradle.kts`, `core/src/**`, `composeApp/src/**`, `iosApp/**` e `init.sh`.
+  - Control negativo: `grep -riE "mlkit|VNRecognizeTextRequest|TextRecognizer" core/src composeApp/src` → sin resultados; contrato de `AiClient` sin cambios (`git diff` vacío).
+- Evidence captured: arreglo `evidence` de `image-ocr-optional` en `feature_list.json`; ADR `docs/adr/0002-ocr-decision.md`; diff de los docs durables.
+- Files or artifacts updated: `docs/adr/0002-ocr-decision.md` (nuevo), `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `ARCHITECTURE.md`, `docs/specs/image-ocr-optional.md`, `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: la calidad de OCR sobre **manuscrito** no se midió (no se ejecutó OCR); el descarte se fundamenta en la orientación de los motores a texto impreso y en las restricciones del repo, declarado como incertidumbre. La pregunta "¿los Adjuntos sin texto entran al RAG?" sigue abierta (precisada) para la feature de indexado/RAG. Convención de estado final de una feature descartada (`passing → accepted` con el descarte documentado) propuesta en la spec; si el validador/orquestador prefiere otra, registrarla.
+- Next best step: validación independiente de `image-ocr-optional` con `$feature-validator`; tras el `accept`, elegir la próxima feature lista (`semantic-linking` / `voice-attachment-storage`) y crear su spec con `$feature-spec`.
+
+### Session 029
+
+- Date: 2026-10-13
+- Goal: validación independiente de `image-ocr-optional` (spec `docs/specs/image-ocr-optional.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `image-ocr-optional` promovida a `accepted` en `feature_list.json` con evidencia de validación; ADR `docs/adr/0002-ocr-decision.md` promovido de `propuesto` a `accepted`; commit `docs: complete image-ocr-optional` creado por el orquestador y PR draft contra `develop`.
+- Verification run:
+  - `./init.sh` → exit 0, sin dev servers ni simuladores; `git diff -- init.sh` vacío.
+  - `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks, 6m49s); 16 tests Android/JVM y 16 iOS, 0 failures/0 errors (conteos de `core/build/test-results/*/TEST-*.xml`).
+  - Esquema confirmado por fuente generada: `PlaybookDatabaseImpl.Schema.version == 4`; `find core/src -name '*.sqm'` → `1.sqm`/`2.sqm`/`3.sqm` (sin `.sqm` nuevo).
+  - `git diff` vacío en `core/src composeApp/src iosApp gradle/libs.versions.toml build.gradle.kts core/build.gradle.kts composeApp/build.gradle.kts init.sh`, incluido `AiClient.kt` (contrato sin cambios).
+  - Control negativo propio del validador: `grep -riE "mlkit|VNRecognizeTextRequest|TextRecognizer|com.google.mlkit" core/src composeApp/src` → sin resultados (exit 1).
+  - Escenarios 1–5 verificados (ADR MADR-lite con 5 alternativas/trade-offs/decisión DISCARD/disparadores; docs durables con puntero al ADR; entry + `PROGRESS.md`/`AGENTS.md`; gate honesto; control negativo). Honestidad corroborada: "No se ejecutó OCR ni se midió calidad", sin medición fabricada; sin secrets.
+- Evidence captured: línea de validación en el arreglo `evidence` de `image-ocr-optional` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/adr/0002-ocr-decision.md`.
+- Known risk or unresolved issue: hallazgos Low no bloqueantes — `Status: propuesto` del ADR (promovido a `accepted` al persistir la aceptación) y estimaciones de peso/calidad sin URLs fechadas (declaradas en los límites honestos del ADR). La calidad de OCR sobre manuscrito sigue sin medirse; la pregunta de RAG de adjuntos sin texto sigue abierta para la feature de indexado/RAG.
+- Next best step: la próxima feature ready es `semantic-linking` (depende de `embeddings-generation`, ya `accepted`); crear su spec con `$feature-spec`. Alternativa ready: `voice-attachment-storage` (depende de `voice-capture-stt`).
