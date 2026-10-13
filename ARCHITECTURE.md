@@ -15,9 +15,11 @@ de release/signing de Android (keystore externo) y el runbook de publicación,
 `VoiceTranscriber` + adaptadores Android/iOS), `note-category-and-tags` las
 Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`),
 `image-capture-camera` el primer Adjunto: tabla `attachment` (esquema v4 con
-`3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería), e
-`ios-release-pipeline` el pipeline de release de iOS (archive/export/upload a
-TestFlight) con firma, versionado y reglas de secretos.
+`3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería),
+`image-ocr-optional` la decisión de viabilidad del OCR del boceto (descartado del
+MVP; ver `docs/adr/0002-ocr-decision.md`), e `ios-release-pipeline` el pipeline de
+release de iOS (archive/export/upload a TestFlight) con firma, versionado y reglas
+de secretos.
 
 ## Modules
 
@@ -457,9 +459,18 @@ Comandos manuales equivalentes:
 
 ## Deferred
 
-- Adjuntos de audio (`voice-attachment-storage`), OCR del boceto
-  (`image-ocr-optional`), edición de adjuntos de una nota existente y render de la
-  imagen en la lista/detalle (hoy sólo chip "Imagen" + previsualización al crear).
+- **OCR del boceto (texto derivado): descartado del MVP** (`image-ocr-optional`,
+  2026-10-13). No se integra ningún motor: los on-device de bajo costo están
+  orientados a texto impreso (calidad incierta sobre manuscrito), Android exigiría
+  una dependencia pesada (ML Kit) poco compartida y `AiClient` es text-only.
+  Decisión y **disparadores de re-evaluación** (adaptador `AiClient` con visión,
+  necesidad de texto derivado para RAG, evidencia de calidad sobre manuscrito) en
+  `docs/adr/0002-ocr-decision.md`. Si se reabre, el patrón sería un puerto
+  `TextRecognizer` + adaptadores nativos (patrón `VoiceTranscriber`), guardando el
+  texto derivado en la Nota (no en el `Adjunto`).
+- Adjuntos de audio (`voice-attachment-storage`), edición de adjuntos de una nota
+  existente y render de la imagen en la lista/detalle (hoy sólo chip "Imagen" +
+  previsualización al crear).
 - Enlaces (features posteriores). El wiring de `AiClient`/`NoteIndexingService` a
   la app (`note-enrichment-status-ui`, `offline-pending-retry`) y la similitud
   coseno / enlaces (`semantic-linking`) siguen pendientes; los embeddings ya se
