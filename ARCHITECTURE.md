@@ -26,6 +26,8 @@ por `track` + pantalla navegable).
 resultado del embedding, sin cambio de esquema (sigue v4).
 `semantic-linking` agrega los Enlaces Nota↔Nota por similitud coseno (esquema v5
 con `4.sqm`, tabla `note_link`, `NoteLinkRepository` y `SemanticLinkingService`).
+`voice-attachment-storage` agrega el audio original del dictado como Adjunto
+`AUDIO` (grabado en la misma sesión de voz, sin cambio de esquema).
 
 ## Modules
 
@@ -138,12 +140,13 @@ composeApp (Android app / commonMain) ──▶ core
     de la nota en la misma transacción (`transactionWithResult`), sin huérfanos.
 - **Adjunto** (`com.playbook.core.model`): `Attachment` (id, noteId, kind,
   mimeType, filePath, byteSize, createdAt) + enum `AttachmentKind` (`IMAGE` →
-  `"imagen"`; `AUDIO` llegará con `voice-attachment-storage` sin cambiar el
-  esquema) con `code`/`fromCode` fail-fast. `AttachmentMappers.kt` aliasa
+  `"imagen"`; `AUDIO` → `"audio"`, el audio original de un dictado) con
+  `code`/`fromCode` fail-fast. `AttachmentMappers.kt` aliasa
   `com.playbook.core.db.Attachment as AttachmentRow`. `AttachmentRepository`
   (`create`/`getByNoteId`/`getAll`/`deleteByNoteId`) +
   `SqlDelightAttachmentRepository(database, idFactory, clock)`. `filePath` es
-  relativo al contenedor de la app.
+  relativo al contenedor de la app (`images/<uuid>.jpg` o `audio/<uuid>.m4a`);
+  el `kind` se persiste como texto y agregar `AUDIO` no cambió el esquema.
 - **Mapper** (`NoteMappers.kt`): importa `com.playbook.core.db.Note as NoteRow`
   para evitar la colisión con el modelo de dominio;
   `NoteRow.toDomain(tags = emptyList())` recibe las etiquetas ya resueltas.
@@ -230,6 +233,14 @@ composeApp (Android app / commonMain) ──▶ core
   recién guardado (sin huérfanos). Al borrar la nota, las filas se borran en
   cascade dentro del repositorio y los archivos con el `AttachmentFileStore`
   desde la UI.
+- **Audio del dictado (`voice-attachment-storage`):** el audio original se graba
+  en la **misma sesión de micrófono** del STT y se entrega en `onFinalResult`
+  como `RecordedAudio(relativePath, byteSize, mimeType)` (AAC en MPEG-4,
+  `audio/<uuid>.m4a`, `audio/mp4`). Usa el mismo root privado que las imágenes
+  (`filesDir/audio/` en Android, `Application Support/audio/` en iOS), así que el
+  `AttachmentFileStore.delete(relativePath)` ya cubre el audio al borrar la Nota.
+  `App` persiste el Adjunto `AUDIO`; si la persistencia falla, borra el archivo y
+  conserva la Nota (degradación tolerante). No hay cambio de esquema (sigue v4).
 
 ## AI
 
@@ -307,9 +318,12 @@ composeApp (Android app / commonMain) ──▶ core
 - **Puerto** (`com.playbook.app.voice`, en `:composeApp/commonMain`):
   `VoiceTranscriber` con `start(onPartialResult, onFinalResult, onError)`,
   `stop()` y `cancel()`, más `VoiceCaptureError`
-  (`PERMISSION_DENIED`/`UNAVAILABLE`/`NO_MATCH`/`NETWORK`/`BUSY`/`UNKNOWN`). Vive
-  en `:composeApp` (no en `:core`): es una integración nativa que sólo consume la
-  UI y necesita contexto de plataforma; `:core` no cambia.
+  (`PERMISSION_DENIED`/`UNAVAILABLE`/`NO_MATCH`/`NETWORK`/`BUSY`/`UNKNOWN`) y
+  `RecordedAudio(relativePath, byteSize, mimeType)`. `onFinalResult` recibe
+  `(String, RecordedAudio?)`: el texto transcripto y el audio original ya cerrado
+  (o `null` si no se pudo grabar), en un único callback terminal. Vive en
+  `:composeApp` (no en `:core`): es una integración nativa que sólo consume la UI
+  y necesita contexto de plataforma; `:core` no cambia.
 - **Adaptadores por plataforma** (mismo patrón que `DatabaseDriverFactory`, **sin**
   `expect`/`actual`):
   - `AndroidVoiceTranscriber(ComponentActivity)` (`androidMain`): `SpeechRecognizer`
@@ -317,26 +331,33 @@ composeApp (Android app / commonMain) ──▶ core
     `registerForActivityResult(RequestPermission())` en el constructor (debe
     construirse en `onCreate`). Mapea `onResults`/`onError` del
     `RecognitionListener` a los callbacks del puerto y recrea el recognizer por
-    sesión.
+    sesión. Graba el audio original con `MediaRecorder` (MIC, MPEG_4, AAC) a
+    `filesDir/audio/<uuid>.m4a`; si no puede iniciar/escribir, entrega `null` y
+    sigue la transcripción. `cancel()` descarta el parcial.
   - `IosVoiceTranscriber()` (`iosMain`): `SFSpeechRecognizer` +
     `SFSpeechAudioBufferRecognitionRequest` + `AVAudioEngine`; pide
     `requestAuthorization` y `requestRecordPermission` y, como los callbacks de
     `Speech`/AVFoundation llegan en colas secundarias, los despacha al main queue
-    (`dispatch_async(dispatch_get_main_queue())`). `cancel()` cancela la tarea,
-    quita el tap, detiene el engine y desactiva la `AVAudioSession`.
+    (`dispatch_async(dispatch_get_main_queue())`). El tap del `inputNode` alimenta
+    al reconocedor **y** escribe el audio original a un `AVAudioFile` AAC en
+    `Application Support/audio/<uuid>.m4a`. `cancel()` cancela la tarea, quita el
+    tap, detiene el engine, descarta el parcial y desactiva la `AVAudioSession`.
 - **Wiring sin DI:** `MainActivity` construye `AndroidVoiceTranscriber(this)` y
   `MainViewController` construye `IosVoiceTranscriber()`; ambos se pasan a
-  `App(noteRepository, voiceTranscriber)`.
+  `App(noteRepository, attachmentRepository, voiceTranscriber)`.
 - **Permisos:** `AndroidManifest.xml` declara `android.permission.RECORD_AUDIO`;
   `iosApp/iosApp/Info.plist` declara `NSMicrophoneUsageDescription` y
   `NSSpeechRecognitionUsageDescription` (sin la segunda, iOS termina el proceso al
-  primer uso).
+  primer uso). Sin permisos nuevos (grabar usa la misma concesión del STT).
 - **Resultado:** el texto final no vacío se persiste como `body` de una Nota con
-  `track = null`/`status = CAPTURED` por el mismo `noteRepository.create(...)` del
-  texto; el audio original **no** se guarda (lo hará `voice-attachment-storage`).
-- **Dependencias:** ninguna nueva (`SpeechRecognizer`/`RecognizerIntent` son
-  framework Android; `activity-compose` ya estaba; `Speech`/`AVFAudio`/`dispatch`
-  vienen de Kotlin/Native). No se agregan coroutines ni Flow.
+  `track = null`/`status = CAPTURED` y, si hay `RecordedAudio`, se persiste un
+  Adjunto `AUDIO` (`audio/mp4`, ruta relativa) con el mismo
+  `attachmentRepository.create(...)` que la imagen. Texto vacío → `NO_MATCH` y se
+  borra el audio; Nota primero, Adjunto después (con limpieza si falla).
+- **Dependencias:** ninguna nueva (`SpeechRecognizer`/`RecognizerIntent`/
+  `MediaRecorder` son framework Android; `activity-compose` ya estaba;
+  `Speech`/`AVFAudio`/`AVFoundation`/`CoreAudioTypes`/`dispatch` vienen de
+  Kotlin/Native). No se agregan coroutines ni Flow.
 
 ## UI
 
@@ -380,36 +401,46 @@ composeApp (Android app / commonMain) ──▶ core
   `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`; la
   persistencia y el refresco los maneja `App`. No hay control de
   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
-- **`VoiceCaptureScreen`** (nuevo): pantalla "tonta" de dictado. Recibe
+- **`VoiceCaptureScreen`**: pantalla "tonta" de dictado. Recibe
   `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
   `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
   "Detener" (Listening) o "Reintentar" (Error); "Cancelar" vuelve a la lista.
-  Los estados y los errores se comunican con texto (nunca sólo color). No mantiene
-  el `VoiceTranscriber`.
+  Los estados y los errores se comunican con texto (nunca sólo color) y hay una
+  línea informativa ("Se guarda también el audio original como Adjunto."). No
+  mantiene el `VoiceTranscriber`.
 - **Orquestación de voz (`App`):** la sesión se inicia sólo al tocar "Grabar"
   (para que el prompt de permiso sea explícito); `onPartialResult` actualiza el
-  parcial; `onError` pasa a `Error`; `onFinalResult` no vacío crea la Nota
-  (`NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null)`) y vuelve a la lista con
-  `reload()`; un final vacío se trata como `NO_MATCH`. Al salir del destino un
-  `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el micrófono).
+  parcial; `onError` pasa a `Error`; `onFinalResult(text, audio)` no vacío crea la
+  Nota (`NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null)`) y, si `audio != null`,
+  persiste el Adjunto `AUDIO` (`attachmentRepository.create(note.id, AUDIO,
+  audio.mimeType, audio.relativePath, audio.byteSize)`); si el Adjunto falla se
+  borra el archivo y se conserva la Nota; luego vuelve a la lista con `reload()`.
+  Un final vacío se trata como `NO_MATCH` y borra el audio si lo hubo. Al salir del
+  destino un `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el
+  micrófono y descarta el audio parcial).
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
   track, tags = tags))` (status default `CAPTURED`); **crear con imagen** →
   `fileStore.saveImage(bytes, mime)` → `create(NoteDraft(...))` →
   `attachmentRepository.create(note.id, IMAGE, mime, relativePath, byteSize)` →
   `reload()`; si algo falla después de guardar el archivo, se borra (sin
-  huérfanos). Editar → `update(note.copy(body = body.trim(), track = ...,
-  tags = tags))` (re-sella `updatedAt`, reemplaza el conjunto de etiquetas y
-  preserva `owner`/`createdAt`/`status`); borrar → se leen los adjuntos de la
-  nota, `delete(id)` (limpia `note_tag` y las filas `attachment` en la misma
-  transacción) y se borran los archivos con el `AttachmentFileStore`; siempre
-  `reload()` y vuelta a la lista. El `status` no se edita desde la UI. Si el `id`
-  en `Edit(noteId)` ya no existe en `notes`, se vuelve a la lista.
+  huérfanos). **Dictar** → `create(NoteDraft(...))` → `attachmentRepository.create(
+  note.id, AUDIO, audio.mimeType, audio.relativePath, audio.byteSize)` →
+  `reload()` (misma limpieza ante fallo). Editar → `update(note.copy(body =
+  body.trim(), track = ..., tags = tags))` (re-sella `updatedAt`, reemplaza el
+  conjunto de etiquetas y preserva `owner`/`createdAt`/`status`); borrar → se leen
+  los adjuntos de la nota, `delete(id)` (limpia `note_tag` y las filas `attachment`
+  en la misma transacción) y se borran los archivos con el `AttachmentFileStore`
+  (cubre imágenes y audio por la ruta relativa); siempre `reload()` y vuelta a la
+  lista. El `status` no se edita desde la UI. Si el `id` en `Edit(noteId)` ya no
+  existe en `notes`, se vuelve a la lista.
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
-  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas e
-  `image-capture-camera` la captura/adjunto de imagen (sólo al **crear**; sin
-  edición de adjuntos existentes ni render en la lista/detalle). `gdd-view` agregó
-  la pantalla de GDD (ver abajo). Sigue fuera de esta superficie la IA.
+  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas,
+  `image-capture-camera` la captura/adjunto de imagen y `voice-attachment-storage`
+  el audio del dictado como Adjunto `AUDIO` (chips por tipo en la lista), sólo al
+  **crear** (sin edición de adjuntos existentes ni render/reproducción).
+  `gdd-view` agregó la pantalla de GDD (ver abajo). Siguen fuera de esta superficie
+  la IA.
 
 ## GDD
 
@@ -549,9 +580,9 @@ Comandos manuales equivalentes:
   `docs/adr/0002-ocr-decision.md`. Si se reabre, el patrón sería un puerto
   `TextRecognizer` + adaptadores nativos (patrón `VoiceTranscriber`), guardando el
   texto derivado en la Nota (no en el `Adjunto`).
-- Adjuntos de audio (`voice-attachment-storage`), edición de adjuntos de una nota
-  existente y render de la imagen en la lista/detalle (hoy sólo chip "Imagen" +
-  previsualización al crear).
+- Edición de adjuntos de una Nota existente, reproducción del audio y render de la
+  imagen/audio en la lista o detalle (hoy sólo chips de texto "Imagen"/"Audio" +
+  previsualización de la imagen al crear).
 - Enlaces: la generación ya existe (`semantic-linking`), pero su **UI** de lectura
   (`note-links-ui`) y el **trigger** del recomputo (`recomputeAll`) siguen
   pendientes. El wiring de `AiClient`/`NoteIndexingService`/`SemanticLinkingService`
@@ -560,8 +591,8 @@ Comandos manuales equivalentes:
   proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001
   (`docs/adr/0001-ai-runtime-decision.md`).
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).
-- Guardar el audio original del dictado como `Adjunto`
-  (`voice-attachment-storage`): `voice-capture-stt` sólo persiste la transcripción.
+- Reproducción del audio original del dictado (playback/controles/waveform); el
+  Adjunto `AUDIO` ya se persiste y es visible (`voice-attachment-storage`).
 - Detalle de nota de sólo lectura (`note-links-ui`/posterior). La vista de GDD
   (`gdd-view`) ya está implementada; volver al GDD tras editar desde él queda
   fuera de alcance (ver sección GDD).

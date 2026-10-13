@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `semantic-linking` (2026-10-13; Session 034; enlazado por similitud coseno, esquema v5 + `4.sqm`; validación independiente `accept`); antes `ai-enrichment-classify-tags-type` (Session 032).
+- Última feature `accepted`: `voice-attachment-storage` (2026-10-13; Session 036; audio original del dictado como Adjunto `AUDIO`; validación independiente `accept`); antes `semantic-linking` (Session 034).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -19,7 +19,8 @@
 - `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
 - `ai-enrichment-classify-tags-type` `accepted` (2026-10-13; validación independiente `accept` en `docs/validations/ai-enrichment-classify-tags-type.md`): indexado asíncrono + transiciones de `NoteStatus`. `NoteIndexingOrchestrator.index(note)` reutiliza `NoteIndexingService` y persiste: éxito→`INDEXED`; fallo→`PENDING` salvo Nota ya `INDEXED` (no se degrada); **nunca** escribe `FAILED`. `NoteRepository.updateStatus` (query `updateNoteStatus`, sólo `status`, sin re-sellar `updated_at`) sin cambio de esquema (sigue v4). Alcance re-derivado: la IA no clasifica ni etiqueta.
 - `semantic-linking` `accepted` (2026-10-13; validación independiente `accept`): Enlaces Nota↔Nota por similitud coseno (esquema **v5**, migración `4.sqm` v4→v5, tabla `note_link` con PK canónica `note_a_id < note_b_id` + FK cascade); `CosineSimilarity`, `NoteLink`/`NoteLinkMappers`/`otherNoteId`, `NoteLinkRepository`/`SqlDelightNoteLinkRepository` y `SemanticLinkingService.recomputeAll()` + `LinkingSummary` (umbral `0.8` inclusivo e inyectable). Core puro, sin UI ni wiring.
-- Current next ready features: `note-links-ui` (depende de `semantic-linking`, ya `accepted`), `voice-attachment-storage` y `rag-query` (dependencias ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
+- `voice-attachment-storage` `accepted` (2026-10-13; validación independiente `accept`): el audio original del dictado se graba en la misma sesión de micrófono y se persiste como Adjunto `AUDIO` (`AttachmentKind.AUDIO("audio")`, `audio/<uuid>.m4a`, `audio/mp4`) separado de la transcripción; sin cambio de esquema (sigue v4, sin `.sqm`), sin dependencias ni permisos nuevos. Chips de texto "Imagen"/"Audio" en la lista.
+- Current next ready features: `note-links-ui` (depende de `semantic-linking`, ya `accepted`) y `rag-query` (depende de `embeddings-generation`, ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-13.
 
@@ -705,3 +706,49 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: findings Low no bloqueantes — smoke Android de migración no re-ejecutado por el validador (sin `adb`), `linksWritten` cuenta upserts (correcto porque `deleteAll()` precede) y `CosineSimilarity` devuelve `null` para dos vectores vacíos (conforme a la spec). El trigger del recomputo y la UI de lectura (`note-links-ui`) siguen pendientes; `note-links-ui` queda desbloqueada.
 - Next best step: crear spec de `note-links-ui` con `$feature-spec` e implementarla con `$feature-implementer` (primera ready en orden), o de otro candidato ready (`voice-attachment-storage`, `gdd-view`, `rag-query`).
+
+### Session 035
+
+- Date: 2026-10-13
+
+- Goal: implementar `voice-attachment-storage` (spec `docs/specs/voice-attachment-storage.md`): grabar el audio original del dictado y conservarlo como Adjunto `AUDIO`, además de la transcripción.
+- Completed:
+  - `:core`: `AttachmentKind.AUDIO("audio")` (sin cambio de esquema; el mapper y `AttachmentRepository.create(...)` ya aceptaban cualquier `kind`). `verifyAttachmentCrud` suma el round-trip de un Adjunto `AUDIO` (`audio/round-trip.m4a`, `audio/mp4`) + `AttachmentKind.fromCode("audio")`.
+  - Puerto de voz: `RecordedAudio(relativePath, byteSize, mimeType)` y `VoiceTranscriber.onFinalResult` pasa a `(String, RecordedAudio?)`; el texto y el audio cerrado llegan en un único callback terminal (sin carrera STT/cierre de archivo).
+  - Android (`AndroidVoiceTranscriber`): `MediaRecorder` (MIC, MPEG_4, AAC) en paralelo con el `SpeechRecognizer`, salida a `filesDir/audio/<uuid>.m4a`; `finishAudioRecording()`/`discardAudioRecording()` cierran o borran el archivo; degradación tolerante si no puede iniciar/escribir.
+  - iOS (`IosVoiceTranscriber`): el tap de `AVAudioEngine.inputNode` además escribe cada `AVAudioPCMBuffer` a un `AVAudioFile` AAC creado perezosamente en `Application Support/audio/<uuid>.m4a` (settings `kAudioFormatMPEG4AAC` + sampleRate/channels del buffer + bitrate 64k); `closeAudioRecording()`/`discardAudioRecording()` cierran o borran el parcial.
+  - `App.onFinalResult(text, audio)`: texto vacío → `NO_MATCH` + borra el audio; con texto → crea la Nota y persiste el Adjunto `AUDIO`; si el Adjunto falla se borra el archivo y se conserva la Nota. `NotesListScreen` cambia `attachmentCounts` por `attachmentKinds: Map<String, Set<AttachmentKind>>` y renderiza chips textuales por tipo ("Imagen"/"Audio"). `VoiceCaptureScreen` suma una línea informativa.
+  - Docs: `ARCHITECTURE.md` (AUDIO, grabación en la sesión de voz, UI por tipo, Deferred), `docs/technical-discovery.md` (nueva sección "Voice Attachment / Audio Recording Decisions"), `docs/risks-and-open-questions.md` (doble cliente de micrófono, verificación de audio real) y `AGENTS.md`; tasks de la spec marcadas.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :composeApp:assembleDebug :composeApp:compileKotlinIosSimulatorArm64 --console=plain` → BUILD SUCCESSFUL in 1m 55s (62 tasks); `AttachmentRepositoryAndroidTest` 1/1 con el round-trip `AUDIO` en verde + el resto (3/3/2/3/2/1/1/1/1/1), 0 failures.
+  - `./gradlew :core:iosSimulatorArm64Test --rerun-tasks --console=plain` → BUILD SUCCESSFUL in 1m 13s; `AttachmentRepositoryIosTest` 1/1 con el round-trip `AUDIO` + el resto en verde, 0 failures.
+  - Control negativo propio: cambiar la aserción a `AttachmentKind.IMAGE` hace fallar `AttachmentRepositoryAndroidTest` con `AssertionError: expected:<IMAGE> but was:<AUDIO>` (`failures="1"`); restaurado y re-ejecutado en verde.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; `xcodebuild` scheme `iosApp` → ** BUILD SUCCEEDED **.
+  - `PlaybookDatabaseImpl.Schema.version = 4`; `find core/src -name '*.sqm'` = `1.sqm`/`2.sqm`/`3.sqm` (sin nuevos); `git diff -- Attachment.sq` vacío; sin cambios en build files/`init.sh`/`AndroidManifest.xml`/`Info.plist`/`iosApp`.
+  - `./init.sh` → exit 0, sin procesos de larga duración.
+  - Smoke Android (emulador `sdk_gphone64_arm64`/API 35): al 'Grabar' se crea un archivo parcial `files/audio/<uuid>.m4a` (confirmado con `run-as` + logcat de `MediaRecorder`/`AudioRecord`); con silencio → `NO_MATCH` y el archivo se borra sin Nota; 'Reintentar' + 'Cancelar' en vivo borra el parcial, vuelve a la lista sin filas; chips 'Audio'/'Imagen'/ambos verificados por UI dump con base sembrada; borrar la Nota elimina la fila `attachment` y el archivo de audio (la imagen de otra nota queda intacta); `user_version=4`.
+  - Smoke iOS (iPhone 15, iOS 17.2): install/launch con PID vivo; `playbook.db` `user_version=4` con `note`/`attachment`/`note_tag`/`embedding`; OCR de la lista sembrada confirma chips 'Audio', 'Imagen'+'Audio' y ausencia de chips sin Adjuntos.
+  - Limitación honesta: el happy path con voz real (dictar → Nota con Adjunto `AUDIO` con contenido) no es ejecutable de forma determinista (no se puede inyectar voz en emulador/simulador); los emuladores Android están compartidos con otras sesiones paralelas (se observó desinstalación externa del paquete y el foco robado por otra app). No se fabricó evidencia.
+- Evidence captured: arreglo `evidence` de `voice-attachment-storage` en `feature_list.json` (11 líneas); capturas/UI dumps/DBs y helper OCR en el directorio ignorado `composeApp/build/smoke-evidence/`.
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/model/Attachment.kt`, `core/src/commonTest/kotlin/com/playbook/core/repository/AttachmentRepositoryCheck.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/voice/VoiceTranscriber.kt`, `composeApp/src/androidMain/kotlin/com/playbook/app/voice/AndroidVoiceTranscriber.kt`, `composeApp/src/iosMain/kotlin/com/playbook/app/voice/IosVoiceTranscriber.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/App.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/NotesListScreen.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/VoiceCaptureScreen.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `docs/specs/voice-attachment-storage.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: `MediaRecorder` + `SpeechRecognizer` comparten micrófono y algunos dispositivos pueden rechazarlo (mitigado con degradación tolerante; el emulador sí graba). La conversión a AAC en iOS con `AVAudioFile` no se validó con voz real (sólo compila/enlaza y el ciclo de vida está cubierto por smoke Android). El playback del audio queda diferido (no-goal). Los smoke tests Android fueron intermitentes por emuladores compartidos con otras sesiones paralelas.
+- Next best step: validación independiente de `voice-attachment-storage` con `$feature-validator`; tras el `accept`, crear spec de `semantic-linking` con `$feature-spec`.
+
+### Session 036
+
+- Date: 2026-10-13
+
+- Goal: validación independiente de `voice-attachment-storage` (spec `docs/specs/voice-attachment-storage.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `voice-attachment-storage` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit y PR draft contra `develop` creados por el orquestador.
+- Verification run:
+  - `./init.sh` → exit 0, gate real sin procesos de larga duración.
+  - `:core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL (55s); `AttachmentRepositoryAndroidTest` 1/1 e `AttachmentRepositoryIosTest` 1/1 con el round-trip `AUDIO` + resto de suites 0 failures en ambas plataformas (conteos de `core/build/test-results/*/TEST-*.xml`).
+  - `:composeApp:assembleDebug :composeApp:compileKotlinIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (56 tasks); confirmado que la ruta Android `MediaRecorder` y la iOS `AVAudioFile` compilan frescas.
+  - Esquema: `Schema.version = 4`; `.sqm` = `1/2/3.sqm` (sin nuevos); `git diff -- Attachment.sq` vacío; `git diff` vacío para `iosApp/`, `AndroidManifest.xml`, `Info.plist`, `composeApp/build.gradle.kts`, `gradle/libs.versions.toml` e `init.sh`.
+  - Permisos/arquitectura: manifest sólo `CAMERA`+`RECORD_AUDIO` e `Info.plist` sin cambios; grep sin `ViewModel`/`androidx.lifecycle`/Flow/`androidx.navigation`/playback (`MediaPlayer`/`AVAudioPlayer`).
+  - Control negativo propio del validador (cambiar `assertEquals(AUDIO, reread.kind)`→`IMAGE` en `AttachmentRepositoryCheck.kt`) hace fallar `AttachmentRepositoryAndroidTest` con `AssertionError`; restaurado byte-idéntico y re-verificado en verde.
+  - Corroboración independiente de evidencia: OCR re-ejecutado sobre `ios-voice-att-02-list-seeded.png` (chips `Audio`, `Imagen`, `Imagen`+`Audio`, y sin chips) y lectura de `ios-db/playbook.db` (`user_version=4`, tablas `note`/`attachment`/`note_tag`/`embedding`); consistencia de root de archivos (`filesDir`/`Application Support`) con `AttachmentFileStore.delete`.
+- Evidence captured: línea de validación (accept) en el arreglo `evidence` de `voice-attachment-storage` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: findings Low no bloqueantes — redacción de `AGENTS.md` (resuelta al persistir `accepted`), comentario obsoleto en `Attachment.sq` (correcto por contrato: la spec exige no tocarlo), escritura AAC en iOS sin voz real y `catch (_: Throwable)` amplio en `App.onFinalResult` (consistente con el patrón existente). Sin hallazgos de seguridad.
+- Next best step: crear spec de `semantic-linking` con `$feature-spec` e implementarla con `$feature-implementer`.

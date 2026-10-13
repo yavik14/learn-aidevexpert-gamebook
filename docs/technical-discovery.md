@@ -605,6 +605,76 @@ Implementado 2026-10-13. Decisión en `docs/adr/0002-ocr-decision.md`.
   fundamenta en la evaluación de alternativas y las restricciones del repo, no en
   mediciones. Sin cambios de producto, dependencias ni esquema.
 
+## Voice Attachment / Audio Recording Decisions (voice-attachment-storage)
+
+Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
+
+- **Misma sesión de micrófono, un solo puerto:** el audio original se graba en la
+  misma sesión del STT (no se abre un segundo cliente de micrófono, que competiría
+  por el recurso). Se cambia la firma de `VoiceTranscriber.onFinalResult` de
+  `(String) -> Unit` a `(String, RecordedAudio?) -> Unit`: la sesión entrega el
+  texto **y** el Adjunto ya cerrado en un único callback terminal, evitando la
+  carrera entre el resultado del reconocedor y el cierre del archivo.
+  `RecordedAudio(relativePath, byteSize, mimeType)` es un `data class` en
+  `:composeApp/commonMain/voice`.
+- **Valor de enum sin cambio de esquema:** `AttachmentKind.AUDIO("audio")` se suma
+  a `:core`; el mapper y `AttachmentRepository.create(...)` ya aceptaban cualquier
+  `kind`, así que `PlaybookDatabase.Schema.version` sigue en **4**, no hay `.sqm`
+  nuevos y `Attachment.sq` no cambió. `fromCode("audio")` pasa; un código
+  desconocido sigue fallando fail-fast.
+- **Formato y ubicación:** AAC en contenedor MPEG-4 (`.m4a`), `mimeType =
+  "audio/mp4"`, ruta relativa `audio/<uuid>.m4a` bajo el mismo root privado que las
+  imágenes (`filesDir/audio/` en Android, `Application Support/audio/` en iOS). El
+  root coincide con el que resuelve `AttachmentFileStore.delete(relativePath)`, así
+  que el borrado al borrar la Nota cubre el audio sin cambios.
+- **Android (`MediaRecorder`):** en `startRecognition()` se arranca
+  `MediaRecorder` (`AudioSource.MIC`, `OutputFormat.MPEG_4`, `AudioEncoder.AAC`)
+  con salida a `filesDir/audio/<uuid>.m4a`, en paralelo con `SpeechRecognizer`.
+  `MediaRecorder(context)` requiere API 31+; en API < 31 se usa el constructor sin
+  args (deprecado, `@Suppress("DEPRECATION")`). `stop()` lanza si no hay datos
+  válidos de audio: se captura y se devuelve `null`. Cualquier fallo al
+  iniciar/escribir se traga y se sigue sólo con la transcripción (degradación
+  tolerante).
+- **iOS (`AVAudioFile` AAC):** el tap de `AVAudioEngine.inputNode` ya recibía cada
+  `AVAudioPCMBuffer` para el reconocedor; ahora además se escribe al
+  `AVAudioFile`, creado **perezosamente** con el formato del primer buffer:
+  settings `AVFormatIDKey = kAudioFormatMPEG4AAC` (constante `UInt` de
+  `platform.CoreAudioTypes`, envuelta con `NSNumber.numberWithUnsignedInt`),
+  `AVSampleRateKey`/`AVNumberOfChannelsKey` del buffer y `AVEncoderBitRateKey =
+  64_000`. Si `AVAudioFile` no se crea o `writeFromBuffer` devuelve `false`, se
+  marca fallo y se degrada a Nota sin Adjunto. `AVAudioFile(forWriting:settings:error:)`
+  es un inicializador designado mapeado a constructor Kotlin; se envuelve en
+  `try/catch`. El tamaño se lee con `NSFileManager.attributesOfItemAtPath` +
+  `NSFileSize`.
+- **Ciclo de vida y limpieza (sin huérfanos):** en `App.onFinalResult(text, audio)`
+  si el texto queda vacío → `NO_MATCH` y se borra el audio; si hay texto → se crea
+  la Nota y, si hay audio, se persiste el Adjunto (`AttachmentKind.AUDIO`); si la
+  persistencia del Adjunto falla se borra el archivo y se conserva la Nota
+  (degradación tolerante, Nota primero). `cancel()` descarta el parcial y `onError`
+  también (no hay Nota en esos caminos).
+- **UI por tipo:** `NotesListScreen` deja `attachmentCounts: Map<String, Int>` y
+  pasa a `attachmentKinds: Map<String, Set<AttachmentKind>>`; renderiza chips
+  textuales por tipo en orden estable (`AttachmentKind.entries` → "Imagen", luego
+  "Audio"), sin comunicar el estado sólo con color. `App` calcula el mapa desde
+  `attachments`. `VoiceCaptureScreen` agrega una línea informativa
+  ("Se guarda también el audio original como Adjunto.").
+- **Sin dependencias ni permisos nuevos:** `MediaRecorder` es framework Android;
+  `AVAudioFile`/`AVFoundation`/`CoreAudioTypes` son platform libs de Kotlin/Native.
+  El micrófono es el mismo `RECORD_AUDIO`/`NSMicrophoneUsageDescription` de
+  `voice-capture-stt`; no se agrega permiso ni dependencia Gradle.
+- **Verificación:** el happy path de voz real no es inyectable de forma
+  determinista, así que se verifica con smoke manual. Android (emulador
+  `sdk_gphone64_arm64`/API 35): un archivo parcial `audio/<uuid>.m4a` sí se crea
+  (confirmado con `run-as` + logcat de `MediaRecorder`/`AudioRecord`); con silencio
+  el motor devuelve `NO_MATCH` y el archivo se borra sin crear Nota; "Grabar" +
+  "Cancelar" en vivo borra el parcial, vuelve a la lista y no deja fila; borrar la
+  Nota elimina la fila `attachment` y el archivo de audio (la imagen queda). El
+  chip "Audio" y su coexistencia con "Imagen" se verificaron sembrando la base en
+  Android e iOS. El round-trip del Adjunto `AUDIO` está cubierto por tests de
+  `:core` en Android/JVM e iOS. Límite de entorno: los emuladores están
+  compartidos con otras sesiones paralelas, que reinstalan/limpian el paquete y
+  roban el foco; el happy path con voz real queda pendiente de dispositivo físico.
+
 ## Release Decisions (ios-release-pipeline)
 
 Implementado 2026-10-09 (artefactos repo-side; upload account-gated). Detalle en
