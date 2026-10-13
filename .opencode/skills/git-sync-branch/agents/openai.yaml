@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Sync Branch"
+  short_description: "Rebase, squash to one commit and force-push a branch."
+  default_prompt: "Use $git-sync-branch to sync my branch with develop, squash it to one commit and push."
