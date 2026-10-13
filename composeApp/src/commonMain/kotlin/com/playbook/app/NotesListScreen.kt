@@ -50,6 +50,7 @@ fun NotesListScreen(
     onEdit: (String) -> Unit,
     onDictate: () -> Unit,
     onOpenGdd: () -> Unit,
+    onAsk: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -88,6 +89,12 @@ fun NotesListScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(text = "Ver GDD")
+                }
+                FilledTonalButton(
+                    onClick = onAsk,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = "Preguntar")
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

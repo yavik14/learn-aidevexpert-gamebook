@@ -11,9 +11,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
+import com.playbook.core.ai.NoteIndexingService
+import com.playbook.core.ai.RagAnswer
+import com.playbook.core.ai.RagQueryService
 import com.playbook.core.model.Attachment
 import com.playbook.core.model.AttachmentKind
 import com.playbook.core.model.Note
@@ -21,6 +25,7 @@ import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.NoteRepository
+import kotlinx.coroutines.launch
 
 /** Owner único del MVP: lo provee la UI al construir cada [NoteDraft]. */
 private const val LOCAL_OWNER_ID = "local"
@@ -31,6 +36,7 @@ sealed interface NotesDestination {
     data object Create : NotesDestination
     data class Edit(val noteId: String) : NotesDestination
     data object VoiceCapture : NotesDestination
+    data object Ask : NotesDestination
 
     /** Vista de GDD: proyección de las Notas agrupadas por `track`. */
     data object Gdd : NotesDestination
@@ -59,6 +65,8 @@ fun App(
     noteRepository: NoteRepository,
     attachmentRepository: AttachmentRepository,
     voiceTranscriber: VoiceTranscriber,
+    noteIndexingService: NoteIndexingService,
+    ragQueryService: RagQueryService,
 ) {
     MaterialTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
@@ -66,8 +74,13 @@ fun App(
         var destination by remember { mutableStateOf<NotesDestination>(NotesDestination.List) }
         var refreshKey by remember { mutableStateOf(0) }
         var voiceState by remember { mutableStateOf<VoiceUiState>(VoiceUiState.Idle) }
+        var askState by remember { mutableStateOf<AskUiState>(AskUiState.Idle) }
         var showImageSourceDialog by remember { mutableStateOf(false) }
         var imageError by remember { mutableStateOf<ImageCaptureError?>(null) }
+
+        // Las llamadas de IA son asíncronas: `rememberCoroutineScope` permite
+        // invocar los servicios `suspend` sin introducir `ViewModel`/Flow.
+        val scope = rememberCoroutineScope()
 
         val imagePicker = rememberImagePicker(
             onResult = { picked -> destination = NotesDestination.CreateWithImage(picked) },
@@ -86,6 +99,33 @@ fun App(
 
         fun goToList() {
             destination = NotesDestination.List
+        }
+
+        /**
+         * Indexado best-effort al guardar: genera el embedding de la Nota sin
+         * bloquear ni fallar el guardado y sin tocar `NoteStatus`. Una Nota con
+         * `body` en blanco (p. ej. sólo imagen) no se indexa. Los fallos del
+         * runtime se ignoran (la fuente de verdad de "tiene embedding" es la fila
+         * en `embedding`).
+         */
+        fun indexBestEffort(note: Note) {
+            if (note.body.isBlank()) return
+            scope.launch {
+                noteIndexingService.index(note)
+            }
+        }
+
+        /** Consulta RAG: pasa el estado visible por [AskUiState] mientras corre. */
+        fun ask(question: String) {
+            if (question.isBlank()) return
+            askState = AskUiState.Asking
+            scope.launch {
+                askState = when (val result = ragQueryService.ask(question)) {
+                    is RagAnswer.Answer -> AskUiState.Answered(result.text)
+                    RagAnswer.NoIndexedNotes -> AskUiState.NoIndexedNotes
+                    is RagAnswer.Failed -> AskUiState.Error
+                }
+            }
         }
 
         fun startVoiceCapture() {
@@ -119,6 +159,7 @@ fun App(
                                 fileStore.delete(audio.relativePath)
                             }
                         }
+                        indexBestEffort(note)
                         voiceState = VoiceUiState.Idle
                         goToList()
                         reload()
@@ -160,6 +201,7 @@ fun App(
                     filePath = stored.relativePath,
                     byteSize = stored.byteSize,
                 )
+                indexBestEffort(note)
             } catch (_: Throwable) {
                 // Nada quedó persistido (o la nota se creó sin adjunto): no dejar
                 // el archivo recién guardado huérfano.
@@ -186,6 +228,10 @@ fun App(
                     destination = NotesDestination.VoiceCapture
                 },
                 onOpenGdd = { destination = NotesDestination.Gdd },
+                onAsk = {
+                    askState = AskUiState.Idle
+                    destination = NotesDestination.Ask
+                },
             )
 
             NotesDestination.Gdd -> GddScreen(
@@ -202,7 +248,7 @@ fun App(
                 initialImage = null,
                 isEditing = false,
                 onSave = { body, track, tags ->
-                    noteRepository.create(
+                    val note = noteRepository.create(
                         NoteDraft(
                             owner = LOCAL_OWNER_ID,
                             body = body.trim(),
@@ -210,6 +256,7 @@ fun App(
                             tags = tags,
                         ),
                     )
+                    indexBestEffort(note)
                     goToList()
                     reload()
                 },
@@ -245,9 +292,13 @@ fun App(
                         initialImage = null,
                         isEditing = true,
                         onSave = { body, track, tags ->
-                            noteRepository.update(
-                                note.copy(body = body.trim(), track = track, tags = tags),
+                            val edited = note.copy(
+                                body = body.trim(),
+                                track = track,
+                                tags = tags,
                             )
+                            noteRepository.update(edited)
+                            indexBestEffort(edited)
                             goToList()
                             reload()
                         },
@@ -279,6 +330,12 @@ fun App(
                     onCancel = ::cancelVoiceCapture,
                 )
             }
+
+            NotesDestination.Ask -> AskNotesScreen(
+                state = askState,
+                onAsk = ::ask,
+                onBack = ::goToList,
+            )
         }
 
         if (showImageSourceDialog) {
