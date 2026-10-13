@@ -398,6 +398,55 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   `id` inexistente). Sin E2E persistente (no hay flujo observable; la spec lo
   justifica).
 
+## Linking Decisions (semantic-linking)
+
+Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
+
+- **Enlaces bidireccionales guardados una sola vez (par canónico).** La similitud
+  coseno es simétrica (`sim(a,b) == sim(b,a)`), así que persistir dos filas por
+  par duplicaría el dato y podría desincronizarse. Se guarda **una fila por par**
+  con orden canónico `note_a_id < note_b_id` (PK compuesta + `CHECK`); la lectura
+  "enlaces de una Nota" consulta ambos lados
+  (`note_a_id = :id OR note_b_id = :id`) y un índice sobre `note_b_id` la hace
+  eficiente. `NoteLink.otherNoteId(of)` resuelve "la otra Nota" (fail-fast).
+- **Umbral inclusivo y configurable.** `SemanticLinkingService.
+  DEFAULT_SIMILARITY_THRESHOLD = 0.8`, inyectable por constructor
+  (`threshold in -1.0..1.0`); se enlaza cuando `score >= threshold`. Coseno vive
+  en `[-1, 1]`; `0.8` es una heurística de "alta similitud" a afinar cuando llegue
+  el runtime real. El control negativo (`>=` → `>`) hace fallar la frontera.
+- **Similitud indefinida → `null`.** `CosineSimilarity.score` devuelve `null`
+  (sin lanzar) si las dimensiones difieren o alguna norma es `0` (vector cero); el
+  servicio omite esas parejas y sigue con el resto. Vectores idénticos → `1.0`
+  exacto; ortogonales → `0.0`; opuestos → `-1.0`.
+- **Recomputo explícito, determinista e idempotente.** El único punto de entrada
+  es `SemanticLinkingService.recomputeAll()`: lee `EmbeddingRepository.getAll()`
+  (ordenado por `note_id`), borra todos los enlaces y los reconstruye. Un
+  borrado + reconstrucción es aceptable para una biblioteca personal (si el
+  proceso muere a mitad, se regeneran en el próximo recomputo). Elimina enlaces
+  obsoletos tras re-indexar y no deja duplicados.
+- **Sin transición de `NoteStatus` ni wiring.** `indexada` = "embedding **y**
+  Enlaces" en el dominio, pero la transición de estado y su trigger/scheduling
+  son de `note-enrichment-status-ui`/`offline-pending-retry`; además hoy no hay
+  disparador, así que el servicio es puro core y **no** se cablea a `App`. Esta
+  feature no cambia `embeddings-generation` ni `NoteStatus`.
+- **Esquema v5 + `4.sqm` (v4 → v5).** Nueva tabla `note_link` con FK
+  `note(id) ON DELETE CASCADE` por ambos lados (borrar una Nota no deja enlaces
+  huérfanos; `createDatabase` ya habilita `PRAGMA foreign_keys = ON`). El
+  `CREATE TABLE`/`CREATE INDEX` de `4.sqm` replica exactamente el de `NoteLink.sq`.
+- **Nombre de archivo `.sq` vs símbolos generados:** SQLDelight deriva el
+  accessor del **nombre del archivo** (`NoteLink.sq` → `database.noteLinkQueries`)
+  y la data class del **nombre de la tabla** (`note_link` → `Note_link`). Se usó
+  `NoteLink.sq` (igual que `NoteTag.sq` / `note_tag`) para respetar la convención
+  del repo; el mapper aliasa `Note_link as NoteLinkRow`.
+- **Tests:** `CosineSimilarityTest` (puro, `@Test` en `commonTest`),
+  `verifyNoteLinkRepository` (canónico, upsert idempotente, lectura por ambos
+  lados, validaciones, cascade, `deleteAll`) y `verifySemanticLinking` (umbral,
+  frontera inclusiva, similitud indefinida, idempotencia, re-indexado, Nota sin
+  embedding, cascade) en Android/JVM (`JdbcSqliteDriver.IN_MEMORY`) e iOS
+  (`inMemoryDriver`). Smoke real de migración v4 → v5 en Android (emulador) e iOS
+  (simulador): `user_version` 4 → 5, tabla `note_link` + índice creados y Notas
+  preservadas, sin crashes.
+
 ## Voice / STT Decisions (voice-capture-stt)
 
 Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.

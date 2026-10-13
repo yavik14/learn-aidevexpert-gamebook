@@ -5,10 +5,10 @@ import kotlin.test.Test
 
 class MigrationAndroidTest {
     @Test
-    fun migratesV1ToV4PreservingNotes() {
+    fun migratesV1ToV5PreservingNotes() {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
-            verifyMigrationV1ToV4(driver)
+            verifyMigrationV1ToV5(driver)
         } finally {
             driver.close()
         }

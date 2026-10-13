@@ -1,0 +1,15 @@
+-- Migración v4 -> v5: crea la tabla `note_link` y su índice (ver note_link.sq).
+-- El CREATE TABLE/CREATE INDEX replican exactamente los de `note_link.sq`: el
+-- repo no usa `verifySqlDelightMigration`, así que la equivalencia se cubre con
+-- el test portable `DatabaseMigrationCheck` (compara columnas y FKs del esquema
+-- final). No se toca la tabla `note`: los datos previos se conservan intactos.
+CREATE TABLE note_link (
+  note_a_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+  note_b_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+  score REAL NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (note_a_id, note_b_id),
+  CHECK (note_a_id < note_b_id)
+);
+
+CREATE INDEX note_link_note_b_id ON note_link (note_b_id);

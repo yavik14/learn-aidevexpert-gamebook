@@ -1,0 +1,40 @@
+-- Esquema v5 de Playbook: tabla `note_link` (Enlace Nota↔Nota por similitud).
+-- Un par se guarda UNA sola vez con orden canónico `note_a_id < note_b_id`
+-- (PK compuesta + CHECK): la similitud coseno es simétrica, así que la fila
+-- "de vuelta" sería un dato duplicado que podría desincronizarse. La lectura
+-- "enlaces de una Nota" consulta ambos lados (`note_a_id = :id OR note_b_id =
+-- :id`). Las dos FK cascadean al borrar la Nota (requiere
+-- `PRAGMA foreign_keys = ON`). `score` es el coseno en [-1, 1] y `updated_at` es
+-- el instante del último recomputo que selló el enlace.
+CREATE TABLE note_link (
+  note_a_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+  note_b_id TEXT NOT NULL REFERENCES note(id) ON DELETE CASCADE,
+  score REAL NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (note_a_id, note_b_id),
+  CHECK (note_a_id < note_b_id)
+);
+
+-- Índice sobre `note_b_id` para que la consulta por cualquiera de los dos lados
+-- sea eficiente (mirroring de `attachment_note_id`).
+CREATE INDEX note_link_note_b_id ON note_link (note_b_id);
+
+-- `INSERT OR REPLACE` en vez de `ON CONFLICT DO UPDATE`: el UPSERT de SQLite
+-- requiere 3.24 (Android 11+) y minSdk = 24 (SQLite 3.9).
+upsertNoteLink:
+INSERT OR REPLACE INTO note_link (note_a_id, note_b_id, score, updated_at)
+VALUES (?, ?, ?, ?);
+
+selectLinkByPair:
+SELECT * FROM note_link WHERE note_a_id = ? AND note_b_id = ?;
+
+selectLinksForNote:
+SELECT * FROM note_link
+WHERE note_a_id = ? OR note_b_id = ?
+ORDER BY note_a_id, note_b_id;
+
+selectAllLinks:
+SELECT * FROM note_link ORDER BY note_a_id, note_b_id;
+
+deleteAllLinks:
+DELETE FROM note_link;

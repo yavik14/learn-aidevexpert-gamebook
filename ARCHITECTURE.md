@@ -24,6 +24,8 @@ por `track` + pantalla navegable).
 `ai-enrichment-classify-tags-type` agrega el orquestador de indexado asíncrono
 (`NoteIndexingOrchestrator`) y las transiciones de `NoteStatus` derivadas del
 resultado del embedding, sin cambio de esquema (sigue v4).
+`semantic-linking` agrega los Enlaces Nota↔Nota por similitud coseno (esquema v5
+con `4.sqm`, tabla `note_link`, `NoteLinkRepository` y `SemanticLinkingService`).
 
 ## Modules
 
@@ -53,30 +55,33 @@ composeApp (Android app / commonMain) ──▶ core
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde los `.sq` de
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
-- **Esquema v4:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+- **Esquema v5:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
   `selectNoteById`, `updateNote`, `updateNoteStatus`, `deleteNoteById`), tabla
   `embedding` (`note_id`
   PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
   `indexed_at`), tabla `note_tag` (`note_id`, `label`, PK `(note_id, label)`; N—N
-  sin FK, limpieza explícita en el repositorio) y tabla `attachment` (`id`,
+  sin FK, limpieza explícita en el repositorio), tabla `attachment` (`id`,
   `note_id`, `kind`, `mime_type`, `file_path`, `byte_size`, `created_at` + índice
-  `attachment_note_id`). La tabla `note` no cambió en estas features; los bytes de
-  la imagen **no** se guardan en la base (sólo metadatos + ruta relativa).
-- **Migraciones (v1 → v2 → v3 → v4):** `embeddings-generation` introdujo `1.sqm`
-  (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 → v3, `note_tag`) e
-  `image-capture-camera` `3.sqm` (v3 → v4, `attachment`). Los `.sq` describen el
-  esquema más reciente y los `.sqm` hacen upgrade; los drivers
+  `attachment_note_id`) y tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id)`
+  `ON DELETE CASCADE`, `score`, `updated_at`, PK `(note_a_id, note_b_id)`,
+  `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`). La tabla `note`
+  no cambió en estas features; los bytes de la imagen **no** se guardan en la base
+  (sólo metadatos + ruta relativa).
+- **Migraciones (v1 → v2 → v3 → v4 → v5):** `embeddings-generation` introdujo
+  `1.sqm` (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 → v3,
+  `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`) y
+  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice). Los `.sq` describen
+  el esquema más reciente y los `.sqm` hacen upgrade; los drivers
   (`AndroidSqliteDriver`/`NativeSqliteDriver` con `PlaybookDatabase.Schema`)
   detectan `user_version` y ejecutan `Schema.migrate`.
-  `PlaybookDatabase.Schema.version = 4`. `INSERT OR REPLACE` en lugar de
+  `PlaybookDatabase.Schema.version = 5`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
-  `minSdk = 24`. Las tablas vecinas restantes (enlaces) llegan en features
-  posteriores.
+  `minSdk = 24`.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
   `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
   de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`,
-  `NoteTagCheck.verifyNoteTagMigration` y `verifyMigrationV1ToV4`) que corren en
+  `NoteTagCheck.verifyNoteTagMigration` y `verifyMigrationV1ToV5`) que corren en
   Android/JVM e iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
@@ -156,13 +161,33 @@ composeApp (Android app / commonMain) ──▶ core
   implementación `SqlDelightEmbeddingRepository(database, clock)`. `upsert`
   `require(values.isNotEmpty())`, sella `indexedAt` con `clock()` y hace
   `INSERT OR REPLACE`; `deleteByNoteId` devuelve `rowsAffected > 0`.
+- **Enlace / Relación** (`com.playbook.core.model`): `NoteLink(noteAId, noteBId,
+  score, updatedAt)` es **siempre canónico** (`noteAId < noteBId`); la extensión
+  `NoteLink.otherNoteId(of)` resuelve "la otra Nota" y falla rápido si `of` no es
+  un extremo. `NoteLinkMappers.kt` aliasa `com.playbook.core.db.Note_link as
+  NoteLinkRow`. `NoteLinkRepository` (`upsert`/`getLinksForNote`/`getAll`/
+  `deleteAll`) + `SqlDelightNoteLinkRepository(database, clock)`: `upsert` valida
+  `noteAId != noteBId` y `score.isFinite()`, canoniza el orden y hace
+  `INSERT OR REPLACE`; `getLinksForNote` consulta ambos lados
+  (`note_a_id = :id OR note_b_id = :id`). El borrado de la Nota cascadea las filas
+  `note_link` por FK (no se toca `SqlDelightNoteRepository.delete`).
+- **Similitud y servicio de enlazado** (`com.playbook.core.linking`):
+  `CosineSimilarity.score(a, b): Double?` (puro common) devuelve `null` si las
+  dimensiones difieren o alguna norma es `0`; si no, `dot / (‖a‖·‖b‖)`.
+  `SemanticLinkingService(embeddingRepository, noteLinkRepository, threshold =
+  DEFAULT_SIMILARITY_THRESHOLD = 0.8)` expone `recomputeAll(): LinkingSummary`
+  (`notesConsidered`, `linksWritten`): lee `EmbeddingRepository.getAll()`, borra
+  todos los enlaces y reconstruye los pares con `score >= threshold` (inclusivo,
+  inyectable, `require(threshold in -1.0..1.0)`). Determinista e idempotente.
+  **No** toca `NoteStatus` ni los embeddings, y hoy no se cablea a la app (el
+  trigger del recomputo es un follow-up).
 - **IDs y tiempo** (`com.playbook.core.platform`): `expect`/`actual`
   `randomNoteId()`/`currentTimeMillis()` (Android `UUID`/`System`; iOS
   `NSUUID`/`NSDate`). En tests se inyectan fakes deterministas; no se usa
   `expect`/`actual` en source sets de test.
 - **Orden de lectura:** `selectAllNotes` ordena por `updated_at DESC, id DESC`
-  (cambio de query, no de esquema: sigue v1, sin `.sqm`). El `id` desempata de
-  forma estable los `updated_at` iguales; `getAll()` es determinista y está
+  (cambio de query en `notes-list-ui`, sin cambio de esquema). El `id` desempata
+  de forma estable los `updated_at` iguales; `getAll()` es determinista y está
   cubierto por `verifyNoteCrud`.
 - El repositorio se instancia en los entry points de plataforma y se pasa a la
   UI; no hay DI.
@@ -419,9 +444,10 @@ composeApp (Android app / commonMain) ──▶ core
 ## Runtime surfaces
 
 - **Android:** `MainActivity` (`com.playbook.app`) monta `App(noteRepository,
-  attachmentRepository, AndroidVoiceTranscriber(this))`, aplica el esquema local v4
+  attachmentRepository, AndroidVoiceTranscriber(this))`, aplica el esquema local v5
   con `createDatabase(AndroidDatabaseDriverFactory(...))` y construye
   `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository`.
+  (`NoteLinkRepository`/`SemanticLinkingService` **no** se cablean todavía.)
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
   local, construye los dos repositorios y `IosVoiceTranscriber()`, y envuelve
   `App(notes, attachments, transcriber)`; lo llama `ComposeView` (SwiftUI) en
@@ -526,11 +552,12 @@ Comandos manuales equivalentes:
 - Adjuntos de audio (`voice-attachment-storage`), edición de adjuntos de una nota
   existente y render de la imagen en la lista/detalle (hoy sólo chip "Imagen" +
   previsualización al crear).
-- Enlaces (features posteriores). El wiring de `AiClient`/`NoteIndexingService` a
-  la app (`note-enrichment-status-ui`, `offline-pending-retry`) y la similitud
-  coseno / enlaces (`semantic-linking`) siguen pendientes; los embeddings ya se
-  generan y persisten (`embeddings-generation`). El proveedor/modelo/dimensión y
-  la gestión de keys son follow-ups del ADR 0001
+- Enlaces: la generación ya existe (`semantic-linking`), pero su **UI** de lectura
+  (`note-links-ui`) y el **trigger** del recomputo (`recomputeAll`) siguen
+  pendientes. El wiring de `AiClient`/`NoteIndexingService`/`SemanticLinkingService`
+  a la app (`note-enrichment-status-ui`, `offline-pending-retry`) también; los
+  embeddings ya se generan y persisten (`embeddings-generation`). El
+  proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001
   (`docs/adr/0001-ai-runtime-decision.md`).
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).
 - Guardar el audio original del dictado como `Adjunto`
