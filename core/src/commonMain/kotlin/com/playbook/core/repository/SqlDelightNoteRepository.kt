@@ -3,6 +3,7 @@ package com.playbook.core.repository
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
+import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.normalizeTags
 import com.playbook.core.model.toDomain
 
@@ -81,6 +82,14 @@ class SqlDelightNoteRepository(
         val rowsAffected = database.noteQueries.deleteNoteById(id).value
         database.noteTagQueries.deleteTagsByNoteId(id)
         rowsAffected > 0
+    }
+
+    override fun updateStatus(id: String, status: NoteStatus): Boolean {
+        val rowsAffected = database.noteQueries.updateNoteStatus(
+            status = status.code,
+            id = id,
+        ).value
+        return rowsAffected > 0
     }
 
     private fun insertNoteRow(note: Note) {
