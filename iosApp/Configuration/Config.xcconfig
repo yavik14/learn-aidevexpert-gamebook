@@ -1,3 +1,11 @@
+// Valores versionados. El TEAM_ID real vive fuera del repo.
+// Opción A (recomendada): copiá Local.xcconfig.example a Local.xcconfig
+// (gitignored) y completá TEAM_ID ahí.
+// Opción B: exportá TEAM_ID=<tu-team-id> al correr los scripts, que lo pasan
+// como override de build setting a xcodebuild.
 TEAM_ID=
 BUNDLE_ID=com.playbook.app
 APP_NAME=Playbook
+
+// El include es opcional: si Local.xcconfig no existe, el repo compila igual.
+#include? "Local.xcconfig"

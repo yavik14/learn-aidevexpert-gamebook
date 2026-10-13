@@ -1,0 +1,35 @@
+# Constraints
+
+Reglas durables (MUST / MUST NOT) que las próximas features deben respetar. No
+duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubiertos.
+
+## Release y credenciales
+
+- **MUST NOT** commitear credenciales ni artefactos de firma/release: `.p8`,
+  `.p12`, `.cer`, `.mobileprovision`, `AuthKey_*`, `.ipa`, `.xcarchive`,
+  `ExportOptions.plist` renderizado, `iosApp/Configuration/Local.xcconfig`,
+  `*.apiKey`. Están en `.gitignore`; el runbook
+  `docs/release/ios-testflight.md` documenta el flujo. Razón: `AGENTS.md` ya
+  prohíbe secrets y un leak de firma compromete la cuenta.
+- **MUST** mantener el bundle id de iOS estable (`com.playbook.app`, vía
+  `${BUNDLE_ID}`) y el `TEAM_ID` fuera de los archivos versionados
+  (`Local.xcconfig` gitignored o env). Razón: el bundle id se registra una vez en
+  App Store Connect y no debe cambiar por team.
+- **MUST** usar un `CURRENT_PROJECT_VERSION` (build number) nuevo en cada subida
+  a TestFlight; reutilizarlo es rechazado por App Store Connect. El marketing
+  version va en `MARKETING_VERSION`.
+- La identity de firma de `Release` es `Apple Distribution` (`CODE_SIGN_STYLE =
+  Automatic`); `Debug` conserva `Apple Development`.
+
+## Gate y pipeline
+
+- `./init.sh` **MUST NOT** archivar, exportar ni subir a TestFlight, ni levantar
+  dev servers/simuladores/sesiones de larga duración. Sigue siendo el gate no
+  bloqueante; el release se invoca explícitamente con
+  `scripts/ios-release/*.sh`. Razón: el upload es lento, requiere red y
+  credenciales account-gated.
+- El scheme `iosApp` **MUST** estar compartido en
+  `iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/iosApp.xcscheme` para que
+  `xcodebuild archive`/`-exportArchive` por CLI sean deterministas. Razón: antes
+  se autocreaba en user data (no versionado) y no era reproducible en CI/otro
+  checkout.
