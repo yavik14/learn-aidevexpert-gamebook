@@ -33,3 +33,16 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   `xcodebuild archive`/`-exportArchive` por CLI sean deterministas. Razón: antes
   se autocreaba en user data (no versionado) y no era reproducible en CI/otro
   checkout.
+
+## Indexado de IA
+
+- El pipeline de indexado **MUST NOT** clasificar ni etiquetar la Nota (la IA no
+  asigna `categoría`/`tipo`/`Etiquetas`) ni bloquear la captura: un fallo de IA
+  deja la Nota `PENDING` y nunca lanza hacia el llamador. Razón: la clasificación
+  IA está descartada (`CONTEXT.md`) y la captura es local-first/tolerante a
+  fallos.
+- La transición `pendiente → fallida`, los reintentos, el scheduling y la
+  detección de conectividad **MUST NOT** implementarse en el indexado: pertenecen
+  a `offline-pending-retry`. El indexado sólo escribe `INDEXED`/`PENDING` (nunca
+  `FAILED`). Aplica a features que dependen de ésta
+  (`offline-pending-retry`, `note-enrichment-status-ui`).

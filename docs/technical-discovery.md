@@ -361,6 +361,43 @@ Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
   migración v1 → v2 en Android (emulador) e iOS (simulador): `user_version = 2`,
   tabla `embedding` creada y Notas preservadas, sin crashes.
 
+## Indexing Decisions (ai-enrichment-classify-tags-type)
+
+Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
+
+- **Alcance re-derivado:** la feature se re-encuadró al **indexado asíncrono** +
+  **transiciones de `NoteStatus`**. La clasificación IA de categoría/tipo y las
+  etiquetas IA están **descartadas** (`CONTEXT.md`); los Enlaces por similitud son
+  de `semantic-linking`; el reintento y `pendiente → fallida` son de
+  `offline-pending-retry`. No se toca UI ni wiring.
+- **Transición de estado aislada (sin cambio de esquema):** nueva query
+  `updateNoteStatus` (`UPDATE note SET status = ? WHERE id = ?`) en `Note.sq` y
+  `NoteRepository.updateStatus(id, status)`.
+  `SqlDelightNoteRepository.updateStatus` mapea a `rowsAffected > 0`. **No**
+  re-sella `updated_at`: indexar es un efecto de sistema, no una edición del
+  usuario, así una indexación en segundo plano no reordena la lista
+  (`selectAllNotes` ordena por `updated_at DESC`). `PlaybookDatabase.Schema.version`
+  sigue en **4**, sin `.sqm` nuevo.
+- **Regla de transición (`NoteIndexingOrchestrator`):** éxito → `INDEXED`; fallo →
+  `PENDING` **salvo** que la Nota ya estuviera `INDEXED` (no se degrada lo ya
+  indexado; el embedding previo queda intacto). **No escribe `FAILED`**: el puerto
+  `AiClient` sólo expone `AiClientException` genérico (sin distinción
+  transitorio/permanente) e `IndexingResult.Failed` tampoco distingue causa, así
+  que la regla es crisp y testeable sin reintentos. La promoción
+  `pendiente → fallida` pertenece a `offline-pending-retry`.
+- **Reutilización sin modificar:** el orquestador sólo lee `IndexingResult` de
+  `NoteIndexingService` (código `accepted`) y añade la transición; no propaga
+  fallos de IA (el servicio ya los convierte en `Failed`). Es `suspend` y no
+  agenda nada: el llamador decide cuándo invocarlo, fuera del camino de captura.
+- **Tests:** `verifyNoteIndexingOrchestrator(driver)` (escenarios 1–7) en
+  `commonTest`, corrido en Android/JVM
+  (`JdbcSqliteDriver.IN_MEMORY` → `NoteIndexingOrchestratorAndroidTest`) e iOS
+  (`inMemoryDriver` → `NoteIndexingOrchestratorIosTest`). `verifyNoteCrud` se
+  extendió con el Scenario 8 (`updateStatus` cambia sólo `status`, preserva
+  `body`/`track`/`tags`/`owner`/`created_at`/`updated_at` y devuelve `false` con
+  `id` inexistente). Sin E2E persistente (no hay flujo observable; la spec lo
+  justifica).
+
 ## Voice / STT Decisions (voice-capture-stt)
 
 Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.

@@ -2,6 +2,7 @@ package com.playbook.core.repository
 
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
+import com.playbook.core.model.NoteStatus
 
 /**
  * CRUD de [Note] sobre la persistencia local. La UI y los casos de uso consumen
@@ -28,6 +29,14 @@ interface NoteRepository {
      * `true` si la fila existía.
      */
     fun update(note: Note): Boolean
+
+    /**
+     * Actualiza sólo el `status` de la Nota (efecto de sistema del indexado, no
+     * una edición del usuario): **no** toca `body`/`track`/`tags`/`owner` ni
+     * `created_at`/`updated_at` (así una indexación en segundo plano no reordena
+     * la lista). Devuelve `true` si la fila existía.
+     */
+    fun updateStatus(id: String, status: NoteStatus): Boolean
 
     /** Borra la Nota con [id] y limpia sus etiquetas. Devuelve `true` si la fila existía. */
     fun delete(id: String): Boolean
