@@ -28,6 +28,9 @@ resultado del embedding, sin cambio de esquema (sigue v4).
 con `4.sqm`, tabla `note_link`, `NoteLinkRepository` y `SemanticLinkingService`).
 `voice-attachment-storage` agrega el audio original del dictado como Adjunto
 `AUDIO` (grabado en la misma sesión de voz, sin cambio de esquema).
+`rag-query` agrega el retrieval por similitud coseno, `RagQueryService` y el primer
+wiring del runtime de IA a la app (indexado best-effort al guardar + pantalla de
+consulta).
 
 ## Modules
 
@@ -302,16 +305,62 @@ composeApp (Android app / commonMain) ──▶ core
   (`semantic-linking`). Es `suspend` y no agenda nada: el llamador decide cuándo
   invocarlo, fuera del camino de captura. La transición usa
   `NoteRepository.updateStatus` (sólo `status`, sin re-sellar `updated_at`).
-- **Sin wiring a la UI todavía:** `NoteIndexingService`/`NoteIndexingOrchestrator`/
-  `EmbeddingRepository` existen y están cubiertos por tests, pero `AiClient` **no**
-  se cablea a `App` ni a los entry points; no hay superficie observable ni token de
-  ciclo de vida que lo dispare (llegará con
-  `note-enrichment-status-ui`/`offline-pending-retry`).
-  La inyección se materializa en los tests del contrato (dos implementaciones por
-  el mismo puerto) y en `NoteIndexingService`.
+- **Primer wiring a la UI (`rag-query`, 2026-10-13):** los composition roots
+  construyen `SqlDelightEmbeddingRepository`, `FakeAiClient`,
+  `NoteIndexingService` y `RagQueryService` y los pasan a `App(...)`. `App`
+  indexa best-effort al guardar/editar una Nota con `body` no vacío (ver "RAG") y
+  la pantalla de consulta invoca `RagQueryService.ask`. El wiring de
+  estados/reintento del indexado sigue siendo de
+  `note-enrichment-status-ui`/`offline-pending-retry`.
 - **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato
   `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
   **1.10.1**, compatible con Kotlin 2.1.21.
+
+## RAG (consulta en lenguaje natural)
+
+- **Utilidad de similitud** (`com.playbook.core.ai.cosineSimilarity`): pura de
+  Kotlin common (`kotlin.math.sqrt`). Exige vectores de igual tamaño
+  (`IllegalArgumentException` fail-fast) y devuelve `0f` cuando el denominador es
+  `0f` (vector nulo, sin `NaN`). Es reusable (la consumirá `semantic-linking`).
+- **`RagQueryService`** (`com.playbook.core.ai`): `ask(question)` con
+  `require(question.isNotBlank())` y `maxSources` (default
+  `DEFAULT_MAX_SOURCES = 5`). Orden: (1) `embeddingRepository.getAll()`; vacío →
+  `NoIndexedNotes` **sin** llamar al runtime; (2) asocia las Notas por `id` y
+  descarta embeddings sin Nota; (3) `aiClient.embed(listOf(question.trim()))`
+  (try/catch `AiClientException` → `Failed`); si no devuelve exactamente 1 vector
+  no vacío → `Failed`; (4) score coseno contra cada candidato de dimensión
+  compatible (los incompatibles se descartan), orden descendente con desempate
+  estable por `note.id`, top-K; (5) `context = top.map { it.note.body }` y
+  `aiClient.generate(GenerateRequest(prompt = question.trim(), context))`
+  (try/catch → `Failed`); (6) `Answer(text, sources)`. Los fallos del runtime se
+  mapean a `Failed` sin propagar la excepción ni inventar respuesta.
+- **`RagAnswer`** (`Answer(text, sources)` / `NoIndexedNotes` / `Failed(cause)`) y
+  **`RetrievedNote(note, score)`**. `sources` viene ordenado por score
+  descendente; la UI **no** las renderiza (las citas son `rag-answer-citations`).
+- **Sin umbral ni vector DB:** el retrieval es top-K **sin umbral** (la
+  calibración es pregunta abierta de `semantic-linking`) y en memoria sobre los
+  BLOBs. Es **efímero** (por consulta): no crea filas `link`.
+- **Sin conocimiento externo:** sin Notas indexadas no se llama al runtime (las
+  respuestas provienen sólo de las Notas). El `generate` ancla la respuesta en el
+  `context` recuperado; el adaptador formatea el contexto.
+- **Runtime real:** se inyecta `FakeAiClient` (determinista, sin red). El
+  adaptador cloud/on-device real es follow-up del ADR 0001; por eso la
+  verificación prueba el **pipeline** (retrieval real + petición anclada), no la
+  calidad de la respuesta.
+- **Indexado best-effort al guardar** (glue del RAG): tras crear/editar una Nota
+  (texto/voz/imagen) con `body` no vacío se dispara
+  `scope.launch { noteIndexingService.index(note) }`; es silencioso ante fallo,
+  no bloquea el guardado y **no** cambia `NoteStatus`. Las Notas con `body` en
+  blanco (p. ej. sólo imagen) no se indexan. Sin esto, ninguna Nota del usuario
+  tendría embedding y el RAG siempre vería `NoIndexedNotes`.
+- **UI (`AskNotesScreen`)**: `OutlinedTextField` + botón "Preguntar"
+  (deshabilitado con la pregunta en blanco o mientras corre), estado de carga
+  ("Pensando…"), `Card` con el **texto** de la respuesta, mensaje explícito de
+  "sin notas indexadas", error con "Reintentar" y "Volver". Estados `AskUiState`
+  (`Idle`/`Asking`/`Answered(text)`/`NoIndexedNotes`/`Error`) comunicados con
+  texto. `NotesListScreen` suma la acción "Preguntar". `App` usa
+  `rememberCoroutineScope()` (único patrón nuevo; sin `ViewModel`/Flow) para
+  invocar los servicios `suspend`.
 
 ## Voice capture (STT)
 
@@ -362,16 +411,18 @@ composeApp (Android app / commonMain) ──▶ core
 ## UI
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
-  attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber)`
+  attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber,
+  noteIndexingService: NoteIndexingService, ragQueryService: RagQueryService)`
   es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
   (`mutableStateOf`), `destination` (`NotesDestination`:
-  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`),
-  `refreshKey`, `voiceState` (`VoiceUiState`) y el estado de captura de imagen
-  (`showImageSourceDialog`/`imageError`). La lectura ocurre en un
-  `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de composición; tras cada
-  mutación se incrementa `refreshKey` (`reload()`). Sin DI, sin
-  `ViewModel`/`Lifecycle`, sin coroutines fuera de Compose y sin Flow ni librería
-  de navegación. Obtiene el `ImagePicker` y el `AttachmentFileStore` por
+  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`/`Ask`),
+  `refreshKey`, `voiceState` (`VoiceUiState`), `askState` (`AskUiState`) y el
+  estado de captura de imagen (`showImageSourceDialog`/`imageError`). La lectura
+  ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
+  composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
+  sin `ViewModel`/`Lifecycle` y sin Flow ni librería de navegación; las llamadas
+  `suspend` de IA se invocan con `rememberCoroutineScope()`. Obtiene el
+  `ImagePicker` y el `AttachmentFileStore` por
   `remember`; la acción de imagen abre un `AlertDialog` "Agregar imagen"
   (Cámara/Galería/Cancelar), `onResult` navega a `CreateWithImage` y `onError`
   muestra un `AlertDialog` accionable.
@@ -408,6 +459,14 @@ composeApp (Android app / commonMain) ──▶ core
   Los estados y los errores se comunican con texto (nunca sólo color) y hay una
   línea informativa ("Se guarda también el audio original como Adjunto."). No
   mantiene el `VoiceTranscriber`.
+- **`AskNotesScreen`** (nuevo): pantalla "tonta" de consulta RAG. Recibe
+  `AskUiState` (`Idle`/`Asking`/`Answered(text)`/`NoIndexedNotes`/`Error`) y
+  emite `onAsk(question)`/`onBack`. La acción primaria es "Preguntar"
+  (deshabilitada con la pregunta en blanco o mientras `Asking`), muestra
+  "Pensando…" durante la consulta, la **respuesta** (sólo texto, sin fuentes) en
+  un `Card`, un mensaje explícito si no hay Notas indexadas, y un error con
+  "Reintentar"; "Volver" siempre vuelve a la lista. Todos los estados se
+  comunican con texto (nunca sólo color).
 - **Orquestación de voz (`App`):** la sesión se inicia sólo al tocar "Grabar"
   (para que el prompt de permiso sea explícito); `onPartialResult` actualiza el
   parcial; `onError` pasa a `Error`; `onFinalResult(text, audio)` no vacío crea la
@@ -432,15 +491,17 @@ composeApp (Android app / commonMain) ──▶ core
   en la misma transacción) y se borran los archivos con el `AttachmentFileStore`
   (cubre imágenes y audio por la ruta relativa); siempre `reload()` y vuelta a la
   lista. El `status` no se edita desde la UI. Si el `id` en `Edit(noteId)` ya no
-  existe en `notes`, se vuelve a la lista.
+  existe en `notes`, se vuelve a la lista. Tras crear o editar (texto/voz/imagen)
+  con `body` no vacío se dispara el indexado best-effort; la consulta RAG llama
+  `ragQueryService.ask(question)` y muestra el `Answered(text)` sin listar fuentes.
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
   `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas,
   `image-capture-camera` la captura/adjunto de imagen y `voice-attachment-storage`
   el audio del dictado como Adjunto `AUDIO` (chips por tipo en la lista), sólo al
   **crear** (sin edición de adjuntos existentes ni render/reproducción).
-  `gdd-view` agregó la pantalla de GDD (ver abajo). Siguen fuera de esta superficie
-  la IA.
+  `gdd-view` agregó la pantalla de GDD (ver abajo) y `rag-query` el indexado
+  best-effort al guardar/editar y la pantalla de consulta.
 
 ## GDD
 
@@ -474,15 +535,18 @@ composeApp (Android app / commonMain) ──▶ core
 
 ## Runtime surfaces
 
-- **Android:** `MainActivity` (`com.playbook.app`) monta `App(noteRepository,
-  attachmentRepository, AndroidVoiceTranscriber(this))`, aplica el esquema local v5
-  con `createDatabase(AndroidDatabaseDriverFactory(...))` y construye
-  `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository`.
+- **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v5 con
+  `createDatabase(AndroidDatabaseDriverFactory(...))`, construye
+  `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository` +
+  `SqlDelightEmbeddingRepository`, un `FakeAiClient`, `NoteIndexingService` y
+  `RagQueryService`, y monta `App(..., AndroidVoiceTranscriber(this))`.
   (`NoteLinkRepository`/`SemanticLinkingService` **no** se cablean todavía.)
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
-  local, construye los dos repositorios y `IosVoiceTranscriber()`, y envuelve
-  `App(notes, attachments, transcriber)`; lo llama `ComposeView` (SwiftUI) en
-  `iosApp`.
+  local (singletons perezosos), construye los tres repositorios, el
+  `FakeAiClient`, `NoteIndexingService`, `RagQueryService` y
+  `IosVoiceTranscriber()`, y envuelve
+  `App(notes, attachments, transcriber, indexing, rag)`; lo llama `ComposeView`
+  (SwiftUI) en `iosApp`.
 
 ## Identifiers
 
@@ -585,9 +649,11 @@ Comandos manuales equivalentes:
   previsualización de la imagen al crear).
 - Enlaces: la generación ya existe (`semantic-linking`), pero su **UI** de lectura
   (`note-links-ui`) y el **trigger** del recomputo (`recomputeAll`) siguen
-  pendientes. El wiring de `AiClient`/`NoteIndexingService`/`SemanticLinkingService`
-  a la app (`note-enrichment-status-ui`, `offline-pending-retry`) también; los
-  embeddings ya se generan y persisten (`embeddings-generation`). El
+  pendientes. `rag-query` expone `cosineSimilarity` y hace retrieval **efímero**
+  (no crea filas `link` ni define umbral; las citas visuales son de
+  `rag-answer-citations`). El wiring de estados/reintento del indexado
+  (`note-enrichment-status-ui`, `offline-pending-retry`) sigue pendiente; el
+  indexado best-effort de `rag-query` no transiciona `NoteStatus`. El
   proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001
   (`docs/adr/0001-ai-runtime-decision.md`).
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).

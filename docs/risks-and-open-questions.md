@@ -7,8 +7,10 @@
   descartado del MVP** (ver "Resolved"), así que un `Adjunto` de imagen **no**
   aporta texto indexable. Con `voice-attachment-storage` ya existen Adjuntos
   `AUDIO` reales (además de `IMAGE`), pero la transcripción sigue viviendo en el
-  `body` de la Nota. La pregunta se reduce a si un `Adjunto` sin texto participa
-  del RAG o se excluye, y la decide la feature de indexado/RAG.
+  `body` de la Nota. `rag-query` sólo indexa `note.body` no vacío: un audio sin
+  transcribir o un boceto sin OCR hoy no participan del RAG. La pregunta se reduce
+  a si un `Adjunto` sin texto participa del RAG o se excluye, y la decide la
+  feature de indexado/RAG.
 
 ## Resolved
 - **OCR del boceto (`image-ocr-optional`):** **descartado del MVP** (2026-10-13).
@@ -33,6 +35,13 @@
   recomputo explícito e idempotente (`SemanticLinkingService.recomputeAll()`).
   Queda como **follow-up**: el **trigger** del recomputo (al indexar/editar,
   offline) y la UI de lectura (`note-links-ui`).
+- **Respuesta RAG desde las Notas propias:** **resuelto** en `rag-query`
+  (2026-10-13). El retrieval por similitud coseno es real y la respuesta se genera
+  con `GenerateRequest(prompt, context = cuerpos recuperados)`; sin Notas
+  indexadas devuelve `NoIndexedNotes` y **no** llama al runtime (nunca usa
+  conocimiento externo). Queda abierto el **runtime real** (hoy `FakeAiClient`) y,
+  por lo tanto, la **calidad** de la respuesta, que no es verificable hasta elegir
+  proveedor/modelo (ADR 0001).
 
 ## Implementation-Time Questions
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
@@ -50,6 +59,8 @@
 - Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
   (usuario vs build) — follow-ups del ADR 0001.
 - Runtime on-device concreto para la fase 2 (híbrida).
+- ¿El umbral de similitud de `semantic-linking` aplica también al RAG? Hoy el
+  retrieval del RAG es top-K **sin umbral**.
 - Comportamiento al cambiar el `track` de una Nota ya indexada.
 - Orden final y granularidad de las features del MVP (fase harness). Requiere
   **re-derivar `feature_list.json`** tras el cambio de alcance (se descartó el

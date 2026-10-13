@@ -11,10 +11,12 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - **Persistencia:** SQLDelight.
 - **Búsqueda semántica:** embeddings almacenados como BLOB + similitud coseno
   calculada en memoria.
-- **IA:** interfaz `AiClient` como abstracción (puerto ya implementado en
-  `:core`; ver "AI Decisions"). Runtime **decidido** en
-  `ai-runtime-decision`: estrategia **híbrida por fases, cloud-first** detrás del
-  puerto (ver "AI Decisions (ai-runtime-decision)" y `docs/adr/0001-ai-runtime-decision.md`).
+- **IA:** interfaz `AiClient` como abstracción (puerto implementado en `:core`;
+  ver "AI Decisions"). Runtime **decidido** en `ai-runtime-decision`: estrategia
+  **híbrida por fases, cloud-first** detrás del puerto (ver "AI Decisions
+  (ai-runtime-decision)" y `docs/adr/0001-ai-runtime-decision.md`). `embed` lo
+  consume `NoteIndexingService` (`embeddings-generation`) y `generate` el
+  `RagQueryService` (`rag-query`, ver "RAG Decisions").
 - **Integraciones nativas:** speech-to-text (voz) y cámara (foto de bocetos).
 
 ## Data and Storage
@@ -29,8 +31,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - **Cámara / galería:** captura de bocetos; el OCR (si existe) es texto derivado.
   **OCR descartado del MVP** (`image-ocr-optional`): ver "OCR Decision
   (image-ocr-optional)" y `docs/adr/0002-ocr-decision.md`.
-- **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto ya
-  implementado; runtime pendiente de elección (ver riesgos).
+- **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto
+  implementado y runtime decidido (híbrido, cloud-first); `FakeAiClient` es el
+  adaptador inyectado hoy y el adaptador real es follow-up del ADR 0001.
 
 ## Authentication and Authorization
 - Ninguna en el MVP (single-user local-first).
@@ -446,6 +449,44 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   (`inMemoryDriver`). Smoke real de migración v4 → v5 en Android (emulador) e iOS
   (simulador): `user_version` 4 → 5, tabla `note_link` + índice creados y Notas
   preservadas, sin crashes.
+
+## RAG Decisions (rag-query)
+
+Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
+
+- **Similitud coseno en memoria, sin vector DB ni umbral:** `cosineSimilarity`
+  (pura Kotlin common) puntúa la pregunta contra cada embedding persistido; el
+  retrieval es **top-K** (default `maxSources = 5`) sin umbral. El umbral y los
+  enlaces persistidos son de `semantic-linking`; el retrieval del RAG es
+  **efímero** (por consulta) y no crea filas `link`. El denominador `0f` devuelve
+  `0f` (evita `NaN` con vectores nulos).
+- **`RagQueryService` con el puerto `AiClient`:** `ask(question)` embebe la
+  pregunta (`embed`), recupera por coseno y genera con
+  `GenerateRequest(prompt = pregunta, context = cuerpos)` (`generate`). El core no
+  conoce proveedor/modelo/dimensión: sólo el puerto; la app inyecta `FakeAiClient`.
+- **Sin conocimiento externo:** si no hay filas `embedding` (o ningún candidato
+  queda tras descartar embeddings sin Nota o de dimensión incompatible) devuelve
+  `NoIndexedNotes` **sin** invocar el runtime. Los fallos de `embed`/`generate` se
+  mapean a `Failed(cause)` sin propagar ni inventar respuesta; una respuesta de
+  `embed` inválida (0 vectores, >1 vector, dimensión 0) → `Failed` sin llamar a
+  `generate`.
+- **Indexado best-effort al guardar:** `App` dispara
+  `noteIndexingService.index(note)` en un `scope.launch` tras crear/editar una
+  Nota con `body` no vacío; es silencioso ante fallo, no bloquea el guardado y no
+  transiciona `NoteStatus`. Una Nota de sólo imagen no se indexa. Este glue es el
+  mínimo para que el RAG vea las Notas del usuario; los estados/reintento son de
+  `note-enrichment-status-ui`/`offline-pending-retry`.
+- **Asincronía en la UI sin `ViewModel`/Flow:** la llamada `suspend` se invoca con
+  `rememberCoroutineScope()` (único patrón nuevo); `App` mapea el `RagAnswer` a
+  `AskUiState` (`Idle`/`Asking`/`Answered`/`NoIndexedNotes`/`Error`). La pantalla
+  `AskNotesScreen` muestra sólo el **texto** de la respuesta (las citas son
+  `rag-answer-citations`) y comunica los estados con texto.
+- **Sin esquema ni deps:** se reusan `note`/`embedding`/`note_tag`/`attachment`
+  (esquema v4, sin `.sqm` nuevos); Compose y `kotlinx-coroutines` ya estaban.
+- **Límite honesto (runtime real):** no hay adaptador cloud/on-device; la
+  respuesta es la de `FakeAiClient`. La verificación prueba el **pipeline**
+  (retrieval real + petición de generación anclada en las Notas), no la calidad de
+  la respuesta, que depende del ADR 0001. Sin red ni keys.
 
 ## Voice / STT Decisions (voice-capture-stt)
 
