@@ -1,10 +1,10 @@
 package com.playbook.core.model
 
 /**
- * Adjunto de una Nota: archivo original asociado (imagen de boceto hoy; audio en
- * una feature posterior). No guarda el texto derivado (OCR/transcripción) ni los
- * bytes: el archivo vive en almacenamiento privado de la app y la base sólo
- * conserva metadatos + la ruta relativa al contenedor.
+ * Adjunto de una Nota: archivo original asociado (imagen de boceto o audio de un
+ * dictado). No guarda el texto derivado (OCR/transcripción) ni los bytes: el
+ * archivo vive en almacenamiento privado de la app y la base sólo conserva
+ * metadatos + la ruta relativa al contenedor.
  */
 data class Attachment(
     val id: String,
@@ -19,11 +19,13 @@ data class Attachment(
 
 /**
  * Tipo de Adjunto. Los identificadores Kotlin quedan en inglés; el [code]
- * persistido usa el valor de dominio canónico en español. Sólo `IMAGE` existe en
- * `image-capture-camera`.
+ * persistido usa el valor de dominio canónico en español. `IMAGE` es la imagen de
+ * un boceto (cámara/galería); `AUDIO` es el audio original de un dictado, separado
+ * de la transcripción que vive en el `body` de la Nota.
  */
 enum class AttachmentKind(val code: String) {
     IMAGE("imagen"),
+    AUDIO("audio"),
     ;
 
     companion object {

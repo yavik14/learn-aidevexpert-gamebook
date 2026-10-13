@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.playbook.core.model.AttachmentKind
 import com.playbook.core.model.Note
 
 /**
@@ -37,13 +38,13 @@ import com.playbook.core.model.Note
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
- * regla de accesibilidad de `DESIGN.md`; las notas con adjuntos muestran un chip
- * textual "Imagen".
+ * regla de accesibilidad de `DESIGN.md`; las notas con adjuntos muestran chips
+ * textuales por tipo ("Imagen" y/o "Audio").
  */
 @Composable
 fun NotesListScreen(
     notes: List<Note>,
-    attachmentCounts: Map<String, Int>,
+    attachmentKinds: Map<String, Set<AttachmentKind>>,
     onCreate: () -> Unit,
     onCaptureImage: () -> Unit,
     onEdit: (String) -> Unit,
@@ -104,7 +105,7 @@ fun NotesListScreen(
                     items(notes, key = { it.id }) { note ->
                         NoteCard(
                             note = note,
-                            hasAttachment = (attachmentCounts[note.id] ?: 0) > 0,
+                            attachmentKinds = attachmentKinds[note.id].orEmpty(),
                             onClick = { onEdit(note.id) },
                         )
                     }
@@ -147,7 +148,11 @@ private fun EmptyNotes(
 }
 
 @Composable
-private fun NoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
+private fun NoteCard(
+    note: Note,
+    attachmentKinds: Set<AttachmentKind>,
+    onClick: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -155,15 +160,16 @@ private fun NoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                text = note.body.ifBlank { "Imagen adjunta" },
+                text = note.body.ifBlank { placeholderFor(attachmentKinds) },
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (hasAttachment) {
-                    LabelChip(text = "Imagen")
+                // Chips de texto por tipo (orden estable: Imagen, luego Audio).
+                AttachmentKind.entries.filter { it in attachmentKinds }.forEach { kind ->
+                    LabelChip(text = attachmentLabel(kind))
                 }
                 LabelChip(text = note.track?.code ?: "Sin track")
                 LabelChip(text = note.status.code)
@@ -181,4 +187,17 @@ private fun NoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** Etiqueta textual del tipo de Adjunto (la UI nunca comunica sólo con color). */
+private fun attachmentLabel(kind: AttachmentKind): String = when (kind) {
+    AttachmentKind.IMAGE -> "Imagen"
+    AttachmentKind.AUDIO -> "Audio"
+}
+
+/** Placeholder del cuerpo vacío según el/los Adjunto(s) presentes. */
+private fun placeholderFor(attachmentKinds: Set<AttachmentKind>): String = when {
+    AttachmentKind.IMAGE in attachmentKinds -> "Imagen adjunta"
+    AttachmentKind.AUDIO in attachmentKinds -> "Audio adjunto"
+    else -> "Sin texto"
 }

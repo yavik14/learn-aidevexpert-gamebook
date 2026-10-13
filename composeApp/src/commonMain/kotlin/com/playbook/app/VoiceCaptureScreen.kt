@@ -77,6 +77,11 @@ fun VoiceCaptureScreen(
             .padding(24.dp),
     ) {
         Text(text = "Dictar nota", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Se guarda también el audio original como Adjunto.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Spacer(modifier = Modifier.height(16.dp))
         VoiceStatus(state = state, modifier = Modifier.fillMaxWidth().weight(1f))
         Spacer(modifier = Modifier.height(24.dp))

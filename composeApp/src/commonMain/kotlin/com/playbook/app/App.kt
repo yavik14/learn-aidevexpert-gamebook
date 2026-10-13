@@ -94,14 +94,31 @@ fun App(
                 onPartialResult = { partial ->
                     voiceState = VoiceUiState.Listening(partial = partial)
                 },
-                onFinalResult = { text ->
+                onFinalResult = { text, audio ->
                     val trimmed = text.trim()
                     if (trimmed.isBlank()) {
+                        // Sin transcripción no hay Nota: descartar el audio grabado.
+                        audio?.let { fileStore.delete(it.relativePath) }
                         voiceState = VoiceUiState.Error(VoiceCaptureError.NO_MATCH)
                     } else {
-                        noteRepository.create(
+                        val note = noteRepository.create(
                             NoteDraft(owner = LOCAL_OWNER_ID, body = trimmed, track = null),
                         )
+                        if (audio != null) {
+                            try {
+                                attachmentRepository.create(
+                                    noteId = note.id,
+                                    kind = AttachmentKind.AUDIO,
+                                    mimeType = audio.mimeType,
+                                    filePath = audio.relativePath,
+                                    byteSize = audio.byteSize,
+                                )
+                            } catch (_: Throwable) {
+                                // Degradación tolerante: conservar la Nota sin
+                                // Adjunto y no dejar el archivo huérfano.
+                                fileStore.delete(audio.relativePath)
+                            }
+                        }
                         voiceState = VoiceUiState.Idle
                         goToList()
                         reload()
@@ -152,12 +169,15 @@ fun App(
             reload()
         }
 
-        val attachmentCounts = attachments.groupingBy { it.noteId }.eachCount()
+        val attachmentKinds = attachments
+            .groupBy({ it.noteId }, { it.kind })
+            .mapValues { (_, kinds) -> kinds.toSet() }
+        val attachmentCounts = attachmentKinds.mapValues { (_, kinds) -> kinds.size }
 
         when (val current = destination) {
             NotesDestination.List -> NotesListScreen(
                 notes = notes,
-                attachmentCounts = attachmentCounts,
+                attachmentKinds = attachmentKinds,
                 onCreate = { destination = NotesDestination.Create },
                 onCaptureImage = { showImageSourceDialog = true },
                 onEdit = { noteId -> destination = NotesDestination.Edit(noteId) },

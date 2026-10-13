@@ -5,8 +5,10 @@
   o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
   Precisión tras `image-ocr-optional` (2026-10-13): el **OCR del boceto queda
   descartado del MVP** (ver "Resolved"), así que un `Adjunto` de imagen **no**
-  aporta texto indexable; la pregunta se reduce a si un `Adjunto` sin texto
-  participa del RAG o se excluye, y la decide la feature de indexado/RAG.
+  aporta texto indexable. Con `voice-attachment-storage` ya existen Adjuntos
+  `AUDIO` reales (además de `IMAGE`), pero la transcripción sigue viviendo en el
+  `body` de la Nota. La pregunta se reduce a si un `Adjunto` sin texto participa
+  del RAG o se excluye, y la decide la feature de indexado/RAG.
 
 ## Resolved
 - **OCR del boceto (`image-ocr-optional`):** **descartado del MVP** (2026-10-13).
@@ -40,6 +42,11 @@
   `FileProvider`/`PickVisualMedia` en Android y
   `UIImagePickerController`/`PHPickerViewController` en iOS (galería sin permiso)
   para imagen.
+- El **audio del dictado como Adjunto** (`voice-attachment-storage`) ya se
+  resolvió: se graba en la misma sesión de micrófono (`MediaRecorder` AAC/
+  MPEG-4 en Android; tap de `AVAudioEngine` → `AVAudioFile` AAC en iOS) y se
+  persiste como `AttachmentKind.AUDIO` (`audio/<uuid>.m4a`, `audio/mp4`) sin
+  cambio de esquema. La reproducción del audio queda diferida.
 - Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
   (usuario vs build) — follow-ups del ADR 0001.
 - Runtime on-device concreto para la fase 2 (híbrida).
@@ -97,6 +104,18 @@
   con smoke manual (permiso concedido/denegado, cancelar, sin habla) y el happy
   path de audio real → Nota puede requerir dispositivo físico. Se documenta como
   limitación de entorno, no como fallo del código (`voice-capture-stt`).
+- **Doble cliente de micrófono en Android (`voice-attachment-storage`):**
+  `MediaRecorder` y `SpeechRecognizer` comparten el micrófono en simultáneo y
+  algunos dispositivos lo rechazan. Mitigación implementada: degradación
+  tolerante (Nota sin Adjunto, sin crash) si la grabación no puede iniciar/escribir;
+  en el emulador el `MediaRecorder` sí arranca y produce un `.m4a` válido. Si
+  resultara poco confiable en dispositivos reales, la alternativa es un único
+  camino de audio y transcribir después (documentado como follow-up).
+- **Grabación de audio en iOS no determinista:** el tap de `AVAudioEngine` escribe
+  AAC a `AVAudioFile`, pero la reproducción/inyección de voz en simulador es
+  imposible; el happy path de dictado con audio real sólo se valida en dispositivo
+  físico. Se verifica el build/link/launch, el esquema y la UI por seed, sin
+  fabricar evidencia de grabación real.
 
 ## Research Tasks
 - **Hecho (2026-10-09):** spike comparativo de arquetipos cloud vs on-device
