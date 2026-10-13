@@ -24,7 +24,7 @@ private const val INSERT_NOTE_V1 =
 
 /**
  * Esquema "vacío" (sin tablas) con versión 1. Permite obtener un driver en estado
- * base sin que el esquema actual (v4) se aplique automáticamente, para que el test
+ * base sin que el esquema actual (v5) se aplique automáticamente, para que el test
  * de migración construya la v1 con SQL explícito. Android/JVM usa directamente
  * `JdbcSqliteDriver.IN_MEMORY`; iOS usa `inMemoryDriver(BlankTestSchema)`.
  */
@@ -42,36 +42,36 @@ object BlankTestSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Prueba la migración v1 → v4 (todas las del repo). Asume un driver vacío:
- * construye el esquema v1 (`note` + una fila + `user_version = 1`), aplica
- * `PlaybookDatabase.Schema.migrate(1, 4)` y verifica que las notas v1 se
- * conservan intactas y la tabla `attachment` queda disponible.
+ * Prueba la migración v1 → v5 (todas las del repo: `1.sqm`..`4.sqm`). Asume un
+ * driver vacío: construye el esquema v1 (`note` + una fila + `user_version = 1`),
+ * aplica `PlaybookDatabase.Schema.migrate(1, 5)` y verifica que las notas v1 se
+ * conservan intactas y que la tabla `note_link` (nueva en v5) queda disponible.
  *
  * No se usa `PlaybookDatabase.Schema.create` para la v1 porque eso aplicaría el
- * esquema v4; el DDL v1 se replica aquí a propósito.
+ * esquema v5; el DDL v1 se replica aquí a propósito.
  */
-fun verifyMigrationV1ToV4(driver: SqlDriver) {
+fun verifyMigrationV1ToV5(driver: SqlDriver) {
     // Given: base v1 existente con una fila.
     driver.execute(null, CREATE_NOTE_V1, 0)
     driver.execute(null, "PRAGMA user_version = 1", 0)
     driver.execute(null, INSERT_NOTE_V1, 0)
 
-    assertEquals(4L, PlaybookDatabase.Schema.version, "con 1.sqm+2.sqm+3.sqm el esquema debe ser v4")
+    assertEquals(5L, PlaybookDatabase.Schema.version, "con 1.sqm+2.sqm+3.sqm+4.sqm el esquema debe ser v5")
 
-    // La tabla `attachment` todavía no existe en v1.
-    val attachmentTables = driver.executeQuery(
+    // La tabla `note_link` todavía no existe en v1.
+    val noteLinkTables = driver.executeQuery(
         identifier = null,
-        sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'attachment'",
+        sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'note_link'",
         mapper = { cursor ->
             cursor.next()
             QueryResult.Value(cursor.getLong(0) ?: 0L)
         },
         parameters = 0,
     ).value
-    assertEquals(0L, attachmentTables, "la tabla attachment no debe existir en v1")
+    assertEquals(0L, noteLinkTables, "la tabla note_link no debe existir en v1")
 
-    // When: se aplica la migración v1 → v4.
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 4).value
+    // When: se aplica la migración v1 → v5.
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 5).value
 
     // Then: las notas previas se conservan intactas.
     val database = PlaybookDatabase(driver)
@@ -86,20 +86,25 @@ fun verifyMigrationV1ToV4(driver: SqlDriver) {
     assertEquals(1000L, note.created_at)
     assertEquals(1000L, note.updated_at)
 
-    // Then: la tabla `attachment` queda disponible y usable.
-    database.attachmentQueries.insertAttachment(
-        id = "att-1",
-        note_id = "note-v1",
-        kind = "imagen",
-        mime_type = "image/jpeg",
-        file_path = "images/x.jpg",
-        byte_size = 42L,
+    // Then: la tabla `note_link` queda disponible y usable (FK exige 2 notas).
+    database.noteQueries.insertNote(
+        id = "note-v1b",
+        owner = "local",
+        body = "otra nota",
+        track = null,
+        status = "capturada",
         created_at = 2000L,
+        updated_at = 2000L,
     )
-    val attachments = database.attachmentQueries
-        .selectAttachmentsByNoteId("note-v1")
-        .executeAsList()
-    assertEquals(1, attachments.size, "attachment debe estar disponible tras migrar")
-    assertEquals("note-v1", attachments.first().note_id)
-    assertEquals("imagen", attachments.first().kind)
+    database.noteLinkQueries.upsertNoteLink(
+        note_a_id = "note-v1",
+        note_b_id = "note-v1b",
+        score = 0.75,
+        updated_at = 3000L,
+    )
+    val links = database.noteLinkQueries.selectAllLinks().executeAsList()
+    assertEquals(1, links.size, "note_link debe estar disponible tras migrar")
+    assertEquals("note-v1", links.first().note_a_id)
+    assertEquals("note-v1b", links.first().note_b_id)
+    assertEquals(0.75, links.first().score)
 }
