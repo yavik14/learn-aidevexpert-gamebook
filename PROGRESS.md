@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `image-ocr-optional` (2026-10-13; decisión de descarte del OCR en el MVP + docs durables; validación independiente `accept`).
+- Última feature `accepted`: `gdd-view` (2026-10-13; Session 029; validación independiente `accept`).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -14,6 +14,7 @@
 - `note-category-and-tags` `accepted` (2026-10-09): Etiquetas libres, múltiples y editables en la Nota; esquema v3 (`note_tag`, migración `2.sqm` v2→v3); clasificación fija por `Track` ya existente.
 - `image-capture-camera` `accepted` (2026-10-09): captura de imagen (cámara/galería) → Nota con Adjunto; tabla `attachment` (esquema **v4**, migración `3.sqm` v3→v4) + `AttachmentRepository` + integración nativa Android/iOS.
 - `image-ocr-optional` `accepted` (2026-10-13): feature **opcional/min** resuelta como **decisión + documentación** — **DISCARD del OCR para el MVP** (validación independiente `accept`). Entregable: `docs/adr/0002-ocr-decision.md` (MADR-lite, promovido a `accepted`) + docs durables actualizados; sin código/deps/esquema.
+- `gdd-view` `accepted` (2026-10-13): primera vista de GDD — proyección pura de las Notas por `track` (`buildGdd`/`GddSection` en `:core`) + pantalla `GddScreen` (secciones por track, conteo global/por sección, chips de Etiquetas/`status`/"Imagen", abrir nota y "Volver"), sin tabla ni esquema nuevos (v4). Validada de forma independiente.
 - `ios-release-pipeline-scaffolding` `passing`: artefactos repo-side de release iOS verificados (scripts, scheme compartido, firma/identidad, versionado, `.gitignore`, runbook; Scenarios 1/2/7/8). Requiere validación independiente para `accepted`.
 - `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
 - Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec.
@@ -590,3 +591,45 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/adr/0002-ocr-decision.md`.
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — `Status: propuesto` del ADR (promovido a `accepted` al persistir la aceptación) y estimaciones de peso/calidad sin URLs fechadas (declaradas en los límites honestos del ADR). La calidad de OCR sobre manuscrito sigue sin medirse; la pregunta de RAG de adjuntos sin texto sigue abierta para la feature de indexado/RAG.
 - Next best step: la próxima feature ready es `semantic-linking` (depende de `embeddings-generation`, ya `accepted`); crear su spec con `$feature-spec`. Alternativa ready: `voice-attachment-storage` (depende de `voice-capture-stt`).
+
+### Session 030
+
+- Date: 2026-10-13
+- Goal: implementar `gdd-view` (spec `docs/specs/gdd-view.md`): primera vista de GDD que agrupa y resume las Notas por `track`, sin tabla propia.
+- Completed:
+  - `:core`: `com.playbook.core.gdd.GddSection(track, notes)` + `buildGdd(notes)` (proyección pura; orden fijo `Track.entries` + "Sin track" sólo con notas sin track; conserva orden de entrada; sin mutar ni duplicar). Sin SQLDelight ni `AiClient`.
+  - Tests: `verifyGddProjection()` en `commonTest` + `GddProjectionAndroidTest`/`GddProjectionIosTest` (agrupación, orden fijo, sin track, sin duplicados, determinismo, no-mutación).
+  - `:composeApp`: nuevo `GddScreen` (estado vacío "Todavía no hay notas"; encabezado "GDD" + total; secciones por track con conteo y "Sin notas en este track"; notas resumidas a 2 líneas con chips de `status`/Etiquetas/"Imagen"; "Volver"; abrir nota → editor). `LabelChip` extraído a archivo común reutilizado por lista y GDD.
+  - `App.kt`: nuevo `NotesDestination.Gdd` y wiring (`List → Gdd → Edit`); `NotesListScreen` suma la acción "Ver GDD".
+  - `ARCHITECTURE.md` (intro, destino `Gdd`, sección GDD, Deferred), `docs/technical-discovery.md` (nueva "GDD Decisions (gdd-view)") y `AGENTS.md` actualizados; terminología del entry de `feature_list.json` reconciliada ("por categoría/etiqueta" → "por track"); tasks de la spec implícitas.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest` → BUILD SUCCESSFUL; GddProjectionAndroidTest 1/1 + previos (Greeting 1/1, AiClient 3/3, NoteIndexing 1/1, AiRuntimeSpike 2/2, DatabaseMigration 1/1, Migration 1/1, NotePersistence 2/2, AttachmentRepository 1/1, EmbeddingRepository 1/1, NoteRepository 3/3), 0 failures.
+  - `./gradlew :core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; GddProjectionIosTest 1/1, 0 failures.
+  - `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (60 tareas); `xcodebuild` scheme `iosApp` → `** BUILD SUCCEEDED **`.
+  - Control negativo propio: omitir la sección "Sin track" en `buildGdd` hace fallar `GddProjectionAndroidTest.projectionGroupsByTrack` (`AssertionError: orden fijo de secciones y 'Sin track' al final... expected:<[MECHANICS, CHARACTERS, STORY, null]> but was:<[MECHANICS, CHARACTERS, STORY]>`); restaurado y verde 1/1.
+  - Esquema sin cambios: `Schema.version = 4`, sin `.sqm` nuevos (`1.sqm`/`2.sqm`/`3.sqm` ya existentes); `getAll()` sin cambios; sin dependencias nuevas; `init.sh` sin cambios.
+  - Smoke Android (emulator-5556, APK md5 `d29d8470eccff4b540aa4ea2af483ae6` = build local): GDD vacío → `GDD`/`0 notas`/`Todavía no hay notas`/`Volver`; `Volver` → lista. Base sembrada (5 notas: mecánicas×2, personajes, historia, sin track; 2 etiquetas; 1 adjunto) → secciones en orden con conteos (`mecánicas` 2, `personajes` 1, `historia` 1, `Sin track` 1), encabezado `5 notas`; nota sin track + chip `fallida` tras scroll; chips `Imagen`/etiquetas/`status`; tocar nota → editor `Editar nota`; `Cancelar` → lista; crear nota (`historia`) desde la lista y reabrir GDD → `6 notas` y `historia` `2 notas` (refresco). Datos QA limpiados con `pm clear`.
+  - Smoke iOS (iPhone 15 Pro, iOS 17.2): instalado/lanzado (PID vivo); OCR (`macOS Vision`) de la captura muestra `Notas`/`Dictar nota`/`Ver GDD`/`Todavía no hay notas`/`Crear primera nota`. La navegación al GDD no pudo automatizarse (sin `idb`/`cliclick`/`applesimutils`; `osascript`/System Events bloqueado). No se fabricó evidencia.
+  - `./init.sh` → exit 0, sin procesos de larga duración; `./gradlew tasks` → BUILD SUCCESSFUL.
+- Evidence captured: arreglo `evidence` de `gdd-view` en `feature_list.json` (10 líneas); capturas/UI dumps en el directorio ignorado `composeApp/build/smoke-evidence/gdd-view/` (`android-*.xml`, `ios-01-launch.png`).
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/gdd/GddProjection.kt` (nuevo), `core/src/commonTest/kotlin/com/playbook/core/gdd/GddProjectionCheck.kt` (nuevo), `core/src/androidUnitTest/kotlin/com/playbook/core/gdd/GddProjectionAndroidTest.kt` (nuevo), `core/src/iosTest/kotlin/com/playbook/core/gdd/GddProjectionIosTest.kt` (nuevo), `composeApp/src/commonMain/kotlin/com/playbook/app/GddScreen.kt` (nuevo), `composeApp/src/commonMain/kotlin/com/playbook/app/LabelChip.kt` (nuevo), `composeApp/src/commonMain/kotlin/com/playbook/app/App.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/NotesListScreen.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: al guardar/cancelar en el editor abierto desde el GDD se vuelve a la lista, no al GDD (limitación aceptada; `previousDestination` llega con una feature de navegación/detalle). No hay harness de UI/E2E (la spec lo justifica): la proyección se cubre con tests cross-platform y la UI con smoke manual Android; el GDD en iOS no se pudo navegar por falta de input automation (build/link/launch/OCR del "Ver GDD" sí). Sin detalle de sólo lectura ni edición de adjuntos.
+- Next best step: validación independiente de `gdd-view` con `$feature-validator`; tras el `accept`, crear spec de `semantic-linking` o `voice-attachment-storage` con `$feature-spec`.
+
+### Session 031
+
+- Date: 2026-10-13
+- Goal: validación independiente de `gdd-view` (spec `docs/specs/gdd-view.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `gdd-view` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: complete gdd-view` creado por el orquestador y PR draft contra `develop` (push pedido explícitamente por el owner).
+- Verification run:
+  - `./init.sh` → exit 0 con el gate real, sin cambios y sin dev servers/simuladores.
+  - `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tareas, 3m27s); GddProjectionAndroidTest/GddProjectionIosTest 1/1 y los tests previos verdes (11 clases, 0 failures por plataforma, `core/build/test-results/*/TEST-*.xml`).
+  - `xcodebuild` scheme `iosApp` (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.
+  - Esquema: `PlaybookDatabaseImpl.Schema.version = 4`; `.sqm` `1/2/3` (ninguno nuevo); `git diff -- Note.sq` vacío; sin dependencias nuevas (`libs.versions.toml`/build files sin cambios); `init.sh` sin cambios.
+  - Escenarios 1–8 verificados: agrupación por track con orden fijo y preservación de orden intra-sección, nota sin track en "Sin track", resumen global/por sección con chips textuales, navegación `List → Gdd → Edit → List`, estado vacío, determinismo del `buildGdd` puro, refresco por `refreshKey` y gate honesto.
+  - Control negativo propio del validador (preservación del orden intra-sección: `buildGdd.reversed()`) hace fallar `GddProjectionAndroidTest.projectionGroupsByTrack` (`mecánicas conserva el orden`); restaurado byte-idéntico y re-verificado en verde.
+  - Sin DI/`ViewModel`/Flow/librería de navegación; dirección `UI → core` respetada; sin hallazgos de seguridad (sin red/auth/secretos/permisos ni cambios de manifest/`Info.plist`).
+- Evidence captured: línea de validación en el arreglo `evidence` de `gdd-view` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md` (por el orquestador al persistir la aceptación).
+- Known risk or unresolved issue: hallazgos Low no bloqueantes del validador — F1 línea en blanco al final de `docs/technical-discovery.md`; F2 comentario de `LabelChip.kt` que menciona el editor (que usa su propio `TagChip`); F3 aserción tautológica de no-mutación en `GddProjectionCheck.kt`; F4 smoke iOS del GDD no automatizado (limitación de tooling, declarada honestamente). Al guardar/cancelar en el editor abierto desde el GDD se vuelve a la lista, no al GDD (limitación aceptada; `previousDestination` en una feature de navegación/detalle posterior).
+- Next best step: crear spec de `semantic-linking` o `voice-attachment-storage` con `$feature-spec` (ambas con dependencias ya `accepted`).
