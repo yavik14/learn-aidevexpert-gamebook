@@ -28,7 +28,7 @@ class NoteRepositoryAndroidTest {
     }
 
     @Test
-    fun migrationV1ToV4PreservesNotes() {
+    fun migrationV1ToV5PreservesNotes() {
         // Driver in-memory creado como base v1 (sólo la tabla note).
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {

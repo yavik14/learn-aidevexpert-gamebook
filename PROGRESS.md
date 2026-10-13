@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `ai-enrichment-classify-tags-type` (2026-10-13; Session 032; validación independiente `accept`); antes `gdd-view` (Session 031).
+- Última feature `accepted`: `semantic-linking` (2026-10-13; Session 034; enlazado por similitud coseno, esquema v5 + `4.sqm`; validación independiente `accept`); antes `ai-enrichment-classify-tags-type` (Session 032).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -18,7 +18,8 @@
 - `ios-release-pipeline-scaffolding` `passing`: artefactos repo-side de release iOS verificados (scripts, scheme compartido, firma/identidad, versionado, `.gitignore`, runbook; Scenarios 1/2/7/8). Requiere validación independiente para `accepted`.
 - `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
 - `ai-enrichment-classify-tags-type` `accepted` (2026-10-13; validación independiente `accept` en `docs/validations/ai-enrichment-classify-tags-type.md`): indexado asíncrono + transiciones de `NoteStatus`. `NoteIndexingOrchestrator.index(note)` reutiliza `NoteIndexingService` y persiste: éxito→`INDEXED`; fallo→`PENDING` salvo Nota ya `INDEXED` (no se degrada); **nunca** escribe `FAILED`. `NoteRepository.updateStatus` (query `updateNoteStatus`, sólo `status`, sin re-sellar `updated_at`) sin cambio de esquema (sigue v4). Alcance re-derivado: la IA no clasifica ni etiqueta.
-- Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
+- `semantic-linking` `accepted` (2026-10-13; validación independiente `accept`): Enlaces Nota↔Nota por similitud coseno (esquema **v5**, migración `4.sqm` v4→v5, tabla `note_link` con PK canónica `note_a_id < note_b_id` + FK cascade); `CosineSimilarity`, `NoteLink`/`NoteLinkMappers`/`otherNoteId`, `NoteLinkRepository`/`SqlDelightNoteLinkRepository` y `SemanticLinkingService.recomputeAll()` + `LinkingSummary` (umbral `0.8` inclusivo e inyectable). Core puro, sin UI ni wiring.
+- Current next ready features: `note-links-ui` (depende de `semantic-linking`, ya `accepted`), `voice-attachment-storage` y `rag-query` (dependencias ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-13.
 
@@ -658,3 +659,49 @@
 - Known risk or unresolved issue: sin wiring a la app ni UI (intencional; no hay disparador de ciclo de vida ni superficie observable, llega con `note-enrichment-status-ui`/`offline-pending-retry`). `FAILED` sigue sin escribirse (decisión de alcance). No hay E2E persistente (la spec lo justifica). La terminología obsoleta "categoría/tipo/etiquetas IA" de features vecinas (`note-enrichment-status-ui`, `gdd-view`, `offline-pending-retry`, `enrichment-observability-logging`) sigue registrada para re-derivarse.
 - Validation: validación independiente (`docs/validations/ai-enrichment-classify-tags-type.md`) → **accept** (2026-10-13). El validador re-ejecutó `./init.sh` (exit 0), los tests del core en Android/JVM e iOS (17/0 en cada plataforma), `assembleDebug` + link del framework iOS y confirmó esquema v4 sin `.sqm` nuevo; reprodujo y restauró sus propios controles negativos y no halló findings Critical/High/Medium (dos Low no bloqueantes: cita de escenarios corregida a 2/3/5 y el contrato del llamador sobre `note.status`). Feature promovida a `accepted`; commit `feature: complete ai-enrichment-classify-tags-type`.
 - Next best step: crear spec de `semantic-linking` (o `note-enrichment-status-ui`/`offline-pending-retry`, ya dependency-ready) con `$feature-spec`.
+
+### Session 033
+
+- Date: 2026-10-13
+
+- Goal: implementar `semantic-linking` (spec `docs/specs/semantic-linking.md`): enlazado por similitud coseno en el core (dominio + persistencia + servicio), esquema v5 con `4.sqm`.
+- Completed:
+  - Esquema **v5**: nueva tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id) ON DELETE CASCADE`, `score`, `updated_at`, PK `(note_a_id, note_b_id)`, `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`) y cuarta migración `4.sqm` (v4 → v5). `PlaybookDatabase.Schema.version` pasa a 5.
+  - Dominio: `NoteLink` (canónico) + `NoteLink.otherNoteId(of)` (fail-fast) + `NoteLinkMappers` (`Note_link as NoteLinkRow`); `CosineSimilarity.score(a, b): Double?` (puro common; `null` para dimensión distinta o norma 0).
+  - Persistencia: `NoteLinkRepository` + `SqlDelightNoteLinkRepository(database, clock)` (`upsert` canoniza y valida, `getLinksForNote` consulta ambos lados, `getAll`, `deleteAll`).
+  - Servicio: `SemanticLinkingService` + `LinkingSummary` con `DEFAULT_SIMILARITY_THRESHOLD = 0.8` inclusivo e inyectable; `recomputeAll()` borra y reconstruye (determinista e idempotente); no toca `NoteStatus` ni se cablea a la app.
+  - Tests nuevos: `CosineSimilarityTest` (7), `verifyNoteLinkRepository` + runners Android/iOS, `verifySemanticLinking` + runners Android/iOS. Actualizados a v5: `DatabaseMigrationCheck` (columnas/FKs de `note_link`), `MigrationCheck.verifyMigrationV1ToV5`, `NoteTagCheck.verifyNoteTagMigration` y los nombres de los `@Test` en los runners de migración.
+  - Docs durables: `ARCHITECTURE.md` (esquema v5, tabla/repos/servicio), `docs/technical-discovery.md` ("Linking Decisions (semantic-linking)"), `docs/risks-and-open-questions.md` (direccionalidad/umbral resueltos; trigger como follow-up), `AGENTS.md` (estado/próxima feature) y tasks de la spec.
+  - **Desvío menor documentado:** el archivo `.sq` se llamó `NoteLink.sq` (no `note_link.sq`) porque SQLDelight deriva el accessor del nombre del archivo (`NoteLink.sq` → `database.noteLinkQueries`, convención `NoteTag.sq` → `noteTagQueries`); la tabla sigue siendo `note_link` y la data class generada es `Note_link`. Registrado en la spec.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL in 43s (16 tasks); 25 tests, 0 failures (core/build/test-results/testDebugUnitTest/).
+  - `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; 25 tests, 0 failures (core/build/test-results/iosSimulatorArm64Test/).
+  - `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL in 2m39s (57 tasks).
+  - `PlaybookDatabase.Schema.version` generado `get() = 5`; `4.sqm` presente; `Note.sq`/`embedding.sq`/`.sqm` previos sin cambios (git diff vacío).
+  - `./init.sh` → exit 0, sin dev servers ni procesos de larga duración; `init.sh` sin cambios.
+  - Control negativo 1: `>=` → `>` en `SemanticLinkingService` hace fallar `SemanticLinkingAndroidTest` (`AssertionError: el par con coseno == umbral se incluye (>=) expected:<1> but was:<0>`); restaurado (SHA-256 coincide) y verde.
+  - Control negativo 2: renombrar `note_link`→`note_link_broken` en `4.sqm` hace fallar `MigrationAndroidTest`/`DatabaseMigrationAndroidTest` con `SQLiteException: ... no such table: note_link`; restaurado (SHA-256 coincide) y verde.
+  - Smoke real de migración v4 → v5: Android (emulator-5556) `user_version` 4→5, `note_link` + índice creados, Notas/embedding preservados, sin crashes; iOS (iPhone 15, iOS 17.2) idem con la app viva y sin crash reports. Datos de smoke limpiados.
+  - E2E persistente: no aplica (sin UI ni wiring; justificado en la spec).
+- Evidence captured: arreglo `evidence` de `semantic-linking` en `feature_list.json` (13 líneas).
+- Files or artifacts updated: `core/src/commonMain/sqldelight/com/playbook/core/db/NoteLink.sq` (nuevo), `.../db/4.sqm` (nuevo), `core/src/commonMain/kotlin/com/playbook/core/model/{NoteLink,NoteLinkMappers}.kt` (nuevos), `.../linking/{CosineSimilarity,SemanticLinkingService}.kt` (nuevos), `.../repository/{NoteLinkRepository,SqlDelightNoteLinkRepository}.kt` (nuevos), tests nuevos (`CosineSimilarityTest`, `NoteLinkCheck`, `SemanticLinkingCheck` y runners Android/iOS), `DatabaseMigrationCheck`/`MigrationCheck`/`NoteTagCheck` + runners de migración actualizados a v5, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `docs/specs/semantic-linking.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: el archivo `NoteLink.sq` difiere del nombre planeado (documentado); la tabla `note_link` usa FK cascade (no se toca `SqlDelightNoteRepository.delete`); el **trigger** del recomputo y la UI de lectura (`note-links-ui`) siguen pendientes; sin wiring en la app. Emulator-5554 estaba roto (sin servicio `package`), el smoke Android se hizo en emulator-5556.
+- Next best step: validación independiente de `semantic-linking` con `$feature-validator`; tras el `accept`, crear spec de `note-links-ui` (depende de esta feature) o de otro candidato ready (`voice-attachment-storage`, `rag-query`, `gdd-view`) con `$feature-spec`.
+
+### Session 034
+
+- Date: 2026-10-13
+
+- Goal: validación independiente de `semantic-linking` (spec `docs/specs/semantic-linking.md`).
+- Completed: validación por agente validador independiente; veredicto `accept`; `semantic-linking` promovida a `accepted` en `feature_list.json` con evidencia de validación; commit `feature: complete semantic-linking` creado por el orquestador.
+- Verification run:
+  - `./init.sh` → exit 0, sin dev servers/simuladores.
+  - `:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test --rerun-tasks` → 25 tests / 0 failures en cada plataforma (conteos de `core/build/test-results/*/TEST-*.xml`); `:composeApp:assembleDebug` + link del framework iOS → BUILD SUCCESSFUL (57 tasks); `xcodebuild` scheme iosApp (iPhone 15, iOS 17.2) → BUILD SUCCEEDED.
+  - Esquema: `Schema.version == 5`; `4.sqm` byte-equivalente a `NoteLink.sq` y a `Schema.create` (PK `(note_a_id, note_b_id)`, `CHECK`, 2 FK `ON DELETE CASCADE`, índice). Escenarios 1–9 cubiertos.
+  - Controles negativos propios del validador, reproducidos y restaurados byte-idénticos: umbral `>=`→`>` falla `SemanticLinkingAndroidTest`; `note_link`→`note_link_broken` en `4.sqm` falla `MigrationAndroidTest`/`DatabaseMigrationAndroidTest`.
+  - Smoke iOS real v4→v5 reproducido de forma independiente (`user_version=5`, `note_link` + índice, fila legacy preservada, sin crashes). Smoke Android no re-ejecutado por el validador (sin `adb` en su entorno; cubierto por tests portables).
+  - Alcance: `git diff` vacío en `:composeApp`/`iosApp/**`/`init.sh`/`gradle/libs.versions.toml`/`Note.sq`/`embedding.sq`/`1-3.sqm`; sin transición de `NoteStatus`; sin wiring. Sin hallazgos de seguridad.
+- Evidence captured: línea de validación en el arreglo `evidence` de `semantic-linking` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: findings Low no bloqueantes — smoke Android de migración no re-ejecutado por el validador (sin `adb`), `linksWritten` cuenta upserts (correcto porque `deleteAll()` precede) y `CosineSimilarity` devuelve `null` para dos vectores vacíos (conforme a la spec). El trigger del recomputo y la UI de lectura (`note-links-ui`) siguen pendientes; `note-links-ui` queda desbloqueada.
+- Next best step: crear spec de `note-links-ui` con `$feature-spec` e implementarla con `$feature-implementer` (primera ready en orden), o de otro candidato ready (`voice-attachment-storage`, `gdd-view`, `rag-query`).

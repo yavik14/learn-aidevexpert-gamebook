@@ -24,6 +24,13 @@
   `docs/spikes/ai-runtime-spike.md`. Ya no bloquea el flujo de IA; el primer
   adaptador real lo materializa `embeddings-generation`/`rag-query`. Proveedor,
   modelo, dimensión y gestión de keys quedan como follow-ups del ADR.
+- **Enlaces (direccionalidad, umbral y recálculo):** **resuelto** en
+  `semantic-linking` (2026-10-13). Enlaces **bidireccionales guardados una sola
+  vez** con orden canónico `note_a_id < note_b_id` (se leen desde ambos lados);
+  umbral inclusivo `score >= 0.8` (`DEFAULT_SIMILARITY_THRESHOLD`, inyectable);
+  recomputo explícito e idempotente (`SemanticLinkingService.recomputeAll()`).
+  Queda como **follow-up**: el **trigger** del recomputo (al indexar/editar,
+  offline) y la UI de lectura (`note-links-ui`).
 
 ## Implementation-Time Questions
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
@@ -36,17 +43,19 @@
 - Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
   (usuario vs build) — follow-ups del ADR 0001.
 - Runtime on-device concreto para la fase 2 (híbrida).
-- ¿Los enlaces son bidireccionales? ¿Cuándo se recalculan y con qué umbral?
 - Comportamiento al cambiar el `track` de una Nota ya indexada.
 - Orden final y granularidad de las features del MVP (fase harness). Requiere
   **re-derivar `feature_list.json`** tras el cambio de alcance (se descartó el
   enriquecimiento/clasificación IA y se introdujeron los tracks).
 
 ## Resolved / Tooling Limitations
-- **Migración de esquema sin precedentes:** la v1 → v2 (`1.sqm` + `Attachment.sq`)
-  quedó cubierta por `verifyMigrationV1ToV2` en Android/JVM e iOS, y verificada en
-  el simulador iOS real (`user_version` 1→2 con notas preservadas y tabla
-  `attachment`). Sin bloqueos.
+- **Migración de esquema sin precedentes:** la v1 → v2 (`1.sqm` + tabla
+  `embedding`) quedó cubierta por `verifyDatabaseMigration` en Android/JVM e iOS, y
+  verificada en el simulador iOS real (`user_version` 1→2 con notas preservadas y
+  tabla `embedding`). La v4 → v5 (`4.sqm`, tabla `note_link`) quedó cubierta por
+  `verifyDatabaseMigration`/`verifyMigrationV1ToV5`/`verifyNoteTagMigration` y
+  verificada en Android (emulador) e iOS (simulador) con `user_version` 4→5,
+  `note_link` + índice y Notas preservadas. Sin bloqueos.
 - **`FileProvider` + cámara Android:** `ActivityResultContracts.TakePicture` no
   agrega los flags de grant de URI y la app de cámara no podía escribir el output;
   resuelto con un intent `ACTION_IMAGE_CAPTURE` explícito con

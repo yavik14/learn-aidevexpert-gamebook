@@ -19,25 +19,28 @@ cloud-first), la publicación de Android con `android-release-pipeline`
 la generación/persistencia de embeddings con `embeddings-generation` (esquema v2
 y `1.sqm`), la captura por voz nativa con `voice-capture-stt` (puerto
 `VoiceTranscriber` + adaptadores Android/iOS), las Etiquetas libres con
-`note-category-and-tags` (esquema v3, migración `2.sqm`) y la captura de imagen
+`note-category-and-tags` (esquema v3, migración `2.sqm`), la captura de imagen
 (cámara/galería → Nota con Adjunto) con `image-capture-camera` (esquema v4,
-migración `3.sqm`), todas `accepted`. La decisión de viabilidad del OCR del
-boceto con `image-ocr-optional` quedó documentada como **DISCARD para el MVP**
-(ADR 0002 + docs; validada de forma independiente, `accepted`). La primera vista
-de GDD (`gdd-view`) está implementada y auto-verificada (`passing`): proyección
-pura de las Notas por `track` (`buildGdd` en `:core`) + pantalla `GddScreen`, sin
-tabla ni esquema nuevos; requiere validación independiente para `accepted`. El
-pipeline de release de iOS (`ios-release-pipeline-scaffolding`) tiene los
-artefactos repo-side verificados (scripts, scheme compartido, firma, versionado,
-`.gitignore`, runbook) y está `passing`; el upload firmado a TestFlight
+migración `3.sqm`) y el enlazado por similitud coseno con `semantic-linking`
+(esquema v5, migración `4.sqm`, tabla `note_link`), todas `accepted`. La decisión
+de viabilidad del OCR del boceto con `image-ocr-optional` quedó documentada como
+**DISCARD para el MVP** (ADR 0002 + docs; validada de forma independiente,
+`accepted`). La primera vista de GDD (`gdd-view`) está implementada y
+auto-verificada (`passing`): proyección pura de las Notas por `track` (`buildGdd`
+en `:core`) + pantalla `GddScreen`, sin tabla ni esquema nuevos; requiere
+validación independiente para `accepted`. El pipeline de release de iOS
+(`ios-release-pipeline-scaffolding`) tiene los artefactos repo-side verificados
+(scripts, scheme compartido, firma, versionado, `.gitignore`, runbook) y está
+`passing`; el upload firmado a TestFlight
 (`ios-release-pipeline-first-upload`) queda `blocked` sin Apple Developer Program
 + credenciales (ver `docs/release/ios-testflight.md`). **Nunca** versionar
 keystores ni secrets.
 Próximas features en cola: `ai-enrichment-classify-tags-type` (indexado asíncrono
 + transiciones de `NoteStatus`) quedó `accepted` (2026-10-13, validación
-independiente `accept`); `semantic-linking` (depende de `embeddings-generation`,
-ya `accepted`) y `voice-attachment-storage` (depende de `voice-capture-stt`)
-requieren spec.
+independiente `accept`); con `semantic-linking` ya `accepted`, las próximas son
+`note-links-ui` (depende de `semantic-linking`), `voice-attachment-storage`
+(depende de `voice-capture-stt`) y `rag-query` (depende de
+`embeddings-generation`), que requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

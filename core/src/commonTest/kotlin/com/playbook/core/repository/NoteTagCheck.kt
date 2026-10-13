@@ -50,7 +50,7 @@ object NoteV1Schema : SqlSchema<QueryResult.Value<Unit>> {
 
 /**
  * Ejercita las Etiquetas libres de [SqlDelightNoteRepository] sobre un [SqlDriver]
- * ya inicializado con el esquema v2 (tablas `note` y `note_tag`).
+ * ya inicializado con el esquema v5 (tablas `note` y `note_tag`).
  *
  * Vive en `commonTest` para correr el mismo test en Android/JVM e iOS con el
  * driver in-memory de cada plataforma. `idFactory`/`clock` son fakes
@@ -146,14 +146,14 @@ fun verifyNoteTags(driver: SqlDriver) {
 }
 
 /**
- * Verifica la migración real v1 -> v3 (aplica `1.sqm` y `2.sqm`). El [driver] debe
- * representar una base **v1** ya existente (tabla `note` sin `note_tag`); los
- * tests de plataforma la crean con [NoteV1Schema]:
+ * Verifica la migración real v1 -> v5 (aplica todos los `.sqm` del repo). El
+ * [driver] debe representar una base **v1** ya existente (tabla `note` sin
+ * `note_tag`); los tests de plataforma la crean con [NoteV1Schema]:
  *
  * - Android/JVM: `JdbcSqliteDriver.IN_MEMORY` + `NoteV1Schema.create(driver)`.
  * - iOS: `inMemoryDriver(NoteV1Schema)`.
  *
- * Siembra una fila v1, corre `Schema.migrate(driver, 1, 2)` y comprueba que la
+ * Siembra una fila v1, corre `Schema.migrate(driver, 1, 5)` y comprueba que la
  * nota sobrevive y que la tabla nueva `note_tag` queda operable.
  */
 fun verifyNoteTagMigration(driver: SqlDriver) {
@@ -169,8 +169,8 @@ fun verifyNoteTagMigration(driver: SqlDriver) {
     )
     driver.execute(identifier = null, sql = "PRAGMA user_version = 1", parameters = 0).value
 
-    // Corre la migración real v1 -> v4 (aplica 1.sqm, 2.sqm y 3.sqm).
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 4)
+    // Corre la migración real v1 -> v5 (aplica 1.sqm, 2.sqm, 3.sqm y 4.sqm).
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 5)
 
     val database = PlaybookDatabase(driver)
     val migrated = database.noteQueries.selectNoteById("note-v1").executeAsOneOrNull()
