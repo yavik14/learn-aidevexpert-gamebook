@@ -21,9 +21,11 @@ y `1.sqm`), la captura por voz nativa con `voice-capture-stt` (puerto
 `VoiceTranscriber` + adaptadores Android/iOS), las Etiquetas libres con
 `note-category-and-tags` (esquema v3, migración `2.sqm`), la captura de imagen
 (cámara/galería → Nota con Adjunto) con `image-capture-camera` (esquema v4,
-migración `3.sqm`) y el enlazado por similitud coseno con `semantic-linking`
-(esquema v5, migración `4.sqm`, tabla `note_link`), todas `accepted`. La decisión
-de viabilidad del OCR del boceto con `image-ocr-optional` quedó documentada como
+migración `3.sqm`), el enlazado por similitud coseno con `semantic-linking`
+(esquema v5, migración `4.sqm`, tabla `note_link`) y el audio original del
+dictado como Adjunto `AUDIO` con `voice-attachment-storage` (grabado en la misma
+sesión de voz, sin cambio de esquema), todas `accepted`. La decisión de
+viabilidad del OCR del boceto con `image-ocr-optional` quedó documentada como
 **DISCARD para el MVP** (ADR 0002 + docs; validada de forma independiente,
 `accepted`). La primera vista de GDD (`gdd-view`) está implementada y
 auto-verificada (`passing`): proyección pura de las Notas por `track` (`buildGdd`
@@ -37,10 +39,9 @@ validación independiente para `accepted`. El pipeline de release de iOS
 keystores ni secrets.
 Próximas features en cola: `ai-enrichment-classify-tags-type` (indexado asíncrono
 + transiciones de `NoteStatus`) quedó `accepted` (2026-10-13, validación
-independiente `accept`); con `semantic-linking` ya `accepted`, las próximas son
-`note-links-ui` (depende de `semantic-linking`), `voice-attachment-storage`
-(depende de `voice-capture-stt`) y `rag-query` (depende de
-`embeddings-generation`), que requieren spec.
+independiente `accept`); con `semantic-linking` y `voice-attachment-storage` ya
+`accepted`, las próximas son `note-links-ui` (depende de `semantic-linking`) y
+`rag-query` (depende de `embeddings-generation`), que requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

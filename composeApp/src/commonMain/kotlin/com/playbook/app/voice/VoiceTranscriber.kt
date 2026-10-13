@@ -27,28 +27,44 @@ enum class VoiceCaptureError {
 }
 
 /**
+ * Audio original grabado durante una sesión de dictado y ya cerrado en
+ * almacenamiento privado con **ruta relativa** al contenedor de la app (p. ej.
+ * `audio/<uuid>.m4a`). Es el Adjunto de la Nota; el texto transcripto vive en el
+ * `body`. Se entrega en `onFinalResult` junto con el texto para evitar la carrera
+ * entre el resultado del STT y el cierre del archivo.
+ */
+data class RecordedAudio(
+    val relativePath: String,
+    val byteSize: Long,
+    val mimeType: String,
+)
+
+/**
  * Puerto de captura por voz (speech-to-text) del MVP.
  *
  * Los adaptadores por plataforma viven en `androidMain`/`iosMain` y garantizan
  * que [onPartialResult]/[onFinalResult]/[onError] se invoquen en el hilo
  * principal. El puerto no conoce la persistencia: [com.playbook.app.App] crea la
- * Nota con el texto final.
+ * Nota con el texto final y persiste el Adjunto [RecordedAudio] si lo hay.
  */
 interface VoiceTranscriber {
     /**
      * Inicia una sesión de dictado. Debe pedir/verificar permisos y disponibilidad
-     * y reportar el fallo por [onError] sin crashear. Los callbacks se invocan en
-     * el hilo principal.
+     * y reportar el fallo por [onError] sin crashear. Además alimenta al motor de
+     * STT, graba el audio original (misma sesión de micrófono) y lo entrega en
+     * [onFinalResult]; si no se pudo grabar, entrega `null` y la transcripción
+     * sigue (degradación tolerante). Los callbacks se invocan en el hilo
+     * principal.
      */
     fun start(
         onPartialResult: (String) -> Unit,
-        onFinalResult: (String) -> Unit,
+        onFinalResult: (String, RecordedAudio?) -> Unit,
         onError: (VoiceCaptureError) -> Unit,
     )
 
     /** Pide el resultado final (sigue [onFinalResult]/[onError]). */
     fun stop()
 
-    /** Cancela la sesión y libera el micrófono sin emitir resultado. */
+    /** Cancela la sesión, libera el micrófono y descarta el audio parcial. */
     fun cancel()
 }

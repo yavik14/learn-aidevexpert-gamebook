@@ -34,6 +34,7 @@ fun verifyAttachmentCrud(driver: SqlDriver) {
 
     // Mapeo de códigos fail-fast (columna NOT NULL escrita sólo por este código).
     assertEquals(AttachmentKind.IMAGE, AttachmentKind.fromCode("imagen"))
+    assertEquals(AttachmentKind.AUDIO, AttachmentKind.fromCode("audio"))
     assertFailsWith<IllegalArgumentException>("AttachmentKind desconocido debe fallar") {
         AttachmentKind.fromCode("desconocido")
     }
@@ -133,4 +134,27 @@ fun verifyAttachmentCrud(driver: SqlDriver) {
         AttachmentKind.IMAGE,
         attachmentRepository.getByNoteId(persistedNote.id).single().kind,
     )
+
+    // --- Scenario: round-trip de un Adjunto AUDIO (voz) --------------------
+    // El audio del dictado se persiste con el mismo camino que la imagen; sólo
+    // cambia el `kind` y el mime/ruta. No hay cambio de esquema.
+    now += 1_000
+    val audioNote = noteRepository.create(
+        NoteDraft(owner = "local", body = "texto transcripto", track = null),
+    )
+    val audio = attachmentRepository.create(
+        noteId = audioNote.id,
+        kind = AttachmentKind.AUDIO,
+        mimeType = "audio/mp4",
+        filePath = "audio/round-trip.m4a",
+        byteSize = 40_960L,
+    )
+    assertEquals(AttachmentKind.AUDIO, audio.kind)
+    assertEquals("audio/mp4", audio.mimeType)
+    assertEquals("audio/round-trip.m4a", audio.filePath)
+    assertEquals(40_960L, audio.byteSize)
+    val reread = attachmentRepository.getByNoteId(audioNote.id).single()
+    assertEquals(AttachmentKind.AUDIO, reread.kind)
+    assertEquals("audio/round-trip.m4a", reread.filePath)
+    assertEquals("texto transcripto", noteRepository.getById(audioNote.id)?.body)
 }
