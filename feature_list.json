@@ -525,19 +525,48 @@
     "notes": "Release/signing de Android con signing config condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`); si falta cualquiera de las 4 credenciales, el release queda sin firmar (modo degradado) sin fallar, por lo que `init.sh` no requiere secrets. `versionCode`/`versionName` overrideables con `-Pplaybook.versionCode`/`-Pplaybook.versionName` (defaults 1/\"1.0\"). `isMinifyEnabled = false` (sin R8). Runbook en `docs/release/android.md` (local vs Play Console). `.gitignore` protege `keystore.properties`/`*.jks`/`*.keystore`; `keystore.properties.example` es plantilla sin secrets. `init.sh` sin cambios; esquema v1, sin `.sqm`; sin cambios en `core/**`/UI. Aprendizaje 'lanzar a producción'. No commitear keystores ni secrets."
   },
   {
-    "id": "ios-release-pipeline",
+    "id": "ios-release-pipeline-scaffolding",
     "area": "release",
-    "title": "Distribución de iOS en TestFlight",
-    "user_visible_behavior": "Un build de iOS se distribuye a TestFlight e instala en dispositivos de prueba.",
+    "title": "Pipeline de release de iOS (scaffolding, sin credenciales)",
+    "user_visible_behavior": "Existen los artefactos repo-side versionados que hacen repetible el archive/export/upload de iOS sin credenciales: scripts, scheme compartido, firma/identidad, versionado, `.gitignore` y reglas de secretos.",
     "depends_on": [
       "create-text-note"
     ],
-    "status": "not_started",
+    "status": "passing",
     "verification": [
-      "Provisional: build archivado y subido a TestFlight; instalable en un dispositivo real."
+      "Scenario 1 — `scripts/ios-release/preflight.sh` sin credenciales → exit 1 con `[FAIL]` accionable por prerequisito; no archiva ni sube. Verificado 2026-10-09.",
+      "Scenario 2 — `./gradlew :composeApp:linkReleaseFrameworkIosArm64` → BUILD SUCCESSFUL; `scripts/ios-release/archive.sh --unsigned` (`xcodebuild ... CODE_SIGNING_ALLOWED=NO archive`) → `** ARCHIVE SUCCEEDED **` y `build/ios/Playbook.xcarchive`; bundle id `com.playbook.app`, versiones 1.0/1, binario Release arm64 con ComposeApp enlazado. Verificado 2026-10-09.",
+      "Scenario 7 — `git status`/`git diff` sin `.p8`/`.p12`/`.cer`/`.mobileprovision`/`.ipa`/`.xcarchive`/`ExportOptions.plist`/`Local.xcconfig`; `git check-ignore` confirma las entradas nuevas; `git grep` sin secretos en archivos versionados. Verificado 2026-10-09.",
+      "Scenario 8 — `./init.sh` → exit 0, sin dev servers/simuladores; no archiva ni sube (el pipeline de release se invoca aparte). Verificado 2026-10-09.",
+      "E2E persistente: no aplica; no hay harness E2E y `init.sh` no levanta simuladores."
     ],
-    "evidence": [],
-    "notes": "Aprendizaje 'lanzar a producción'. Requiere cuenta de desarrollador Apple."
+    "evidence": [
+      "2026-10-09: `scripts/ios-release/preflight.sh` → exit 1; `[OK]` macOS (Darwin 27.0.0), Xcode 27.0 (27A266a), scheme compartido, altool; `[FAIL] TEAM_ID no definido`; `[FAIL] Sin credenciales de firma: 0 identidades de codesigning y sin App Store Connect API key`. No archivó ni subió nada.",
+      "2026-10-09: `./gradlew :composeApp:linkReleaseFrameworkIosArm64 --console=plain` → BUILD SUCCESSFUL in 14m 54s (compilación Release iosArm64 del core + composeApp).",
+      "2026-10-09: `scripts/ios-release/archive.sh --unsigned --version 1.0 --build 1` → `xcodebuild ... CODE_SIGNING_ALLOWED=NO archive` → `** ARCHIVE SUCCEEDED **`; `build/ios/Playbook.xcarchive` con `CFBundleIdentifier=com.playbook.app`, `1.0`/`1`; binario arm64 de 27.4 MB con Compose enlazado.",
+      "2026-10-09: `xcodebuild -list -project iosApp/iosApp.xcodeproj` → scheme `iosApp` visible (scheme compartido versionado en `iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/iosApp.xcscheme`).",
+      "2026-10-09: `scripts/ios-release/export-upload.sh` sin `TEAM_ID` → exit 1 con `ERROR: falta TEAM_ID` (no exporta ni sube).",
+      "2026-10-09: Scenario 7 — `git status --porcelain` sólo lista archivos de la feature; `git check-ignore -v` confirma `build/ios/Playbook.xcarchive`/`ExportOptions.plist` (regla `build/`) e `iosApp/Configuration/Local.xcconfig`; `find` de artefactos de firma y `git grep` de claves privadas sin resultados.",
+      "2026-10-09: `./init.sh` → exit 0 (28s+41s+8s), sin dev servers ni procesos de larga duración; no archiva ni sube (Scenario 8). `init.sh` sin cambios."
+    ],
+    "notes": "Artefactos repo-side completos y verificados: `iosApp/Configuration/Config.xcconfig` (`#include? Local.xcconfig`, `TEAM_ID=` vacío) + `Local.xcconfig.example`; `project.pbxproj` (bundle id estable `${BUNDLE_ID}`, `Apple Distribution` en Release, `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`); `Info.plist` parametrizado; scheme compartido `iosApp`; `scripts/ios-release/{preflight,archive,export-upload}.sh` + `ExportOptions.plist.template`; `.gitignore`; runbook `docs/release/ios-testflight.md`; `CONSTRAINTS.md`; `ARCHITECTURE.md`/`docs/technical-discovery.md`. Contrato en `docs/specs/ios-release-pipeline.md` (Scenarios 1/2/7/8). `passing` (auto-verificado); requiere validación independiente para `accepted`. El upload firmado queda en `ios-release-pipeline-first-upload`."
+  },
+  {
+    "id": "ios-release-pipeline-first-upload",
+    "area": "release",
+    "title": "Primer upload firmado de iOS a TestFlight",
+    "user_visible_behavior": "Un build firmado de iOS se archiva, exporta (`.ipa`) y sube a TestFlight, y un tester lo instala en un dispositivo real.",
+    "depends_on": [
+      "ios-release-pipeline-scaffolding"
+    ],
+    "status": "blocked",
+    "verification": [
+      "Provisional (Scenarios 3–6): archive firmado + `-exportArchive` → `.ipa`; upload → build en App Store Connect/TestFlight procesado; tester instala y abre en device real; `CURRENT_PROJECT_VERSION` nuevo aceptado y repetido rechazado. Requiere Apple Developer Program + `TEAM_ID` + credenciales."
+    ],
+    "evidence": [
+      "Bloqueo (2026-10-09): sin Apple Developer Program (`TEAM_ID`) + credenciales de firma (identidad `Apple Distribution` o App Store Connect API key: `ASC_KEY_ID`/`ASC_ISSUER_ID` + `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`) no se pueden ejecutar Scenarios 3–6. Comando que lo prueba: `scripts/ios-release/preflight.sh` → exit 1. No se fabricó evidencia de TestFlight."
+    ],
+    "notes": "Account-gated: el scaffolding (`ios-release-pipeline-scaffolding`) ya está `passing`. Cuando exista cuenta Apple Developer Program + credenciales, completar Scenarios 3–6 (archive firmado, export `.ipa`, upload, device real) y `accept`. Ver `docs/release/ios-testflight.md`."
   },
   {
     "id": "offline-pending-retry",

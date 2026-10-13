@@ -31,3 +31,16 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 *.xcworkspace/xcuserdata/
+
+# iOS release / firma (nunca commitear credenciales ni artefactos de release)
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+*.ipa
+*.xcarchive
+*.apiKey
+AuthKey_*
+iosApp/Configuration/Local.xcconfig
+build/ios/**
+**/ExportOptions.plist

@@ -38,6 +38,14 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - Distribución en Android (Play / internal testing) e iOS (TestFlight) para
   ejercitar "lanzar a producción".
 - Sin operación de servidores en el MVP.
+- **iOS release (`ios-release-pipeline`):** pipeline shell + Xcode CLI sin
+  `fastlane` en `scripts/ios-release/` (preflight → archive → export → upload).
+  Firma automática con `Apple Distribution` en Release; bundle id estable
+  `com.playbook.app`; versionado por build settings; subida con
+  `xcrun altool --upload-app` y App Store Connect API key fuera del repo. Detalle
+  en `ARCHITECTURE.md` y runbook `docs/release/ios-testflight.md`. La ejecución
+  firmada a TestFlight requiere Apple Developer Program y credenciales
+  (account-gated).
 
 ## Testing and Verification
 - Tests unitarios del core KMP con un `AiClient` fake (deterministas, sin red).
@@ -481,3 +489,31 @@ Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.
   verifica que las notas v1 se conservan y `attachment` queda usable) en
   `commonTest`; corren en Android/JVM (`AttachmentRepositoryAndroidTest`,
   `MigrationAndroidTest`) e iOS (`AttachmentRepositoryIosTest`, `MigrationIosTest`).
+
+## Release Decisions (ios-release-pipeline)
+
+Implementado 2026-10-09 (artefactos repo-side; upload account-gated). Detalle en
+`ARCHITECTURE.md` y runbook `docs/release/ios-testflight.md`.
+
+- **Herramienta:** shell + Xcode CLI, sin agregar `fastlane`/Ruby al repo (se
+  mantiene la decisión de no sumar dependencias sin justificación). El CLI de
+  subida confirmado en la Xcode instalada es `xcrun altool` 27.0.5 (2.1); el
+  fallback declarado es `iTMSTransporter` y, como último recurso, `fastlane
+  pilot` (requeriría Gemfile, no adoptado).
+- **Firma:** `Release` cambia `CODE_SIGN_IDENTITY` de `Apple Development` a
+  `Apple Distribution`; `Debug` queda igual. `PRODUCT_BUNDLE_IDENTIFIER` deja de
+  concatenar `${TEAM_ID}` y pasa a `${BUNDLE_ID}` (`com.playbook.app`) para
+  registrar un App ID estable. El `TEAM_ID` real vive en `Local.xcconfig`
+  (gitignored) o env, no en el repo.
+- **Versionado:** `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` como build
+  settings; `Info.plist` deja de hardcodear `1.0`/`1` y usa `$(...)`. Los
+  overrides de `archive.sh` permiten un build number único por subida
+  (TestFlight rechaza repetidos).
+- **Verificación sin credenciales:** `archive.sh --unsigned`
+  (`CODE_SIGNING_ALLOWED=NO`) produce `build/ios/Playbook.xcarchive` y prueba que
+  la app compila/enlaza en Release. `preflight.sh` falla con exit != 0 y
+  `[FAIL]` accionables por prerequisito. Los artefactos de firma/release están en
+  `.gitignore`.
+- **Bloqueo:** sin Apple Developer Program + credenciales (`TEAM_ID`, identidad
+  o API key) no se puede firmar/exportar/subir. La feature queda `blocked` (no
+  `passing`) hasta ejecutar Scenarios 3–6 en un entorno con cuenta.
