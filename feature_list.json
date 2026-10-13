@@ -459,18 +459,37 @@
   {
     "id": "gdd-view",
     "area": "gdd",
-    "title": "Vista de GDD que agrupa y resume las notas",
-    "user_visible_behavior": "El usuario ve un GDD navegable que agrupa y resume sus notas por categoría/etiqueta.",
+    "title": "Vista de GDD que agrupa y resume las notas por track",
+    "user_visible_behavior": "El usuario ve un GDD navegable que agrupa y resume sus notas por track (mecánicas/personajes/historia) y muestra sus etiquetas.",
     "depends_on": [
       "note-category-and-tags",
       "notes-list-ui"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: flujo manual que muestra notas agrupadas y resumidas; incluye notas sin enriquecer."
+      "`./gradlew :core:testDebugUnitTest` → BUILD SUCCESSFUL; GddProjectionAndroidTest 1/1 (agrupación, orden, sin track, sin duplicados) + los tests previos verdes, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; GddProjectionIosTest 1/1 + los tests previos verdes, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (UI GDD + wiring Android).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; `xcodebuild` del scheme `iosApp` → BUILD SUCCEEDED.",
+      "Esquema sin cambios: `PlaybookDatabase.Schema.version == 4`, sin `.sqm` nuevos; `getAll()` sin cambios; sin dependencias nuevas; `init.sh` sin cambios.",
+      "Smoke manual Android/iOS: GDD con secciones por track ordenadas y conteos; nota sin track en \"Sin track\"; chips \"Imagen\"/Etiquetas/`status`; abrir nota y Volver; base vacía → estado vacío.",
+      "`./init.sh` → exit 0; gate no bloqueante sin dev servers ni simuladores.",
+      "E2E persistente: no aplica (sin harness de UI/E2E y `init.sh` no levanta simuladores; lo justifica la spec). La agrupación se cubre con tests del core en dos plataformas y la UI con smoke manual."
     ],
-    "evidence": [],
-    "notes": "El GDD es una vista sobre las notas, sin tabla propia (docs/domain-model.md)."
+    "evidence": [
+      "2026-10-13: `./gradlew :core:testDebugUnitTest` → BUILD SUCCESSFUL (16 tareas); GddProjectionAndroidTest 1/1 + GreetingTest 1/1 + AiClientAndroidTest 3/3 + NoteIndexingAndroidTest 1/1 + AiRuntimeSpikeAndroidTest 2/2 + DatabaseMigrationAndroidTest 1/1 + MigrationAndroidTest 1/1 + NotePersistenceAndroidTest 2/2 + AttachmentRepositoryAndroidTest 1/1 + EmbeddingRepositoryAndroidTest 1/1 + NoteRepositoryAndroidTest 3/3, 0 failures (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-13: `./gradlew :core:iosSimulatorArm64Test` → BUILD SUCCESSFUL; GddProjectionIosTest 1/1 + los mismos tests previos, 0 failures (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-13: `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (60 tareas); `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphonesimulator -destination 'platform=iOS Simulator,id=3BEE5881-32E4-4EDD-8CA4-1402408448BA' -derivedDataPath composeApp/build/xcode-smoke build` → ** BUILD SUCCEEDED **.",
+      "2026-10-13: cobertura de `buildGdd` — orden fijo `Track.entries` (`mecánicas`/`personajes`/`historia`) y `Sin track` al final sólo con notas sin `track`; nota sin `track` va a la última sección; ninguna nota queda fuera ni duplicada (conjunto/tamaño); el orden de entrada se conserva dentro de cada sección; la entrada no se muta; `buildGdd` es determinista; con sólo notas sin track las tres secciones de track siguen presentes.",
+      "2026-10-13: control negativo propio (restaurado): omitir la sección `Sin track` en `buildGdd` hace fallar `GddProjectionAndroidTest.projectionGroupsByTrack` con `AssertionError: orden fijo de secciones y 'Sin track' al final cuando hay notas sin track expected:<[MECHANICS, CHARACTERS, STORY, null]> but was:<[MECHANICS, CHARACTERS, STORY]>`; restaurado y re-ejecutado en verde 1/1.",
+      "2026-10-13: esquema sin cambios — `PlaybookDatabaseImpl.Schema.version = 4`; `find core/src -name '*.sqm'` → `1.sqm`, `2.sqm`, `3.sqm` (ninguno nuevo); `getAll()`/`NoteRepository` sin cambios; sin dependencias nuevas (`git status` sólo UI + `:core/gdd` + docs); `init.sh` sin cambios.",
+      "2026-10-13 (smoke Android, Pixel/sdk_gphone64_arm64, emulator-5556; APK instalado md5 d29d8470eccff4b540aa4ea2af483ae6 = build local): base vacía → lista con \"Ver GDD\"; GDD vacío = `GDD` + `0 notas` + `Todavía no hay notas` + `Volver`, sin secciones; `Volver` → lista. Base sembrada (`sqlite3` vía `run-as`) con 5 notas (mecánicas×2, personajes, historia, sin track), 2 etiquetas y 1 adjunto → GDD: secciones en orden `mecánicas` (2 notas), `personajes` (1 nota), `historia` (1 nota), `Sin track` (1 nota), encabezado `5 notas`; body de la nota sin track `Idea sin clasificar` + chip `fallida` visibles tras scroll; chips `Imagen`/etiquetas `movimiento`/`protagonista`/`status`. Tocar la nota → editor `Editar nota` con `Idea sin clasificar` y `✓ Sin track`; `Cancelar` → lista. Crear una nota (`Nueva idea hisp`, track `historia`) desde la lista y reabrir el GDD → encabezado `6 notas` y `historia` `2 notas` con la nota nueva al tope (refresco por `refreshKey`). Capturas/UI dumps en `composeApp/build/smoke-evidence/gdd-view/android-*.xml`; datos QA limpiados con `pm clear` al cerrar.",
+      "2026-10-13 (smoke iOS, iPhone 15 Pro iOS 17.2, sim 5FBB4205-...): instalado y lanzado el build (PID 49409 vivo); OCR de la captura (`ios-01-launch.png`, macOS Vision) muestra `Notas` / `Dictar nota` / `Ver GDD` / `Todavía no hay notas` / `Crear primera nota`. La navegación al GDD **no** pudo automatizarse: no hay `idb`/`cliclick`/`applesimutils` y `osascript`/System Events está bloqueado; el mismo `commonMain` de `GddScreen` se ejercitó vía smoke Android y la proyección por tests del core en dos plataformas. No se fabricó evidencia.",
+      "2026-10-13: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración; `./gradlew tasks` → BUILD SUCCESSFUL.",
+      "2026-10-13: reconciliación de terminología en este entry — `title`/`user_visible_behavior`/`notes` pasan de \"por categoría/etiqueta\" a \"por track\"; el GDD es una vista sobre las Notas, sin tabla (docs/domain-model.md), agrupa por track y muestra Etiquetas como chips.",
+      "2026-10-13: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tareas, 3m27s), con GddProjectionAndroidTest/GddProjectionIosTest 1/1 y los tests previos verdes (11 clases, 0 failures por plataforma), `xcodebuild` scheme iosApp → BUILD SUCCEEDED y `./init.sh` exit 0 sin cambios. Confirmó los Escenarios 1–8, `Schema.version == 4` sin `.sqm` nuevos, sin dependencias nuevas, sin DI/ViewModel/Flow/navegación y la reconciliación de terminología. Control negativo propio del validador (preservación del orden intra-sección, `buildGdd.reversed()`) hace fallar `GddProjectionAndroidTest.projectionGroupsByTrack` (`mecánicas conserva el orden`) y se restaura byte-idéntico. Findings Low no bloqueantes (F1 línea en blanco al final de `docs/technical-discovery.md`; F2 comentario de `LabelChip.kt` que menciona el editor que usa su propio `TagChip`; F3 aserción tautológica de no-mutación en `GddProjectionCheck.kt`; F4 smoke iOS del GDD no automatizado, declarado honestamente)."
+    ],
+    "notes": "El GDD es una vista sobre las notas, sin tabla propia (docs/domain-model.md); agrupa por track y no por etiqueta. Se implementa como proyección pura en `:core` (`buildGdd`) más una pantalla `GddScreen` en `:composeApp`; las Etiquetas se muestran como chips, sin agrupación por etiqueta."
   },
   {
     "id": "rag-query",

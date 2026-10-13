@@ -20,7 +20,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,9 +31,9 @@ import com.playbook.core.model.Note
 
 /**
  * Lista de notas locales. Permite crear una nota de texto, capturar/adjuntar una
- * imagen, dictar una nota de voz ("Dictar nota") y abrir una tarjeta para
- * editarla. El refresco tras la mutación lo maneja [App]: esta pantalla sólo
- * emite intenciones.
+ * imagen, dictar una nota de voz ("Dictar nota"), abrir una tarjeta para
+ * editarla y abrir la vista de GDD ("Ver GDD"). El refresco tras la mutación lo
+ * maneja [App]: esta pantalla sólo emite intenciones.
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
@@ -49,6 +48,7 @@ fun NotesListScreen(
     onCaptureImage: () -> Unit,
     onEdit: (String) -> Unit,
     onDictate: () -> Unit,
+    onOpenGdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -72,11 +72,22 @@ fun NotesListScreen(
         ) {
             Text(text = "Notas", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            FilledTonalButton(
-                onClick = onDictate,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(text = "Dictar nota")
+                FilledTonalButton(
+                    onClick = onDictate,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = "Dictar nota")
+                }
+                FilledTonalButton(
+                    onClick = onOpenGdd,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(text = "Ver GDD")
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
             if (notes.isEmpty()) {
@@ -169,20 +180,5 @@ private fun NoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun LabelChip(text: String) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
     }
 }

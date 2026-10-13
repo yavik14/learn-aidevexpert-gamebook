@@ -23,17 +23,18 @@ y `1.sqm`), la captura por voz nativa con `voice-capture-stt` (puerto
 (cámara/galería → Nota con Adjunto) con `image-capture-camera` (esquema v4,
 migración `3.sqm`), todas `accepted`. La decisión de viabilidad del OCR del
 boceto con `image-ocr-optional` quedó documentada como **DISCARD para el MVP**
-(ADR 0002 + docs; validada de forma independiente, `accepted`). El pipeline
-de release de iOS (`ios-release-pipeline-scaffolding`) tiene los artefactos
-repo-side verificados
-(scripts, scheme compartido, firma, versionado, `.gitignore`, runbook) y está
-`passing`; el upload firmado a TestFlight
+(ADR 0002 + docs; validada de forma independiente, `accepted`). La primera vista
+de GDD (`gdd-view`) está implementada y auto-verificada (`passing`): proyección
+pura de las Notas por `track` (`buildGdd` en `:core`) + pantalla `GddScreen`, sin
+tabla ni esquema nuevos; requiere validación independiente para `accepted`. El
+pipeline de release de iOS (`ios-release-pipeline-scaffolding`) tiene los
+artefactos repo-side verificados (scripts, scheme compartido, firma, versionado,
+`.gitignore`, runbook) y está `passing`; el upload firmado a TestFlight
 (`ios-release-pipeline-first-upload`) queda `blocked` sin Apple Developer Program
 + credenciales (ver `docs/release/ios-testflight.md`). **Nunca** versionar
 keystores ni secrets.
-Próximas features en cola: `semantic-linking` (depende de `embeddings-generation`,
-ya `accepted`); requiere spec. `image-ocr-optional` queda `accepted` (decisión de
-descarte del OCR en el MVP; ver `docs/adr/0002-ocr-decision.md`).
+Próximas features en cola: `semantic-linking` y `voice-attachment-storage`
+(dependencias ya `accepted`); requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

@@ -17,9 +17,10 @@ Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`),
 `image-capture-camera` el primer Adjunto: tabla `attachment` (esquema v4 con
 `3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería),
 `image-ocr-optional` la decisión de viabilidad del OCR del boceto (descartado del
-MVP; ver `docs/adr/0002-ocr-decision.md`), e `ios-release-pipeline` el pipeline de
+MVP; ver `docs/adr/0002-ocr-decision.md`), `ios-release-pipeline` el pipeline de
 release de iOS (archive/export/upload a TestFlight) con firma, versionado y reglas
-de secretos.
+de secretos, y `gdd-view` la primera vista de GDD (proyección pura de las Notas
+por `track` + pantalla navegable).
 
 ## Modules
 
@@ -294,7 +295,7 @@ composeApp (Android app / commonMain) ──▶ core
   attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber)`
   es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
   (`mutableStateOf`), `destination` (`NotesDestination`:
-  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`),
+  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`),
   `refreshKey`, `voiceState` (`VoiceUiState`) y el estado de captura de imagen
   (`showImageSourceDialog`/`imageError`). La lectura ocurre en un
   `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de composición; tras cada
@@ -307,8 +308,8 @@ composeApp (Android app / commonMain) ──▶ core
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
 - **`NotesListScreen`**: `Scaffold` con una fila de `ExtendedFloatingActionButton`
-  ("Nueva nota" + "Foto"); acción secundaria `FilledTonalButton` "Dictar nota"
-  (`onDictate`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
+  ("Nueva nota" + "Foto"); acciones secundarias `FilledTonalButton` "Dictar nota"
+  (`onDictate`) y "Ver GDD" (`onOpenGdd`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
   + "Agregar foto"; y estado con notas (título "Notas" + `LazyColumn` de `Card`s
   clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra
   `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
@@ -358,8 +359,38 @@ composeApp (Android app / commonMain) ──▶ core
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
   `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas e
   `image-capture-camera` la captura/adjunto de imagen (sólo al **crear**; sin
-  edición de adjuntos existentes ni render en la lista/detalle). Siguen fuera de
-  esta superficie la IA y el GDD.
+  edición de adjuntos existentes ni render en la lista/detalle). `gdd-view` agregó
+  la pantalla de GDD (ver abajo). Sigue fuera de esta superficie la IA.
+
+## GDD
+
+- **Proyección pura en `:core`** (`com.playbook.core.gdd`): `GddSection(track,
+  notes)` y `buildGdd(notes): List<GddSection>`. Agrupa por `track` en orden fijo
+  (`Track.entries`: `mecánicas`, `personajes`, `historia`) y añade una sección
+  "Sin track" (`track = null`) al final **sólo** si hay notas sin `track`. Las
+  tres secciones de `track` siempre están presentes (estructura estable); dentro
+  de cada sección se conserva el orden de entrada (`getAll()`:
+  `updated_at DESC, id DESC`). No muta la lista ni duplica notas. No depende de
+  SQLDelight ni de `AiClient`: el GDD **no es una entidad persistida**, es una
+  vista agregada sobre las Notas (`docs/domain-model.md`), sin tabla, query ni
+  migración propias.
+- **Pantalla `GddScreen`** (`:composeApp/commonMain`): render fino sobre
+  `buildGdd`. Encabezado "GDD" + resumen del total ("N notas"); un botón "Volver";
+  una sección por `track` (o "Sin track") con su conteo ("N notas") y el texto
+  "Sin notas en este track" cuando está vacía; y las notas en un `LazyColumn`
+  (`key = { it.id }`). Cada nota resume el `body` (máx. 2 líneas, ellipsis) y
+  muestra chips textuales de `status`, Etiquetas (si tiene) y "Imagen" (si tiene
+  adjuntos). Todo se comunica con texto, no sólo color (`DESIGN.md`).
+- **Estado vacío:** si `notes.isEmpty()`, mensaje explícito "Todavía no hay notas"
+  (con "0 notas" en el encabezado) sin secciones ni errores.
+- **Navegación (sin librería):** `NotesListScreen` "Ver GDD" →
+  `NotesDestination.Gdd`; tocar una nota → `NotesDestination.Edit(noteId)` (mismo
+  editor que desde la lista); "Volver" desde el GDD → `List`. **Limitación
+  aceptada:** al guardar/cancelar en el editor se vuelve a la lista, no al GDD (un
+  `previousDestination` llegará con una feature de navegación/detalle).
+- **Refresco:** `GddScreen` recibe `notes`/`attachmentCounts` ya hoisteados por
+  `App` (recargados por `refreshKey`); no lee la base dentro del cuerpo de
+  composición. No hay DI/`ViewModel`/Flow ni esquema/dependencias nuevos.
 
 ## Runtime surfaces
 
@@ -480,7 +511,9 @@ Comandos manuales equivalentes:
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).
 - Guardar el audio original del dictado como `Adjunto`
   (`voice-attachment-storage`): `voice-capture-stt` sólo persiste la transcripción.
-- Agrupado por `track` / vista GDD (`gdd-view`) y detalle de nota de sólo lectura.
+- Detalle de nota de sólo lectura (`note-links-ui`/posterior). La vista de GDD
+  (`gdd-view`) ya está implementada; volver al GDD tras editar desde él queda
+  fuera de alcance (ver sección GDD).
 - Manejo del back físico Android/iOS en el editor y en la captura de voz (hoy sólo
   "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).
