@@ -9,6 +9,7 @@ import com.playbook.core.model.Track
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -169,5 +170,36 @@ fun verifyNoteCrud(driver: SqlDriver) {
         repository.getAll(),
         secondRepository.getAll(),
         "una segunda instancia sobre el mismo driver relee lo persistido",
+    )
+
+    // --- Scenario 8: updateStatus toca sólo el estado ---------------------
+    // No se avanza `now`: `updateStatus` es un efecto de sistema y no debe
+    // re-sellar `updatedAt` (así una indexación en segundo plano no reordena la
+    // lista `updated_at DESC`).
+    val withStatus = repository.create(
+        NoteDraft(
+            owner = "owner-status",
+            body = "nota con estado",
+            track = Track.STORY,
+            tags = listOf("tag-uno", "tag-dos"),
+        ),
+    )
+    val frozenUpdatedAtStatus = withStatus.updatedAt
+    assertTrue(
+        repository.updateStatus(withStatus.id, NoteStatus.INDEXED),
+        "updateStatus de una nota existente devuelve true",
+    )
+    val rereadStatus = repository.getById(withStatus.id)
+    assertNotNull(rereadStatus)
+    assertEquals(NoteStatus.INDEXED, rereadStatus.status, "updateStatus cambia el status")
+    assertEquals(withStatus.body, rereadStatus.body, "updateStatus no toca body")
+    assertEquals(withStatus.track, rereadStatus.track, "updateStatus no toca track")
+    assertEquals(withStatus.tags, rereadStatus.tags, "updateStatus no toca tags")
+    assertEquals(withStatus.owner, rereadStatus.owner, "updateStatus no toca owner")
+    assertEquals(withStatus.createdAt, rereadStatus.createdAt, "updateStatus no toca createdAt")
+    assertEquals(frozenUpdatedAtStatus, rereadStatus.updatedAt, "updateStatus no re-sella updatedAt")
+    assertFalse(
+        repository.updateStatus("no-existe", NoteStatus.INDEXED),
+        "updateStatus de un id inexistente devuelve false y no lanza",
     )
 }

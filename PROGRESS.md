@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
-- Última feature `accepted`: `gdd-view` (2026-10-13; Session 029; validación independiente `accept`).
+- Última feature `accepted`: `ai-enrichment-classify-tags-type` (2026-10-13; Session 032; validación independiente `accept`); antes `gdd-view` (Session 031).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -17,7 +17,8 @@
 - `gdd-view` `accepted` (2026-10-13): primera vista de GDD — proyección pura de las Notas por `track` (`buildGdd`/`GddSection` en `:core`) + pantalla `GddScreen` (secciones por track, conteo global/por sección, chips de Etiquetas/`status`/"Imagen", abrir nota y "Volver"), sin tabla ni esquema nuevos (v4). Validada de forma independiente.
 - `ios-release-pipeline-scaffolding` `passing`: artefactos repo-side de release iOS verificados (scripts, scheme compartido, firma/identidad, versionado, `.gitignore`, runbook; Scenarios 1/2/7/8). Requiere validación independiente para `accepted`.
 - `ios-release-pipeline-first-upload` `blocked`: archive firmado + export `.ipa` + upload a TestFlight + device real (Scenarios 3–6) requieren Apple Developer Program + `TEAM_ID` + credenciales, ausentes en el entorno. Probado con `scripts/ios-release/preflight.sh` → exit 1. Ver `docs/release/ios-testflight.md`.
-- Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec.
+- `ai-enrichment-classify-tags-type` `accepted` (2026-10-13; validación independiente `accept` en `docs/validations/ai-enrichment-classify-tags-type.md`): indexado asíncrono + transiciones de `NoteStatus`. `NoteIndexingOrchestrator.index(note)` reutiliza `NoteIndexingService` y persiste: éxito→`INDEXED`; fallo→`PENDING` salvo Nota ya `INDEXED` (no se degrada); **nunca** escribe `FAILED`. `NoteRepository.updateStatus` (query `updateNoteStatus`, sólo `status`, sin re-sellar `updated_at`) sin cambio de esquema (sigue v4). Alcance re-derivado: la IA no clasifica ni etiqueta.
+- Current next ready features: `semantic-linking` y `voice-attachment-storage` (dependencias ya `accepted`); requieren spec. `note-enrichment-status-ui` y `offline-pending-retry` quedan dependency-ready (`ai-enrichment-classify-tags-type` ya `accepted`); requieren spec.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-13.
 
@@ -633,3 +634,27 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md` (por el orquestador al persistir la aceptación).
 - Known risk or unresolved issue: hallazgos Low no bloqueantes del validador — F1 línea en blanco al final de `docs/technical-discovery.md`; F2 comentario de `LabelChip.kt` que menciona el editor (que usa su propio `TagChip`); F3 aserción tautológica de no-mutación en `GddProjectionCheck.kt`; F4 smoke iOS del GDD no automatizado (limitación de tooling, declarada honestamente). Al guardar/cancelar en el editor abierto desde el GDD se vuelve a la lista, no al GDD (limitación aceptada; `previousDestination` en una feature de navegación/detalle posterior).
 - Next best step: crear spec de `semantic-linking` o `voice-attachment-storage` con `$feature-spec` (ambas con dependencias ya `accepted`).
+### Session 032
+
+- Date: 2026-10-13
+
+- Goal: implementar `ai-enrichment-classify-tags-type` (spec `docs/specs/ai-enrichment-classify-tags-type.md`): indexado asíncrono + transiciones de `NoteStatus`.
+- Completed:
+  - Alcance re-derivado por el planner: la feature es el pipeline de **indexado asíncrono** + transición de `NoteStatus`; **no** clasifica ni etiqueta (clasificación IA descartada en `CONTEXT.md`), no crea Enlaces (`semantic-linking`) y no escribe `FAILED`/reintenta (`offline-pending-retry`).
+  - `:core`: query `updateNoteStatus` en `Note.sq` (sólo query; **sin cambio de esquema**, sigue v4) y `NoteRepository.updateStatus(id, status)` + implementación en `SqlDelightNoteRepository` (escribe sólo `status`, **no** re-sella `updated_at`; `rowsAffected > 0`).
+  - `NoteIndexingOrchestrator(indexingService, noteRepository)` (`com.playbook.core.ai`): `suspend index(note): NoteStatus` reutiliza `NoteIndexingService` sin modificarlo; éxito→`INDEXED`; fallo→`PENDING` salvo Nota ya `INDEXED` (se queda `INDEXED`, embedding previo intacto); nunca propaga el fallo de IA ni escribe `FAILED`.
+  - Tests: `verifyNoteIndexingOrchestrator(driver)` (escenarios 1–7) en `commonTest` + `@Test` Android (`JdbcSqliteDriver.IN_MEMORY`) e iOS (`inMemoryDriver`); `verifyNoteCrud` extendido con el Scenario 8 (`updateStatus` sólo toca `status`, id inexistente→false).
+  - Docs: `ARCHITECTURE.md` (AI, dominio/repositorio y query), `docs/technical-discovery.md` (nueva "Indexing Decisions"), `CONSTRAINTS.md` (MUST NOT durable de indexado) y `AGENTS.md` (línea "Próxima feature en cola").
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM **17/17** (NoteIndexingOrchestratorAndroidTest 1/1 nuevo, NoteRepositoryAndroidTest 3/3 con Scenario 8, NoteIndexing 1/1, EmbeddingRepository 1/1, AttachmentRepository 1/1, NotePersistence 2/2, DatabaseMigration 1/1, Migration 1/1, AiClient 3/3, AiRuntimeSpike 2/2, Greeting 1/1), 0 failures.
+  - `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; iOS **17/17** (NoteIndexingOrchestratorIosTest 1/1 nuevo), 0 failures.
+  - `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (57 tasks).
+  - `PlaybookDatabaseImpl.Schema.version = 4`; `find core/src -name '*.sqm'` → `1.sqm`/`2.sqm`/`3.sqm` (sin `.sqm` nuevo); `Note.sq` sólo suma la query.
+  - `./init.sh` → exit 0, sin procesos de larga duración; `init.sh` sin cambios.
+  - Controles negativos reproducidos y restaurados byte-idénticos: (1) orquestador forzado a `INDEXED` siempre → falla `NoteIndexingOrchestratorAndroidTest` (aserciones de fallo→`PENDING`: escenarios 2/3/5); (2) `updateNoteStatus` con `updated_at = updated_at + 1` → falla `NoteRepositoryAndroidTest.crudRoundTrip` (Scenario 8). Suites re-ejecutadas en verde tras restaurar.
+  - Alcance verificado: `git diff` vacío para `NoteIndexingService.kt`, `AiClient.kt`, `embedding.sq`, `1.sqm`, `:composeApp`, `iosApp`, `init.sh` y `libs.versions.toml`; sin clasificación IA/etiquetas IA ni entidad `enlace` en el diff.
+- Evidence captured: arreglo `evidence` de `ai-enrichment-classify-tags-type` en `feature_list.json` (11 líneas) + `docs/validations/ai-enrichment-classify-tags-type.md`.
+- Files or artifacts updated: `core/src/commonMain/sqldelight/com/playbook/core/db/Note.sq`, `core/src/commonMain/kotlin/com/playbook/core/repository/{NoteRepository,SqlDelightNoteRepository}.kt`, `core/src/commonMain/kotlin/com/playbook/core/ai/NoteIndexingOrchestrator.kt` (nuevo), `core/src/commonTest/kotlin/com/playbook/core/ai/NoteIndexingOrchestratorCheck.kt` (nuevo), `core/src/commonTest/kotlin/com/playbook/core/repository/NoteRepositoryCheck.kt`, `core/src/androidUnitTest/kotlin/com/playbook/core/ai/NoteIndexingOrchestratorAndroidTest.kt` (nuevo), `core/src/iosTest/kotlin/com/playbook/core/ai/NoteIndexingOrchestratorIosTest.kt` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: sin wiring a la app ni UI (intencional; no hay disparador de ciclo de vida ni superficie observable, llega con `note-enrichment-status-ui`/`offline-pending-retry`). `FAILED` sigue sin escribirse (decisión de alcance). No hay E2E persistente (la spec lo justifica). La terminología obsoleta "categoría/tipo/etiquetas IA" de features vecinas (`note-enrichment-status-ui`, `gdd-view`, `offline-pending-retry`, `enrichment-observability-logging`) sigue registrada para re-derivarse.
+- Validation: validación independiente (`docs/validations/ai-enrichment-classify-tags-type.md`) → **accept** (2026-10-13). El validador re-ejecutó `./init.sh` (exit 0), los tests del core en Android/JVM e iOS (17/0 en cada plataforma), `assembleDebug` + link del framework iOS y confirmó esquema v4 sin `.sqm` nuevo; reprodujo y restauró sus propios controles negativos y no halló findings Critical/High/Medium (dos Low no bloqueantes: cita de escenarios corregida a 2/3/5 y el contrato del llamador sobre `note.status`). Feature promovida a `accepted`; commit `feature: complete ai-enrichment-classify-tags-type`.
+- Next best step: crear spec de `semantic-linking` (o `note-enrichment-status-ui`/`offline-pending-retry`, ya dependency-ready) con `$feature-spec`.

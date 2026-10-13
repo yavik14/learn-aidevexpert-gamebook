@@ -21,6 +21,9 @@ MVP; ver `docs/adr/0002-ocr-decision.md`), `ios-release-pipeline` el pipeline de
 release de iOS (archive/export/upload a TestFlight) con firma, versionado y reglas
 de secretos, y `gdd-view` la primera vista de GDD (proyección pura de las Notas
 por `track` + pantalla navegable).
+`ai-enrichment-classify-tags-type` agrega el orquestador de indexado asíncrono
+(`NoteIndexingOrchestrator`) y las transiciones de `NoteStatus` derivadas del
+resultado del embedding, sin cambio de esquema (sigue v4).
 
 ## Modules
 
@@ -52,7 +55,8 @@ composeApp (Android app / commonMain) ──▶ core
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
 - **Esquema v4:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
-  `selectNoteById`, `updateNote`, `deleteNoteById`), tabla `embedding` (`note_id`
+  `selectNoteById`, `updateNote`, `updateNoteStatus`, `deleteNoteById`), tabla
+  `embedding` (`note_id`
   PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
   `indexed_at`), tabla `note_tag` (`note_id`, `label`, PK `(note_id, label)`; N—N
   sin FK, limpieza explícita en el repositorio) y tabla `attachment` (`id`,
@@ -112,10 +116,15 @@ composeApp (Android app / commonMain) ──▶ core
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.
 - **Repositorio** (`com.playbook.core.repository`): interfaz `NoteRepository`
-  (`create`/`getAll`/`getById`/`update`/`delete`) e implementación
+  (`create`/`getAll`/`getById`/`update`/`updateStatus`/`delete`) e implementación
   `SqlDelightNoteRepository(database, idFactory, clock)`. `update` re-sella
   `updated_at` con `clock()` (ignora el del argumento) y preserva
   `owner`/`created_at`; `update`/`delete` devuelven `rowsAffected > 0`.
+  - `updateStatus(id, status)` es la transición **aislada** de estado que usa el
+    pipeline de indexado: escribe sólo `status` y **no** re-sella `updated_at`
+    (efecto de sistema, no edición del usuario; así una indexación en segundo
+    plano no reordena la lista `updated_at DESC`), ni toca
+    `body`/`track`/`tags`/`owner`/`created_at`. Devuelve `rowsAffected > 0`.
   - Etiquetas: `create` normaliza y persiste `insertNote` + `insertNoteTag` en
     una transacción; `getById` lee `selectTagsByNoteId`; `getAll` usa
     `selectAllNoteTags` agrupado en memoria (evita N+1); `update` reemplaza el
@@ -243,10 +252,25 @@ composeApp (Android app / commonMain) ──▶ core
   toca `NoteStatus`**: un fallo de IA no degrada la Nota (la captura nunca se
   bloquea por IA). La fuente de verdad de "tiene embedding" es la fila en
   `embedding`.
-- **Sin wiring a la UI todavía:** `NoteIndexingService`/`EmbeddingRepository`
-  existen y están cubiertos por tests, pero `AiClient` **no** se cablea a `App`
-  ni a los entry points; no hay superficie observable ni token de ciclo de vida
-  que lo dispare (llegará con `note-enrichment-status-ui`/`offline-pending-retry`).
+- **Orquestador de indexado asíncrono**
+  (`com.playbook.core.ai.NoteIndexingOrchestrator`, `ai-enrichment-classify-tags-type`):
+  `index(note: Note): NoteStatus` (`suspend`) reutiliza `NoteIndexingService` **sin
+  modificarlo** y persiste la transición de `NoteStatus` derivada del resultado:
+  éxito (`IndexingResult.Indexed`) → `INDEXED`; fallo (`IndexingResult.Failed`) →
+  `PENDING` **salvo** que la Nota **ya** estuviera `INDEXED`, en cuyo caso se queda
+  `INDEXED` (un re-indexado fallido no degrada lo ya indexado y deja el embedding
+  previo intacto). **No escribe `FAILED`**: la promoción `pendiente → fallida` y
+  los reintentos son de `offline-pending-retry`. El fallo de IA nunca se propaga
+  (`NoteIndexingService` lo convierte en `IndexingResult.Failed`), así la captura
+  nunca se bloquea. No clasifica ni etiqueta la Nota y **no** crea Enlaces
+  (`semantic-linking`). Es `suspend` y no agenda nada: el llamador decide cuándo
+  invocarlo, fuera del camino de captura. La transición usa
+  `NoteRepository.updateStatus` (sólo `status`, sin re-sellar `updated_at`).
+- **Sin wiring a la UI todavía:** `NoteIndexingService`/`NoteIndexingOrchestrator`/
+  `EmbeddingRepository` existen y están cubiertos por tests, pero `AiClient` **no**
+  se cablea a `App` ni a los entry points; no hay superficie observable ni token de
+  ciclo de vida que lo dispare (llegará con
+  `note-enrichment-status-ui`/`offline-pending-retry`).
   La inyección se materializa en los tests del contrato (dos implementaciones por
   el mismo puerto) y en `NoteIndexingService`.
 - **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato

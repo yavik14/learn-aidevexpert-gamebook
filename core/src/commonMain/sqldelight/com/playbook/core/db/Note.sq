@@ -26,5 +26,12 @@ SELECT * FROM note WHERE id = ?;
 updateNote:
 UPDATE note SET body = ?, track = ?, status = ?, updated_at = ? WHERE id = ?;
 
+-- Transición aislada de estado del pipeline de indexado (`NoteIndexingOrchestrator`).
+-- No re-sella `updated_at`: indexar es un efecto de sistema, no una edición del
+-- usuario, así una indexación en segundo plano no reordena la lista (`selectAllNotes`
+-- ordena por `updated_at DESC`). Es un cambio de query, no de esquema (sigue v4).
+updateNoteStatus:
+UPDATE note SET status = ? WHERE id = ?;
+
 deleteNoteById:
 DELETE FROM note WHERE id = ?;

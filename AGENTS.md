@@ -33,8 +33,11 @@ artefactos repo-side verificados (scripts, scheme compartido, firma, versionado,
 (`ios-release-pipeline-first-upload`) queda `blocked` sin Apple Developer Program
 + credenciales (ver `docs/release/ios-testflight.md`). **Nunca** versionar
 keystores ni secrets.
-Próximas features en cola: `semantic-linking` y `voice-attachment-storage`
-(dependencias ya `accepted`); requieren spec.
+Próximas features en cola: `ai-enrichment-classify-tags-type` (indexado asíncrono
++ transiciones de `NoteStatus`) quedó `accepted` (2026-10-13, validación
+independiente `accept`); `semantic-linking` (depende de `embeddings-generation`,
+ya `accepted`) y `voice-attachment-storage` (depende de `voice-capture-stt`)
+requieren spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

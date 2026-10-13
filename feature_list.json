@@ -251,19 +251,37 @@
   {
     "id": "ai-enrichment-classify-tags-type",
     "area": "ai",
-    "title": "Enriquecimiento async: categoría, etiquetas y tipo",
-    "user_visible_behavior": "Al guardar una nota, un job async asigna categoría, etiquetas y tipo; la nota pasa por capturada/pendiente/enriquecida/fallida.",
+    "title": "Indexado asíncrono y transiciones de estado de la Nota",
+    "user_visible_behavior": "Al indexar una nota, se genera y persiste su embedding y la nota pasa de capturada a indexada; si la IA falla o no está disponible queda pendiente, sin bloquear nunca la captura.",
     "depends_on": [
       "ai-client-interface",
       "ai-runtime-decision",
       "note-category-and-tags"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: test con AiClient fake que verifica la transición de estados; la captura nunca se bloquea por la IA."
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; `NoteIndexingOrchestratorAndroidTest` 1/1 (nuevo) + `NoteRepositoryAndroidTest` 3/3 (con el Scenario 8 de `updateStatus`) + NoteIndexing 1/1 + EmbeddingRepository 1/1 + AttachmentRepository 1/1 + NotePersistence 2/2 + DatabaseMigration 1/1 + Migration 1/1 + AiClient 3/3 + AiRuntimeSpike 2/2 + Greeting 1/1; 17/17, 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; los mismos 17 tests en iOS (incluye `NoteIndexingOrchestratorIosTest` 1/1), 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "`PlaybookDatabase.Schema.version == 4` y sin `.sqm` nuevo (`1.sqm`, `2.sqm`, `3.sqm` sin cambios); `updateNoteStatus` es sólo una query (no toca el esquema).",
+      "`./init.sh` → exit 0; gate no bloqueante, sin dev servers ni simuladores, `init.sh` sin cambios.",
+      "Control negativo: forzar el orquestador a devolver siempre `INDEXED` (ignorar `Failed`) hace fallar `NoteIndexingOrchestratorAndroidTest` (aserciones de fallo→`PENDING`: escenarios 2/3/5); `updateStatus` que re-sella `updated_at` hace fallar `NoteRepositoryAndroidTest.crudRoundTrip` (Scenario 8). Ambos restaurados byte-idénticos.",
+      "E2E persistente: no aplica (sin flujo de usuario/API observable: sin UI ni wiring; no hay harness E2E y `init.sh` no levanta simuladores). La cobertura es de tests del core en dos plataformas + compilación de la app."
     ],
-    "evidence": [],
-    "notes": "Ciclo definido en docs/domain-model.md. Todo debe ser tolerante a fallos."
+    "evidence": [
+      "2026-10-13: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL in 1m39s (16 tasks); Android/JVM 17 tests, 0 failures: NoteIndexingOrchestratorAndroidTest 1/1 (nuevo), NoteRepositoryAndroidTest 3/3 (crudRoundTrip con Scenario 8 + tagsRoundTrip + migrationV1ToV4PreservesNotes), NoteIndexingAndroidTest 1/1, EmbeddingRepositoryAndroidTest 1/1, AttachmentRepositoryAndroidTest 1/1, NotePersistenceAndroidTest 2/2, DatabaseMigrationAndroidTest 1/1, MigrationAndroidTest 1/1, AiClientAndroidTest 3/3, AiRuntimeSpikeAndroidTest 2/2, GreetingTest 1/1 (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-13: `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL in 2m16s; iOS 17 tests, 0 failures: NoteIndexingOrchestratorIosTest 1/1 (nuevo), NoteRepositoryIosTest 3/3, NoteIndexingIosTest 1/1, EmbeddingRepositoryIosTest 1/1, AttachmentRepositoryIosTest 1/1, NotePersistenceIosTest 2/2, DatabaseMigrationIosTest 1/1, MigrationIosTest 1/1, AiClientIosTest 3/3, AiRuntimeSpikeIosTest 2/2, GreetingTest 1/1 (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-13: `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL in 5m36s (57 actionable tasks).",
+      "2026-10-13: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin dev servers ni simuladores; `git diff -- init.sh` vacío.",
+      "2026-10-13: `PlaybookDatabaseImpl.Schema.version` = 4 (core/build/generated/.../PlaybookDatabaseImpl.kt:37); `find core/src -name '*.sqm'` → sólo `1.sqm`, `2.sqm`, `3.sqm` (sin `.sqm` nuevo); `git diff Note.sq` sólo agrega la query `updateNoteStatus`, sin líneas de esquema.",
+      "2026-10-13: escenarios 1–7 cubiertos por `verifyNoteIndexingOrchestrator(driver)` en commonTest: capturada+éxito→indexada (embedding persistido); fallo de IA→pendiente sin fila y sin lanzar; respuesta inválida (0 vectores, >1 vector, dimensión 0)→pendiente sin fila; pendiente+éxito→indexada (reintento); pendiente+fallo→sigue pendiente (nunca FAILED); re-indexado exitoso de indexada→sigue indexada con una sola fila y values nuevos; re-indexado fallido de indexada→no se degrada y el embedding previo queda intacto. Scenario 8 en `verifyNoteCrud`: `updateStatus` cambia sólo `status` y preserva body/track/tags/owner/createdAt/updatedAt; id inexistente→false.",
+      "2026-10-13: control negativo 1: `NoteIndexingOrchestrator.index` forzado a `NoteStatus.INDEXED` (ignorando `Failed`) → `:core:testDebugUnitTest --tests ...NoteIndexingOrchestratorAndroidTest` FAILED (`transitionsNoteStatusByIndexingResult`, java.lang.AssertionError); restaurado (hash 789e78bd…) y re-ejecutado en verde.",
+      "2026-10-13: control negativo 2: `updateNoteStatus` con `updated_at = updated_at + 1` → `:core:testDebugUnitTest --tests ...NoteRepositoryAndroidTest` FAILED (`crudRoundTrip`, java.lang.AssertionError); restaurado (Note.sq hash 18a0f10c…) y re-ejecutado en verde.",
+      "2026-10-13: suites re-ejecutadas tras restaurar: `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL in 1m28s (20 tasks), 0 failures en ambos.",
+      "2026-10-13: alcance: `git diff --stat` vacío para `core/src/commonMain/kotlin/com/playbook/core/ai/NoteIndexingService.kt`, `AiClient.kt`, `embedding.sq`, `1.sqm`, `:composeApp`, `iosApp`, `init.sh` y `gradle/libs.versions.toml`; sin clasificación IA/categoría/tipo/etiquetas IA ni tabla/entidad `enlace` en el diff.",
+      "2026-10-13: validación independiente (accept). El validador re-ejecutó `./init.sh` (exit 0, sin dev servers/simuladores, `init.sh` sin cambios), `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` (17/0 en cada plataforma; conteos de `core/build/test-results/*/TEST-*.xml`, incluye `NoteIndexingOrchestrator*Test` 1/1 nuevo), `:composeApp:assembleDebug` + link framework iOS (57 tasks) y confirmó `Schema.version == 4` sin `.sqm` nuevo. Corrió sus propios controles negativos (orquestador forzado a `INDEXED` → falla `NoteIndexingOrchestratorAndroidTest`; `updateNoteStatus` re-sellando `updated_at` → falla `NoteRepositoryAndroidTest.crudRoundTrip`), ambos restaurados byte-idénticos (hashes coincidentes con los del implementer) y re-verificados en verde. Confirmó scope (`git diff` vacío en paths protegidos, una sola implementación de `NoteRepository`, sin cableado a UI), seguridad (sin secrets/deps nuevas/red) y docs durables (`ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md` MUST NOT, `AGENTS.md` sólo la línea de próxima feature). Registro en `docs/validations/ai-enrichment-classify-tags-type.md`. Hallazgos Low no bloqueantes: cita imprecisa de escenarios en el control negativo (corregida a 2/3/5 en esta evidencia) y el orquestador decide con el `status` del argumento `Note` (contrato del llamador, a documentar al cablearse)."
+    ],
+    "notes": "Alcance re-derivado (spec docs/specs/ai-enrichment-classify-tags-type.md): indexado asíncrono + transiciones de NoteStatus. La clasificación IA de categoría/tipo y las etiquetas IA están descartadas (CONTEXT.md); los enlaces son de semantic-linking; el reintento y pendiente→fallida son de offline-pending-retry. Sin cambio de esquema (status ya existe, v4)."
   },
   {
     "id": "note-enrichment-status-ui",
