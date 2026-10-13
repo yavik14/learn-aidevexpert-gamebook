@@ -32,6 +32,9 @@ sealed interface NotesDestination {
     data class Edit(val noteId: String) : NotesDestination
     data object VoiceCapture : NotesDestination
 
+    /** Vista de GDD: proyección de las Notas agrupadas por `track`. */
+    data object Gdd : NotesDestination
+
     /** Creación con una imagen recién capturada/elegida, todavía en memoria. */
     data class CreateWithImage(val image: PickedImage) : NotesDestination
 }
@@ -162,6 +165,14 @@ fun App(
                     voiceState = VoiceUiState.Idle
                     destination = NotesDestination.VoiceCapture
                 },
+                onOpenGdd = { destination = NotesDestination.Gdd },
+            )
+
+            NotesDestination.Gdd -> GddScreen(
+                notes = notes,
+                attachmentCounts = attachmentCounts,
+                onOpenNote = { noteId -> destination = NotesDestination.Edit(noteId) },
+                onBack = ::goToList,
             )
 
             NotesDestination.Create -> NoteEditorScreen(

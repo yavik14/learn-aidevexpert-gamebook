@@ -546,3 +546,43 @@ Implementado 2026-10-09 (artefactos repo-side; upload account-gated). Detalle en
 - **Bloqueo:** sin Apple Developer Program + credenciales (`TEAM_ID`, identidad
   o API key) no se puede firmar/exportar/subir. La feature queda `blocked` (no
   `passing`) hasta ejecutar Scenarios 3–6 en un entorno con cuenta.
+
+## GDD Decisions (gdd-view)
+
+Implementado 2026-10-13. Detalle en `ARCHITECTURE.md`.
+
+- **GDD = proyección, no entidad:** el GDD agrupa/resume las Notas por `track` y
+  **no** tiene tabla, query ni migración propias (`docs/domain-model.md`). Se
+  reutiliza `NoteRepository.getAll()` (ya ordenado `updated_at DESC, id DESC` y
+  con etiquetas); el esquema sigue en **v4** sin `.sqm` nuevos.
+- **Terminología reconciliada:** el entry de `feature_list.json` decía "por
+  categoría/etiqueta" (obsoleto). No hay agrupación por Etiqueta ni
+  Categoría/Tipo/Nivel: el `track` (enum fijo) estructura el GDD y las Etiquetas
+  se muestran como chips. `docs/specs/note-category-and-tags.md` ya lo había
+  señalado.
+- **Agregación en `:core` (testeable):** `com.playbook.core.gdd.buildGdd(notes):
+  List<GddSection>` es una función pura sobre el modelo (sin SQLDelight ni
+  `AiClient`). Orden fijo `Track.entries` (`mecánicas`/`personajes`/`historia`)
+  + "Sin track" (`track = null`) al final **sólo** si hay notas sin `track`; las
+  tres secciones de `track` siempre están presentes. Conserva el orden de entrada
+  y no muta ni duplica notas. Se cubre con `verifyGddProjection()` en `commonTest`
+  corrido en Android/JVM e iOS (sin harness de UI no se puede testear la pantalla;
+  la lógica sí queda con tests cross-platform deterministas).
+- **UI fina sin DI/ViewModel/Flow:** `GddScreen` recibe `notes`/`attachmentCounts`
+  y sólo emite `onOpenNote`/`onBack`. Encabezado "GDD" + total ("N notas"), un
+  `LazyColumn` con una sección por `track` (conteo "N notas" y texto "Sin notas en
+  este track" si vacía) y las notas resumidas (cuerpo a 2 líneas + chips de
+  `status`/Etiquetas/"Imagen"). Todo con texto, no sólo color (`DESIGN.md`).
+- **Navegación local:** nuevo `NotesDestination.Gdd`; "Ver GDD" en
+  `NotesListScreen` abre el GDD; tocar una nota abre el editor existente
+  (`NotesDestination.Edit`); "Volver" regresa a `List`. Sin librería de
+  navegación. **Limitación aceptada:** al guardar/cancelar en el editor se vuelve a
+  la lista, no al GDD (un `previousDestination` llegará con una feature de
+  navegación/detalle).
+- **Refresco:** `GddScreen` consume el estado hoisteado por `App` (recargado por
+  `refreshKey`); no lee la base en el cuerpo de composición. Editar/crear/borrar
+  desde otra pantalla se refleja al reabrir el GDD.
+- **Sin deps ni esquema:** `Scaffold`/`Card`/`LazyColumn`/`Surface` ya estaban;
+  no se agregaron dependencias y `init.sh` no cambió. `LOCAL_OWNER_ID`/`:core`
+  sin cambios de contrato.
+
