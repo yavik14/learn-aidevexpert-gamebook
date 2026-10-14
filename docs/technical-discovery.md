@@ -833,8 +833,9 @@ Implementado 2026-10-09 (artefactos repo-side; upload account-gated). Detalle en
   `[FAIL]` accionables por prerequisito. Los artefactos de firma/release están en
   `.gitignore`.
 - **Bloqueo:** sin Apple Developer Program + credenciales (`TEAM_ID`, identidad
-  o API key) no se puede firmar/exportar/subir. La feature queda `blocked` (no
-  `passing`) hasta ejecutar Scenarios 3–6 en un entorno con cuenta.
+  o API key) no se puede firmar/exportar/subir; los Scenarios 3–6 quedan
+  account-gated en `ios-release-pipeline-first-upload` (`blocked`). El
+  **scaffolding** repo-side está verificado y `accepted`.
 
 ## GDD Decisions (gdd-view)
 

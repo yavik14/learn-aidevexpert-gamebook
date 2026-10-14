@@ -34,8 +34,8 @@ auto-verificada (`passing`): proyección pura de las Notas por `track` (`buildGd
 en `:core`) + pantalla `GddScreen`, sin tabla ni esquema nuevos; requiere
 validación independiente para `accepted`. El pipeline de release de iOS
 (`ios-release-pipeline-scaffolding`) tiene los artefactos repo-side verificados
-(scripts, scheme compartido, firma, versionado, `.gitignore`, runbook) y está
-`passing`; el upload firmado a TestFlight
+(scripts, scheme compartido, firma, versionado, `.gitignore`, runbook) y quedó
+`accepted` (validación independiente `accept`); el upload firmado a TestFlight
 (`ios-release-pipeline-first-upload`) queda `blocked` sin Apple Developer Program
 + credenciales (ver `docs/release/ios-testflight.md`). **Nunca** versionar
 keystores ni secrets.
