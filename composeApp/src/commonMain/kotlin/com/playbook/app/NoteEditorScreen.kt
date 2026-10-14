@@ -47,10 +47,12 @@ import com.playbook.core.model.normalizeTags
  *   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
  * - Si hay una [initialImage] se muestra una previsualización y "Quitar imagen".
  * - En modo edición se ofrece "Borrar", con `AlertDialog` de confirmación. La
- *   acción no destructiva es explícita: "Cancelar".
+ *   acción no destructiva es explícita: "Cancelar". Si [onOpenRelated] no es null
+ *   (modo edición) también se ofrece "Ver relacionadas".
  *
  * La pantalla es "tonta": mantiene el borrador local y emite `onSave`/`onDelete`/
- * `onCancel`/`onRemoveImage`; la persistencia y el refresco los maneja [App].
+ * `onCancel`/`onRemoveImage`/`onOpenRelated`; la persistencia, el refresco y la
+ * navegación los maneja [App].
  */
 @Composable
 fun NoteEditorScreen(
@@ -63,6 +65,7 @@ fun NoteEditorScreen(
     onDelete: (() -> Unit)?,
     onCancel: () -> Unit,
     onRemoveImage: (() -> Unit)?,
+    onOpenRelated: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
@@ -169,6 +172,15 @@ fun NoteEditorScreen(
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
+        if (isEditing && onOpenRelated != null) {
+            // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
+            // Borrar/Cancelar/Guardar empujaba "Guardar" fuera del borde visible.
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onOpenRelated) {
+                    Text(text = "Ver relacionadas")
+                }
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

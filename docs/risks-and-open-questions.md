@@ -32,9 +32,12 @@
   `semantic-linking` (2026-10-13). Enlaces **bidireccionales guardados una sola
   vez** con orden canónico `note_a_id < note_b_id` (se leen desde ambos lados);
   umbral inclusivo `score >= 0.8` (`DEFAULT_SIMILARITY_THRESHOLD`, inyectable);
-  recomputo explícito e idempotente (`SemanticLinkingService.recomputeAll()`).
-  Queda como **follow-up**: el **trigger** del recomputo (al indexar/editar,
-  offline) y la UI de lectura (`note-links-ui`).
+  recomputo explícito e idempotente (`SemanticLinkingService.recomputeAll()`). La
+  **UI de lectura** quedó **resuelta** en `note-links-ui` (2026-10-14;
+  `RelatedNotesScreen` + proyección `buildRelatedNotes`), con un **trigger mínimo
+  best-effort al abrir** "Notas relacionadas". Queda como **follow-up**: el
+  **trigger de ciclo de vida** del recomputo (al indexar/editar, offline) y el
+  recomputo incremental/background.
 - **Respuesta RAG desde las Notas propias:** **resuelto** en `rag-query`
   (2026-10-13). El retrieval por similitud coseno es real y la respuesta se genera
   con `GenerateRequest(prompt, context = cuerpos recuperados)`; sin Notas
