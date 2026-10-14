@@ -309,13 +309,14 @@ composeApp (Android app / commonMain) ──▶ core
   (`semantic-linking`). Es `suspend` y no agenda nada: el llamador decide cuándo
   invocarlo, fuera del camino de captura. La transición usa
   `NoteRepository.updateStatus` (sólo `status`, sin re-sellar `updated_at`).
-- **Primer wiring a la UI (`rag-query`, 2026-10-13):** los composition roots
-  construyen `SqlDelightEmbeddingRepository`, `FakeAiClient`,
-  `NoteIndexingService` y `RagQueryService` y los pasan a `App(...)`. `App`
-  indexa best-effort al guardar/editar una Nota con `body` no vacío (ver "RAG") y
-  la pantalla de consulta invoca `RagQueryService.ask`. El wiring de
-  estados/reintento del indexado sigue siendo de
-  `note-enrichment-status-ui`/`offline-pending-retry`.
+- **Wiring a la UI (`rag-query` 2026-10-13; `note-enrichment-status-ui` 2026-10-14):**
+  los composition roots construyen `SqlDelightEmbeddingRepository`, `FakeAiClient`,
+  `NoteIndexingService`, `NoteIndexingOrchestrator` y `RagQueryService` y los pasan
+  a `App(...)`. `App` indexa best-effort al guardar/editar una Nota con `body` no
+  vacío vía `NoteIndexingOrchestrator` (transiciona `NoteStatus` y refresca el
+  badge) y la pantalla de consulta invoca `RagQueryService.ask`. El editor permite
+  re-indexar a mano una Nota no indexada. El reintento automático, el scheduling y
+  la promoción `pendiente → fallida` siguen siendo de `offline-pending-retry`.
 - **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato
   `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
   **1.10.1**, compatible con Kotlin 2.1.21.
@@ -421,7 +422,7 @@ composeApp (Android app / commonMain) ──▶ core
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
   attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber,
-  noteIndexingService: NoteIndexingService, ragQueryService: RagQueryService,
+  noteIndexingOrchestrator: NoteIndexingOrchestrator, ragQueryService: RagQueryService,
   noteLinkRepository: NoteLinkRepository, semanticLinkingService: SemanticLinkingService)`
   es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
   (`mutableStateOf`), `destination` (`NotesDestination`:
@@ -446,7 +447,8 @@ composeApp (Android app / commonMain) ──▶ core
   clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra
   `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
   "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
-  (o "Sin track") y `status.code`, y —si `note.tags` no está vacía— una fila de
+  (o "Sin track") y un `StatusBadge` con la etiqueta legible del `status`, y —si
+  `note.tags` no está vacía— una fila de
   chips de etiqueta (misma `LabelChip`, en `Row` con `horizontalScroll`). Todo se
   comunica con texto, no sólo color (`DESIGN.md`).
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
@@ -461,11 +463,20 @@ composeApp (Android app / commonMain) ──▶ core
   placeholder de fallo si no decodifica. En edición, si llega `onOpenRelated` no
   nulo, ofrece "Ver relacionadas" en una **fila propia** (en pantallas angostas no
   cabe junto a Borrar/Cancelar/Guardar y empujaría "Guardar" fuera del borde).
+  En edición, si llega `initialStatus` (no null) muestra un `StatusBadge` de sólo
+  lectura y —si `onReindex` no es null— el botón "Re-indexar", habilitado sólo si
+  el estado no es `INDEXED` y el `body` del borrador no está en blanco; re-indexar
+  **no** reescribe `track`/`tags`/`body` (sólo dispara el enriquecimiento).
   Mantiene el borrador local
   (`body`/`track`/`tags`) y emite
-  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`;
+  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`;
   la persistencia, el refresco y la navegación los maneja `App`. No hay control de
   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
+- **`EnrichmentStatus`** (`commonMain`, `note-enrichment-status-ui`):
+  `statusLabel(NoteStatus)` (etiqueta en español, única fuente del texto mostrado
+  al usuario) y `StatusBadge(status)`, un `Surface` con borde y texto que **nunca**
+  comunica sólo con color; es el "Badge de Estado" de `DESIGN.md` y lo reutilizan
+  la lista de Notas y el editor.
 - **`VoiceCaptureScreen`**: pantalla "tonta" de dictado. Recibe
   `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
   `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
@@ -507,7 +518,13 @@ composeApp (Android app / commonMain) ──▶ core
   (cubre imágenes y audio por la ruta relativa); siempre `reload()` y vuelta a la
   lista. El `status` no se edita desde la UI. Si el `id` en `Edit(noteId)` ya no
   existe en `notes`, se vuelve a la lista. Tras crear o editar (texto/voz/imagen)
-  con `body` no vacío se dispara el indexado best-effort; la consulta RAG llama
+  con `body` no vacío se dispara el indexado best-effort (`indexBestEffort`), que
+  llama `NoteIndexingOrchestrator.index` y —al resolver el `suspend`— `reload()`,
+  de modo que el badge muestra el estado **real** (antes el `status` quedaba en
+  `capturada`). Una Nota de sólo imagen no se indexa. El editor ofrece además el
+  **re-indexado manual** (`reindex(note)`, mismo orquestador + `reload()`),
+  habilitado sólo si el estado no es `INDEXED` y hay texto; no agenda nada ni
+  detecta conectividad (`offline-pending-retry`). La consulta RAG llama
   `ragQueryService.ask(question)` y muestra el `Answered(text, sources)` con la
   respuesta y sus **citas** (tocar una cita abre la Nota fuente con `Edit`).
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
@@ -706,10 +723,9 @@ Comandos manuales equivalentes:
   ciclo de vida** (al indexar/editar, offline) y el recomputo incremental.
   `rag-query` expone `cosineSimilarity` y hace retrieval **efímero** (no crea
   filas `link` ni define umbral); `rag-answer-citations` renderiza esas fuentes
-  como citas y navega a la Nota, sin persistir el enlace. El wiring de
-  estados/reintento del indexado
-  (`note-enrichment-status-ui`, `offline-pending-retry`) sigue pendiente; el
-  indexado best-effort de `rag-query` no transiciona `NoteStatus`. El
+  como citas y navega a la Nota, sin persistir el enlace. El estado de indexado ya
+  es visible (badge textual) y re-indexable a mano (`note-enrichment-status-ui`);
+  el reintento automático/`FAILED` (`offline-pending-retry`) sigue pendiente. El
   proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001
   (`docs/adr/0001-ai-runtime-decision.md`).
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).

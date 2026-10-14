@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
 import com.playbook.core.model.normalizeTags
 
@@ -49,10 +50,15 @@ import com.playbook.core.model.normalizeTags
  * - En modo edición se ofrece "Borrar", con `AlertDialog` de confirmación. La
  *   acción no destructiva es explícita: "Cancelar". Si [onOpenRelated] no es null
  *   (modo edición) también se ofrece "Ver relacionadas".
+ * - En modo edición, si llega [initialStatus], se muestra un `StatusBadge`
+ *   (sólo lectura, nunca sólo color) y —cuando [onReindex] no es null— el botón
+ *   "Re-indexar", habilitado sólo si el estado no es `INDEXED` y el `body` del
+ *   borrador no está en blanco (sin texto no hay nada que embeber). Re-indexar
+ *   **no** reescribe `track`/`tags`/`body`: sólo dispara el enriquecimiento.
  *
  * La pantalla es "tonta": mantiene el borrador local y emite `onSave`/`onDelete`/
- * `onCancel`/`onRemoveImage`/`onOpenRelated`; la persistencia, el refresco y la
- * navegación los maneja [App].
+ * `onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`; la persistencia, el
+ * refresco y la navegación los maneja [App].
  */
 @Composable
 fun NoteEditorScreen(
@@ -66,6 +72,8 @@ fun NoteEditorScreen(
     onCancel: () -> Unit,
     onRemoveImage: (() -> Unit)?,
     onOpenRelated: (() -> Unit)? = null,
+    initialStatus: NoteStatus? = null,
+    onReindex: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
@@ -86,6 +94,28 @@ fun NoteEditorScreen(
             style = MaterialTheme.typography.headlineMedium,
         )
         Spacer(modifier = Modifier.height(16.dp))
+        if (isEditing && initialStatus != null) {
+            // Estado de indexado de sólo lectura + re-indexado manual. El badge
+            // comunica con texto/forma y el botón sólo se habilita si hay algo
+            // que embeber (body no vacío) y la Nota no está ya indexada.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusBadge(status = initialStatus)
+                Spacer(modifier = Modifier.weight(1f))
+                if (onReindex != null) {
+                    OutlinedButton(
+                        onClick = onReindex,
+                        enabled = initialStatus != NoteStatus.INDEXED && body.isNotBlank(),
+                    ) {
+                        Text(text = "Re-indexar")
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
         if (initialImage != null) {
             val bitmap = remember(initialImage) { decodeImageBitmap(initialImage.bytes) }
             Text(text = "Imagen adjunta", style = MaterialTheme.typography.titleSmall)

@@ -304,16 +304,16 @@ No se esperan cambios en `:core` de producción (`NoteIndexingService`,
 
 ## Implementation Tasks
 
-- [ ] Crear `EnrichmentStatus.kt` con `statusLabel` y `StatusBadge` (texto, no sólo color).
-- [ ] Reemplazar `noteIndexingService` por `noteIndexingOrchestrator` en `App` y actualizar `indexBestEffort` (+ `reload()`).
-- [ ] Agregar `reindex(note)` en `App` y pasarlo al editor.
-- [ ] Construir y pasar el orquestador en `MainActivity` y `MainViewController`.
-- [ ] Aplicar `StatusBadge` en `NotesListScreen` y en `NoteEditorScreen`.
-- [ ] Agregar estado read-only + botón "Re-indexar" (habilitado si `status != INDEXED && body.isNotBlank()`) en el editor.
-- [ ] Extender `NoteIndexingOrchestratorCheck` con la regresión de `track`/`tags`/`body`.
-- [ ] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`.
-- [ ] Correr verificación + smoke + control negativo y registrar evidencia.
-- [ ] Actualizar `feature_list.json` (título/`user_visible_behavior`/`verification`/`notes`) y `PROGRESS.md`.
+- [x] Crear `EnrichmentStatus.kt` con `statusLabel` y `StatusBadge` (texto, no sólo color).
+- [x] Reemplazar `noteIndexingService` por `noteIndexingOrchestrator` en `App` y actualizar `indexBestEffort` (+ `reload()`).
+- [x] Agregar `reindex(note)` en `App` y pasarlo al editor.
+- [x] Construir y pasar el orquestador en `MainActivity` y `MainViewController`.
+- [x] Aplicar `StatusBadge` en `NotesListScreen` y en `NoteEditorScreen`.
+- [x] Agregar estado read-only + botón "Re-indexar" (habilitado si `status != INDEXED && body.isNotBlank()`) en el editor.
+- [x] Extender `NoteIndexingOrchestratorCheck` con la regresión de `track`/`tags`/`body`.
+- [x] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`.
+- [x] Correr verificación + smoke + control negativo y registrar evidencia.
+- [x] Actualizar `feature_list.json` (título/`user_visible_behavior`/`verification`/`notes`) y `PROGRESS.md`.
 
 ## Verification Plan
 
