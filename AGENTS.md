@@ -50,9 +50,10 @@ Con `semantic-linking`, `voice-attachment-storage` y `rag-query` ya `accepted`,
 `note-links-ui` (proyección `buildRelatedNotes` + `RelatedNotesScreen` + wiring)
 quedó `accepted` (validación independiente `accept`). `note-enrichment-status-ui`
 (wiring de `NoteIndexingOrchestrator` en `App` + badge de estado textual +
-re-indexado manual) quedó `accepted` (validación independiente `accept`). Las
-próximas en cola son `offline-pending-retry` y `enrichment-observability-logging`
-(dependen de `ai-enrichment-classify-tags-type`, ya `accepted`); ya tienen spec.
+re-indexado manual) quedó `accepted` (validación independiente `accept`).
+`enrichment-observability-logging` (puerto `Diagnostics` + sink local acotado +
+instrumentación de fallos de IA y nativos) quedó `accepted` (validación
+independiente `accept`). La próxima en cola es `offline-pending-retry`.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

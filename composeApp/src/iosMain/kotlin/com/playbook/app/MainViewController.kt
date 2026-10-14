@@ -9,6 +9,8 @@ import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.IosDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
+import com.playbook.core.diagnostics.FileDiagnostics
+import com.playbook.core.diagnostics.diagnosticStorage
 import com.playbook.core.linking.SemanticLinkingService
 import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.platform.randomNoteId
@@ -20,6 +22,9 @@ import com.playbook.core.repository.SqlDelightAttachmentRepository
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
 import com.playbook.core.repository.SqlDelightNoteLinkRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
+import platform.Foundation.NSApplicationSupportDirectory
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
 import platform.UIKit.UIViewController
 
 // Base local, repositorios (notas, adjuntos, embeddings, enlaces) y runtime de IA
@@ -36,9 +41,20 @@ private var noteIndexingOrchestrator: NoteIndexingOrchestrator? = null
 private var ragQueryService: RagQueryService? = null
 private var semanticLinkingService: SemanticLinkingService? = null
 private var voiceTranscriber: IosVoiceTranscriber? = null
+private var diagnostics: FileDiagnostics? = null
 
 private fun resolveDatabase(): PlaybookDatabase =
     playbookDatabase ?: createDatabase(IosDatabaseDriverFactory()).also { playbookDatabase = it }
+
+/** Sink de diagnóstico local en `Application Support/diagnostics.log`. */
+private fun diagnosticsFilePath(): String {
+    val base = NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory,
+        NSUserDomainMask,
+        true,
+    ).firstOrNull() as? String ?: error("No se encontró Application Support")
+    return "$base/diagnostics.log"
+}
 
 fun MainViewController(): UIViewController {
     val database = resolveDatabase()
@@ -63,7 +79,11 @@ fun MainViewController(): UIViewController {
     // Runtime de IA por defecto: fake determinista y sin red (el adaptador real es
     // follow-up del ADR 0001). `generate` materializa el RAG.
     val ai = aiClient ?: FakeAiClient().also { aiClient = it }
-    val indexing = noteIndexingService ?: NoteIndexingService(ai, embeddings).also {
+    // Sink de diagnóstico local acotado en Application Support.
+    val diag = diagnostics ?: FileDiagnostics(
+        diagnosticStorage(diagnosticsFilePath()),
+    ).also { diagnostics = it }
+    val indexing = noteIndexingService ?: NoteIndexingService(ai, embeddings, diag).also {
         noteIndexingService = it
     }
     // Orquestador de indexado: envuelve el servicio y persiste la transición
@@ -71,12 +91,17 @@ fun MainViewController(): UIViewController {
     val orchestrator = noteIndexingOrchestrator ?: NoteIndexingOrchestrator(indexing, notes).also {
         noteIndexingOrchestrator = it
     }
-    val rag = ragQueryService ?: RagQueryService(ai, notes, embeddings).also {
-        ragQueryService = it
-    }
+    val rag = ragQueryService ?: RagQueryService(
+        ai,
+        notes,
+        embeddings,
+        diagnostics = diag,
+    ).also { ragQueryService = it }
     val linking = semanticLinkingService ?: SemanticLinkingService(embeddings, links).also {
         semanticLinkingService = it
     }
     val transcriber = voiceTranscriber ?: IosVoiceTranscriber().also { voiceTranscriber = it }
-    return ComposeUIViewController { App(notes, attachments, transcriber, orchestrator, rag, links, linking) }
+    return ComposeUIViewController {
+        App(notes, attachments, transcriber, orchestrator, rag, links, linking, diag)
+    }
 }

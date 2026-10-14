@@ -294,7 +294,8 @@ composeApp (Android app / commonMain) ──▶ core
   `IndexingResult.Failed` **sin escribir ni pisar** el embedding previo. **No
   toca `NoteStatus`**: un fallo de IA no degrada la Nota (la captura nunca se
   bloquea por IA). La fuente de verdad de "tiene embedding" es la fila en
-  `embedding`.
+  `embedding`. Cada `Failed` se reporta a `Diagnostics` (`AI_INDEXING`) de forma
+  best-effort (ver "Observability").
 - **Orquestador de indexado asíncrono**
   (`com.playbook.core.ai.NoteIndexingOrchestrator`, `ai-enrichment-classify-tags-type`):
   `index(note: Note): NoteStatus` (`suspend`) reutiliza `NoteIndexingService` **sin
@@ -338,7 +339,9 @@ composeApp (Android app / commonMain) ──▶ core
   estable por `note.id`, top-K; (5) `context = top.map { it.note.body }` y
   `aiClient.generate(GenerateRequest(prompt = question.trim(), context))`
   (try/catch → `Failed`); (6) `Answer(text, sources)`. Los fallos del runtime se
-  mapean a `Failed` sin propagar la excepción ni inventar respuesta.
+  mapean a `Failed` sin propagar la excepción ni inventar respuesta. Cada `Failed`
+  se reporta a `Diagnostics` (`AI_QUERY`) de forma best-effort y sin registrar la
+  pregunta (ver "Observability").
 - **`RagAnswer`** (`Answer(text, sources)` / `NoIndexedNotes` / `Failed(cause)`) y
   **`RetrievedNote(note, score)`**. `sources` viene ordenado por score
   descendente; la UI lo renderiza como **citas numeradas** ("Fuentes", rank 1..N,
@@ -602,18 +605,58 @@ composeApp (Android app / commonMain) ──▶ core
   nuevas. `NoteLinkRepository`/`SemanticLinkingService` se construyen en los
   composition roots y se inyectan por constructor (sin DI).
 
+## Observability
+
+- **Puerto `Diagnostics`** (`com.playbook.core.diagnostics`): única superficie de
+  observabilidad del MVP. `recordFailure(source, summary, detail?)` es
+  **best-effort**: **nunca** lanza ni bloquea al llamador (una implementación que
+  falle al escribir se traga el error). No es un logger general: sólo registra
+  **fallos**, no caminos de éxito. Sin telemetría remota ni librería de logging.
+- **Tipos:** `DiagnosticSource` (`AI_INDEXING`, `AI_QUERY`, `VOICE`, `IMAGE`,
+  `STORAGE`) y `DiagnosticEntry(timestampMillis, source, summary, detail?)`.
+  `summary` es un **resumen estable** (sin datos del usuario).
+- **Implementaciones:** `NoOpDiagnostics` (**default inyectable**, no rompe a los
+  callers que no cablean sink), `InMemoryDiagnostics(maxEntries = 100, clock)`
+  (tests/sink efímero; `snapshot()`/`clear()`; retiene las últimas `maxEntries`) y
+  `FileDiagnostics(storage, clock, maxEntries = 200)` (sink local persistente).
+- **Sink local acotado:** `DiagnosticStorage` (interfaz) + `expect fun
+  diagnosticStorage(path)` con `actual` Android/JVM (`java.io.File`) e iOS
+  (`NSFileManager`/`NSString`, con append = read + overwrite). Cada línea es
+  `<timestampMillis>\t<source>\t<summary>\t<detail|->` (`detail` recortado a ~200
+  chars); la retención es **por cantidad** (al superar `maxEntries` reescribe con
+  las últimas). `rawLog()` expone el contenido crudo para diagnóstico.
+- **Cableado:** los composition roots construyen
+  `FileDiagnostics(diagnosticStorage("<private>/diagnostics.log"))`
+  (`filesDir/diagnostics.log` en Android, `Application Support/diagnostics.log` en
+  iOS) y lo inyectan en `NoteIndexingService`/`RagQueryService` y `App(...)`.
+  `:core` usa `NoOpDiagnostics` por defecto (retrocompatible).
+- **Instrumentación:** `NoteIndexingService` registra `AI_INDEXING` en cada
+  `Failed` (excepción del runtime o respuesta inválida); `RagQueryService` registra
+  `AI_QUERY` en cada `Failed` (`embed`/`generate`/respuesta inválida);
+  `NoIndexedNotes` **no** registra. `App` registra `VOICE`/`IMAGE` (los `onError`
+  de las integraciones nativas, con el nombre del error como `detail`) y `STORAGE`
+  (los `catch (Throwable)` de persistencia de adjuntos, sin `detail`).
+- **Privacidad (durable):** el log sólo guarda fuente, resumen estable y mensaje
+  de excepción recortado. **Nunca** `body`, preguntas, rutas de adjuntos, IDs ni
+  secrets (ver `CONSTRAINTS.md`). El `detail` de `STORAGE` se omite a propósito
+  porque las excepciones de IO/SQL pueden contener rutas.
+- **Sin esquema ni deps:** el log es infra, no modelo de dominio (no hay entidad
+  `Log`, ni tabla, ni `.sqm`): esquema **v5** sin cambios, sin dependencias nuevas.
+
 ## Runtime surfaces
 
 - **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v5 con
   `createDatabase(AndroidDatabaseDriverFactory(...))`, construye
   `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository` +
   `SqlDelightEmbeddingRepository` + `SqlDelightNoteLinkRepository`, un
-  `FakeAiClient`, `NoteIndexingService`, `RagQueryService` y
-  `SemanticLinkingService`, y monta `App(..., AndroidVoiceTranscriber(this),
-  noteLinkRepository, semanticLinkingService)`.
+  `FakeAiClient`, un `FileDiagnostics` sobre `filesDir/diagnostics.log`,
+  `NoteIndexingService`, `RagQueryService` y `SemanticLinkingService`, y monta
+  `App(..., AndroidVoiceTranscriber(this), noteLinkRepository,
+  semanticLinkingService, diagnostics)`.
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
   local (singletons perezosos), construye los cuatro repositorios, el
-  `FakeAiClient`, `NoteIndexingService`, `RagQueryService` y
+  `FakeAiClient`, un `FileDiagnostics` sobre `Application Support/diagnostics.log`,
+  `NoteIndexingService`, `RagQueryService` y
   `SemanticLinkingService`, y envuelve
   `App(notes, attachments, transcriber, indexing, rag, noteLinkRepository,
   semanticLinkingService)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
@@ -737,4 +780,7 @@ Comandos manuales equivalentes:
   GDD y Enlaces).
 - Manejo del back físico Android/iOS en el editor y en la captura de voz (hoy sólo
   "Cancelar").
+- Observabilidad: UI/pantalla de diagnóstico, serialización/export del log local y
+  telemetría remota/crash reporting quedan **fuera del MVP** (el puerto
+  `Diagnostics` sólo registra fallos localmente; ver "Observability").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

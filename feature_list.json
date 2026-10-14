@@ -765,11 +765,28 @@
     "depends_on": [
       "ai-enrichment-classify-tags-type"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: un fallo simulado genera una entrada de log local recuperable."
+      "`./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → 42 tests por plataforma, 0 failures, incl. `Diagnostics*Test` 2/2 por plataforma.",
+      "`./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "`PlaybookDatabase.Schema.version == 5` y sin `.sqm` nuevo; `init.sh`/`libs.versions.toml`/`iosApp`/`.sq` sin cambios.",
+      "`CI=true ./init.sh` → exit 0, sin dev servers ni simuladores.",
+      "Control negativo: sin registro en `NoteIndexingService` falla el Scenario 1; sin retención en `FileDiagnostics` falla el Scenario 6. Ambos restaurados.",
+      "Smoke Android real: denegar permiso de cámara deja una línea `IMAGE` en `files/diagnostics.log`, sin datos sensibles.",
+      "E2E persistente: no aplica (sin harness E2E; se cubre con tests del core en dos plataformas + smoke del archivo)."
     ],
-    "evidence": [],
-    "notes": "Observabilidad mínima del MVP (docs/technical-discovery.md)."
+    "evidence": [
+      "2026-10-14: `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; 42/42 en Android/JVM y 42/42 en iOS, 0 failures. Diagnóstico: Android `DiagnosticsAndroidTest` 1/1 + `DiagnosticsStorageAndroidTest` 1/1; iOS `DiagnosticsIosTest` 1/1 + `DiagnosticsStorageIosTest` 1/1. Tests previos de IA intactos con `NoOpDiagnostics` (AiClient 3/3, NoteIndexing 1/1, NoteIndexingOrchestrator 1/1, RagQuery 6/6).",
+      "2026-10-14: `verifyDiagnostics(driver)` (commonTest) cubre los escenarios 1–7: fallo de IA en indexado→`AI_INDEXING` + sin embedding; éxito→snapshot vacío; respuesta inválida (0 vectores/>1/dim 0)→entrada; fallos de RAG (`embed`/`generate`/respuesta inválida)→`AI_QUERY`; `NoIndexedNotes` sin invocar el runtime ni registrar; best-effort con un `DiagnosticStorage` que lanza (`FileDiagnostics.recordFailure` no propaga y `rawLog()`==\"\"); retención de `FileDiagnostics` (`maxEntries` + recuperable); privacidad (sin `body`/pregunta/ID/`SECRET`). `verifyDiagnosticStorage(...)` ejercita el `actual` real (`java.io.File` / `NSFileManager`+`NSString`) en runtime por plataforma.",
+      "2026-10-14: `./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (57 tasks).",
+      "2026-10-14: `CI=true ./init.sh` → exit 0 (assembleDebug + core tests Android/iOS + link del framework iOS), sin dev servers ni simuladores; `git diff -- init.sh` vacío.",
+      "2026-10-14: `PlaybookDatabaseImpl.Schema.version = 5`; `find core/src -name '*.sqm'` → sólo `1.sqm`–`4.sqm` (sin `.sqm` nuevo); `git diff --stat` vacío para `init.sh`, `gradle/libs.versions.toml`, `iosApp/**`, `core/src/commonMain/sqldelight/**`, `AiClient.kt` y `FakeAiClient.kt`.",
+      "2026-10-14: control negativo (a): quitar el `recordFailure(AI_INDEXING, ...)` del catch de `embed` en `NoteIndexingService` → `:core:testDebugUnitTest --tests ...DiagnosticsAndroidTest` FAILED (Scenario 1: snapshot sin `AI_INDEXING`); restaurado y re-verificado en verde. Control negativo (b): quitar `enforceRetention()` de `FileDiagnostics.recordFailure` → `DiagnosticsAndroidTest` FAILED (Scenario 6: `rawLog()` supera `maxEntries`); restaurado y re-verificado en verde.",
+      "2026-10-14 (smoke Android real, emulator-5554): APK debug instalado, `pm clear com.playbook.app` + launch; desde la lista se abrió 'Foto' → 'Cámara' y se denegó el permiso; `adb shell run-as com.playbook.app cat files/diagnostics.log` → `1791991973203\tIMAGE\timage_failed\tPERMISSION_DENIED` (una línea, 4 campos, sin `body`/pregunta/rutas/IDs/secrets). Datos QA limpiados con `pm clear`.",
+      "2026-10-14: smoke iOS interactivo no ejecutado (falta input automation: `idb`/`cliclick` ausentes, `osascript` bloqueado); el `actual` iOS se ejercita en runtime por `DiagnosticsStorageIosTest` y los escenarios 1–7 corren en `:core:iosSimulatorArm64Test`. Limitación declarada honestamente.",
+      "2026-10-14: alcance: `App.kt`/`MainActivity.kt`/`MainViewController.kt` instrumentados; `:core` gana `com.playbook.core.diagnostics` y el parámetro `diagnostics` (default `NoOpDiagnostics`) en los dos servicios; sin UI, sin telemetría remota, sin librería de logging, sin dependencias nuevas y sin cambio de esquema.",
+      "2026-10-14 (validación independiente, accept): `CI=true ./init.sh` exit 0 (sin dev servers/simuladores); `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → 42/42 Android/JVM y 42/42 iOS, 0 failures (`Diagnostics*Test` 1/1 por plataforma + actuals de storage reales); `:composeApp:assembleDebug`/`linkDebugFrameworkIosSimulatorArm64` OK; `Schema.version == 5` sin `.sqm` nuevo ni deps. Control negativo propio reproducido y restaurado byte-idéntico: (a) sin `recordFailure(AI_INDEXING)` en `NoteIndexingService` → falla Scenario 1; (b) sin `enforceRetention()` en `FileDiagnostics` → falla Scenario 6. Escenarios 1–7 verificados en `:core` (2 plataformas); privacidad sin `body`/pregunta/rutas/IDs/secrets; smoke Android `IMAGE image_failed PERMISSION_DENIED`. Hallazgos Low no bloqueantes (typo cosmético corregido en ARCHITECTURE.md; VOICE/STORAGE sólo por inspección; `detail`=mensaje de excepción a vigilar al cablear el adaptador cloud). Registro en `docs/validations/enrichment-observability-logging.md`."
+    ],
+    "notes": "Observabilidad mínima del MVP (docs/technical-discovery.md → Observability). Puerto `Diagnostics` best-effort (`NoOpDiagnostics`/`InMemoryDiagnostics`/`FileDiagnostics`) + `DiagnosticStorage` expect/actual; instrumenta `AI_INDEXING`/`AI_QUERY` (servicios) y `VOICE`/`IMAGE`/`STORAGE` (`App`); sink `FileDiagnostics` cableado en los composition roots (`filesDir/diagnostics.log` Android, `Application Support/diagnostics.log` iOS). Sin esquema (v5), sin `.sqm`, sin dependencias nuevas ni UI. `accepted` (validación independiente `accept`, 2026-10-14)."
   }
 ]
