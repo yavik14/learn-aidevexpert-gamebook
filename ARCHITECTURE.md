@@ -30,7 +30,8 @@ con `4.sqm`, tabla `note_link`, `NoteLinkRepository` y `SemanticLinkingService`)
 `AUDIO` (grabado en la misma sesión de voz, sin cambio de esquema).
 `rag-query` agrega el retrieval por similitud coseno, `RagQueryService` y el primer
 wiring del runtime de IA a la app (indexado best-effort al guardar + pantalla de
-consulta).
+consulta). `rag-answer-citations` surfacea las Notas fuente como **citas
+numeradas** con navegación a la Nota, sin persistirlas.
 
 ## Modules
 
@@ -336,7 +337,8 @@ composeApp (Android app / commonMain) ──▶ core
   mapean a `Failed` sin propagar la excepción ni inventar respuesta.
 - **`RagAnswer`** (`Answer(text, sources)` / `NoIndexedNotes` / `Failed(cause)`) y
   **`RetrievedNote(note, score)`**. `sources` viene ordenado por score
-  descendente; la UI **no** las renderiza (las citas son `rag-answer-citations`).
+  descendente; la UI lo renderiza como **citas numeradas** ("Fuentes", rank 1..N,
+  fragmento + `track`) y permite abrir la Nota fuente (`rag-answer-citations`).
 - **Sin umbral ni vector DB:** el retrieval es top-K **sin umbral** (la
   calibración es pregunta abierta de `semantic-linking`) y en memoria sobre los
   BLOBs. Es **efímero** (por consulta): no crea filas `link`.
@@ -355,10 +357,14 @@ composeApp (Android app / commonMain) ──▶ core
   tendría embedding y el RAG siempre vería `NoIndexedNotes`.
 - **UI (`AskNotesScreen`)**: `OutlinedTextField` + botón "Preguntar"
   (deshabilitado con la pregunta en blanco o mientras corre), estado de carga
-  ("Pensando…"), `Card` con el **texto** de la respuesta, mensaje explícito de
-  "sin notas indexadas", error con "Reintentar" y "Volver". Estados `AskUiState`
-  (`Idle`/`Asking`/`Answered(text)`/`NoIndexedNotes`/`Error`) comunicados con
-  texto. `NotesListScreen` suma la acción "Preguntar". `App` usa
+  ("Pensando…"), `Card` con el **texto** de la respuesta y, debajo, la sección
+  **"Fuentes"** (`rag-answer-citations`): una cita por cada `RetrievedNote` de
+  `sources` (rank `"Fuente N"` 1..N, fragmento del `body` a 2 líneas con ellipsis
+  o "Sin texto", chip de `track` o "Sin track"), clickeable con
+  `onClickLabel = "Abrir nota fuente"`/`Role.Button`; sin fuentes no hay sección.
+  Mensaje explícito de "sin notas indexadas", error con "Reintentar" y "Volver".
+  Estados `AskUiState` (`Idle`/`Asking`/`Answered(text, sources)`/`NoIndexedNotes`/`Error`)
+  comunicados con texto. `NotesListScreen` suma la acción "Preguntar". `App` usa
   `rememberCoroutineScope()` (único patrón nuevo; sin `ViewModel`/Flow) para
   invocar los servicios `suspend`.
 
@@ -460,13 +466,14 @@ composeApp (Android app / commonMain) ──▶ core
   línea informativa ("Se guarda también el audio original como Adjunto."). No
   mantiene el `VoiceTranscriber`.
 - **`AskNotesScreen`** (nuevo): pantalla "tonta" de consulta RAG. Recibe
-  `AskUiState` (`Idle`/`Asking`/`Answered(text)`/`NoIndexedNotes`/`Error`) y
-  emite `onAsk(question)`/`onBack`. La acción primaria es "Preguntar"
-  (deshabilitada con la pregunta en blanco o mientras `Asking`), muestra
-  "Pensando…" durante la consulta, la **respuesta** (sólo texto, sin fuentes) en
-  un `Card`, un mensaje explícito si no hay Notas indexadas, y un error con
-  "Reintentar"; "Volver" siempre vuelve a la lista. Todos los estados se
-  comunican con texto (nunca sólo color).
+  `AskUiState` (`Idle`/`Asking`/`Answered(text, sources)`/`NoIndexedNotes`/`Error`)
+  y emite `onAsk(question)`/`onOpenSource(noteId)`/`onBack`. La acción primaria es
+  "Preguntar" (deshabilitada con la pregunta en blanco o mientras `Asking`),
+  muestra "Pensando…" durante la consulta, la **respuesta** (texto) en un `Card` y,
+  si hay `sources`, la sección **"Fuentes"** con una cita numerada clickeable por
+  Nota (abre `NotesDestination.Edit(noteId)`); un mensaje explícito si no hay Notas
+  indexadas, y un error con "Reintentar"; "Volver" siempre vuelve a la lista. Todos
+  los estados se comunican con texto (nunca sólo color).
 - **Orquestación de voz (`App`):** la sesión se inicia sólo al tocar "Grabar"
   (para que el prompt de permiso sea explícito); `onPartialResult` actualiza el
   parcial; `onError` pasa a `Error`; `onFinalResult(text, audio)` no vacío crea la
@@ -493,7 +500,8 @@ composeApp (Android app / commonMain) ──▶ core
   lista. El `status` no se edita desde la UI. Si el `id` en `Edit(noteId)` ya no
   existe en `notes`, se vuelve a la lista. Tras crear o editar (texto/voz/imagen)
   con `body` no vacío se dispara el indexado best-effort; la consulta RAG llama
-  `ragQueryService.ask(question)` y muestra el `Answered(text)` sin listar fuentes.
+  `ragQueryService.ask(question)` y muestra el `Answered(text, sources)` con la
+  respuesta y sus **citas** (tocar una cita abre la Nota fuente con `Edit`).
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
   `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas,
@@ -650,8 +658,9 @@ Comandos manuales equivalentes:
 - Enlaces: la generación ya existe (`semantic-linking`), pero su **UI** de lectura
   (`note-links-ui`) y el **trigger** del recomputo (`recomputeAll`) siguen
   pendientes. `rag-query` expone `cosineSimilarity` y hace retrieval **efímero**
-  (no crea filas `link` ni define umbral; las citas visuales son de
-  `rag-answer-citations`). El wiring de estados/reintento del indexado
+  (no crea filas `link` ni define umbral); `rag-answer-citations` renderiza esas
+  fuentes como citas y navega a la Nota, sin persistir el enlace. El wiring de
+  estados/reintento del indexado
   (`note-enrichment-status-ui`, `offline-pending-retry`) sigue pendiente; el
   indexado best-effort de `rag-query` no transiciona `NoteStatus`. El
   proveedor/modelo/dimensión y la gestión de keys son follow-ups del ADR 0001

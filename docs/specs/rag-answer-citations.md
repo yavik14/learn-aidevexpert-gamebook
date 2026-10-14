@@ -71,8 +71,8 @@ sólo color, y es objetivo táctil con label/rol ("Abrir nota fuente") (`DESIGN.
 Given `:core` sin cambios, When se corren `:core:testDebugUnitTest`,
 `:core:iosSimulatorArm64Test`, `:composeApp:assembleDebug`,
 `:composeApp:linkDebugFrameworkIosSimulatorArm64` y `./init.sh`,
-Then todo pasa en Android/JVM e iOS, el esquema sigue en **v4** (sin `.sqm`) y
-`./init.sh` termina en 0 sin dev servers.
+Then todo pasa en Android/JVM e iOS, el esquema sigue en **v5** (sin `.sqm`
+nuevo; ver "Implementation Findings") y `./init.sh` termina en 0 sin dev servers.
 
 ## Repository Research
 
@@ -177,14 +177,14 @@ No se esperan cambios en `core/**`, esquema (`.sq`/`.sqm`), `init.sh`,
 
 ## Implementation Tasks
 
-- [ ] `AskUiState.Answered` a `(text, sources: List<RetrievedNote>)`.
-- [ ] Agregar `onOpenSource: (String) -> Unit` a `AskNotesScreen`.
-- [ ] Renderizar "Fuentes" (rank + body truncado/placeholder + chip `track`),
+- [x] `AskUiState.Answered` a `(text, sources: List<RetrievedNote>)`.
+- [x] Agregar `onOpenSource: (String) -> Unit` a `AskNotesScreen`.
+- [x] Renderizar "Fuentes" (rank + body truncado/placeholder + chip `track`),
       clickeable/accesible; sin sección si `sources` está vacía.
-- [ ] Mapear `RagAnswer.Answer -> Answered(text, sources)` en `App.ask()`.
-- [ ] Cablear `onOpenSource` a `NotesDestination.Edit(noteId)`.
-- [ ] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`.
-- [ ] Correr verificación + smoke (Android/iOS) y registrar evidencia.
+- [x] Mapear `RagAnswer.Answer -> Answered(text, sources)` en `App.ask()`.
+- [x] Cablear `onOpenSource` a `NotesDestination.Edit(noteId)`.
+- [x] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`.
+- [x] Correr verificación + smoke (Android/iOS) y registrar evidencia.
 
 ## Verification Plan
 
@@ -195,8 +195,9 @@ No se esperan cambios en `core/**`, esquema (`.sq`/`.sqm`), `init.sh`,
   `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL;
   `xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug
   -sdk iphonesimulator build` → BUILD SUCCEEDED.
-- Confirmar esquema **v4** (`PlaybookDatabase.Schema.version == 4`), sin `.sqm`
-  nuevos y sin diffs en `.sq`/`init.sh`/build files.
+- Confirmar esquema **v5** (`PlaybookDatabase.Schema.version == 5`), sin `.sqm`
+  nuevos (`1.sqm`/`2.sqm`/`3.sqm`/`4.sqm` preexistentes) y sin diffs en
+  `.sq`/`init.sh`/build files.
 - **Control negativo** (restaurar): forzar `App.ask()` a
   `Answered(result.text, emptyList())` deja el Scenario 1 sin fuentes.
 - **Smoke Android** (emulador): sembrar Notas con embedding, preguntar → respuesta
@@ -215,7 +216,7 @@ No se esperan cambios en `core/**`, esquema (`.sq`/`.sqm`), `init.sh`,
 - Salida de `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test` (suite intacta,
   `RagQuery` 6/6 incl. orden de `sources`) y de `assembleDebug` + link iOS +
   `xcodebuild`.
-- `./init.sh` → exit 0; `Schema.version == 4`, sin `.sqm`; diffs vacíos de
+- `./init.sh` → exit 0; `Schema.version == 5`, sin `.sqm` nuevo; diffs vacíos de
   `:core`/`.sq`/`init.sh`/build files/`iosApp`.
 - Smoke (Android/iOS): respuesta + "Fuentes" 1..N en orden, navegación a la Nota
   correcta, truncado/placeholder, ausencia de sección sin fuentes.
@@ -233,7 +234,7 @@ No se esperan cambios en `core/**`, esquema (`.sq`/`.sqm`), `init.sh`,
       `NoIndexedNotes`/`Error` no muestran "Fuentes".
 - [ ] Accesibilidad: citas con texto (no sólo color) y con label/rol.
 - [ ] Evidencia en `feature_list.json`/`PROGRESS.md`; `ARCHITECTURE.md`/
-      `docs/technical-discovery.md` actualizados; esquema v4; `init.sh` sin cambios.
+      `docs/technical-discovery.md` actualizados; esquema v5; `init.sh` sin cambios.
 - [ ] No hay E2E persistente y la spec justifica por qué.
 
 ## Open Questions
@@ -244,3 +245,18 @@ No se esperan cambios en `core/**`, esquema (`.sq`/`.sqm`), `init.sh`,
   la respuesta); re-entrar a "Preguntar" resetea a `Idle`. No bloquea el MVP.
 - **Adjuntos sin texto**: siguen fuera del RAG (`note.body` es la única fuente
   indexada); coherente con `image-ocr-optional`.
+
+## Implementation Findings
+
+- **Esquema real v5, no v4 (corrección honesta).** La spec se redactó asumiendo
+  `Schema.version == 4`; en esta rama `semantic-linking` ya está `accepted` con
+  `4.sqm` (v4 → v5, tabla `note_link`) y el esquema actual es **v5**. Esta feature
+  **no cambia** el esquema (sin `.sqm` nuevo); la verificación confirma
+  `PlaybookDatabaseImpl.Schema.version == 5` y sólo `1.sqm`/`2.sqm`/`3.sqm`/`4.sqm`.
+  Se corrigieron las referencias a v4 en la spec.
+- **Scroll en la sección de resultado (robustez).** `AskResult` envuelve su
+  contenido en `verticalScroll` para que una respuesta + hasta `maxSources = 5`
+  citas sean alcanzables en pantallas pequeñas; no cambia el contrato ni el estilo.
+- **Placeholder de body en la cita**: se usa literalmente `"Sin texto"` (no
+  `"Imagen adjunta"` como la lista), según Scenario 3; la cita no conoce Adjuntos.
+
