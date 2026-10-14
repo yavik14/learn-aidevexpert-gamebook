@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.playbook.app.voice.AndroidVoiceTranscriber
 import com.playbook.core.ai.FakeAiClient
+import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.AndroidDatabaseDriverFactory
@@ -52,6 +53,9 @@ class MainActivity : ComponentActivity() {
         // es follow-up del ADR 0001). `generate` materializa el RAG.
         val aiClient = FakeAiClient()
         val noteIndexingService = NoteIndexingService(aiClient, embeddingRepository)
+        // Orquestador de indexado: envuelve el servicio y persiste la transición
+        // real de `NoteStatus` (la UI lo usa al guardar y al re-indexar a mano).
+        val noteIndexingOrchestrator = NoteIndexingOrchestrator(noteIndexingService, noteRepository)
         val ragQueryService = RagQueryService(aiClient, noteRepository, embeddingRepository)
         val semanticLinkingService = SemanticLinkingService(embeddingRepository, noteLinkRepository)
         // El adaptador registra el permission launcher, por eso se construye aquí
@@ -62,7 +66,7 @@ class MainActivity : ComponentActivity() {
                 noteRepository = noteRepository,
                 attachmentRepository = attachmentRepository,
                 voiceTranscriber = voiceTranscriber,
-                noteIndexingService = noteIndexingService,
+                noteIndexingOrchestrator = noteIndexingOrchestrator,
                 ragQueryService = ragQueryService,
                 noteLinkRepository = noteLinkRepository,
                 semanticLinkingService = semanticLinkingService,

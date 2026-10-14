@@ -179,7 +179,7 @@ private fun NoteCard(
                     LabelChip(text = attachmentLabel(kind))
                 }
                 LabelChip(text = note.track?.code ?: "Sin track")
-                LabelChip(text = note.status.code)
+                StatusBadge(status = note.status)
             }
             if (note.tags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))

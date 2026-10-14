@@ -211,6 +211,41 @@ suspend fun verifyNoteIndexingOrchestrator(driver: SqlDriver) {
         "el fallo del runtime se propaga como causa de IndexingResult.Failed",
     )
 
+    // --- Scenario 8 (note-enrichment-status-ui): re-indexar NO pisa la ---------
+    // --- clasificación manual (`track`/`tags`) ni el `body`/`owner`/timestamps --
+    val pendingWithTags = noteRepository.create(
+        NoteDraft(
+            owner = "owner-8",
+            body = "Diseñar el sistema de combate",
+            track = Track.MECHANICS,
+            status = NoteStatus.PENDING,
+            tags = listOf("jefe", "combate"),
+        ),
+    )
+    now += 1_000
+    val outcome8 = successOrchestrator.index(pendingWithTags)
+    assertEquals(NoteStatus.INDEXED, outcome8, "re-indexar PENDING con éxito debe dar INDEXED")
+    val after8 = noteRepository.getById(pendingWithTags.id)!!
+    assertEquals(NoteStatus.INDEXED, after8.status, "re-indexar debe persistir INDEXED")
+    assertEquals(pendingWithTags.body, after8.body, "re-indexar no debe pisar el body")
+    assertEquals(pendingWithTags.track, after8.track, "re-indexar no debe pisar el track")
+    assertEquals(pendingWithTags.tags, after8.tags, "re-indexar no debe pisar las etiquetas")
+    assertEquals(pendingWithTags.owner, after8.owner, "re-indexar no debe pisar el owner")
+    assertEquals(
+        pendingWithTags.createdAt,
+        after8.createdAt,
+        "re-indexar no debe re-sellar createdAt",
+    )
+    assertEquals(
+        pendingWithTags.updatedAt,
+        after8.updatedAt,
+        "updateStatus no debe re-sellar updatedAt",
+    )
+    assertTrue(
+        after8.tags.isNotEmpty(),
+        "la Nota del escenario debe conservar sus etiquetas manuales",
+    )
+
     // --- Guardrail: `index` nunca propaga el fallo de IA -------------------
     assertFalse(
         listOf(scenario2, scenario4, scenario5, scenario6, scenario7).contains(NoteStatus.FAILED),
