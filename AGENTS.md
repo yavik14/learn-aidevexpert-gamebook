@@ -43,10 +43,11 @@ Próximas features en cola: `ai-enrichment-classify-tags-type` (indexado asíncr
 + transiciones de `NoteStatus`) quedó `accepted` (2026-10-13, validación
 independiente `accept`); `rag-query` (consulta en lenguaje natural sobre las Notas:
 retrieval por similitud coseno + `RagQueryService` + primer wiring del runtime de
-IA a la app) quedó `accepted` (validación independiente). Con `semantic-linking`,
-`voice-attachment-storage` y `rag-query` ya `accepted`, las próximas son
-`note-links-ui` (depende de `semantic-linking`) y `rag-answer-citations` (depende
-de `rag-query`), que requieren spec.
+IA a la app) quedó `accepted` (validación independiente). `rag-answer-citations`
+(la respuesta lista sus Notas fuente como citas numeradas y permite abrirlas;
+sólo UI, `:core` sin cambios) quedó `accepted` (validación independiente `accept`).
+La feature en curso es `note-links-ui` (depende de `semantic-linking`, ya
+`accepted`).
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

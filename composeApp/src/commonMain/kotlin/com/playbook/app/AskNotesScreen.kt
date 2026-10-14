@@ -1,5 +1,6 @@
 package com.playbook.app
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.playbook.core.ai.RetrievedNote
 
 /**
  * Estado visible de la pantalla de consulta (RAG).
@@ -36,8 +42,8 @@ sealed interface AskUiState {
     /** Consulta en curso: se muestra el estado de carga. */
     data object Asking : AskUiState
 
-    /** Respuesta generada; la UI muestra **sólo** el texto (sin citas). */
-    data class Answered(val text: String) : AskUiState
+    /** Respuesta generada con sus Notas fuente ([sources]) ordenadas por score. */
+    data class Answered(val text: String, val sources: List<RetrievedNote>) : AskUiState
 
     /** No hay Notas con embedding: el runtime no se invocó. */
     data object NoIndexedNotes : AskUiState
@@ -51,7 +57,9 @@ sealed interface AskUiState {
  *
  * - `Idle`: invita a escribir y habilita "Preguntar".
  * - `Asking`: muestra "Pensando…" y deshabilita la acción.
- * - `Answered`: muestra el texto de la respuesta (sin listar ni navegar a fuentes).
+ * - `Answered`: muestra el texto de la respuesta **y** la sección "Fuentes" con una
+ *   cita numerada (rank + fragmento + `track`) por cada Nota recuperada; tocar una
+ *   cita abre esa Nota (`onOpenSource`).
  * - `NoIndexedNotes`: mensaje explícito.
  * - `Error`: mensaje de error con "Reintentar".
  *
@@ -62,6 +70,7 @@ sealed interface AskUiState {
 fun AskNotesScreen(
     state: AskUiState,
     onAsk: (String) -> Unit,
+    onOpenSource: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -87,7 +96,11 @@ fun AskNotesScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(16.dp))
-        AskResult(state = state, modifier = Modifier.fillMaxWidth().weight(1f))
+        AskResult(
+            state = state,
+            onOpenSource = onOpenSource,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
         Spacer(modifier = Modifier.height(24.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -109,8 +122,14 @@ fun AskNotesScreen(
 }
 
 @Composable
-private fun AskResult(state: AskUiState, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
+private fun AskResult(
+    state: AskUiState,
+    onOpenSource: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+    ) {
         when (state) {
             AskUiState.Idle -> Text(
                 text = "Escribí una pregunta sobre tus notas.",
@@ -122,11 +141,32 @@ private fun AskResult(state: AskUiState, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.titleMedium,
             )
 
-            is AskUiState.Answered -> Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(text = "Respuesta", style = MaterialTheme.typography.labelLarge)
+            is AskUiState.Answered -> {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(text = "Respuesta", style = MaterialTheme.typography.labelLarge)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = state.text, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                if (state.sources.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Fuentes",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = state.text, style = MaterialTheme.typography.bodyLarge)
+                    state.sources.forEachIndexed { index, source ->
+                        SourceCitation(
+                            rank = index + 1,
+                            source = source,
+                            onClick = { onOpenSource(source.note.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (index != state.sources.lastIndex) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                 }
             }
 
@@ -139,6 +179,46 @@ private fun AskResult(state: AskUiState, modifier: Modifier = Modifier) {
                 text = "No se pudo responder. Revisá el runtime de IA e intentá de nuevo.",
                 style = MaterialTheme.typography.bodyLarge,
             )
+        }
+    }
+}
+
+/**
+ * Cita de una Nota fuente: rank ("Fuente N", 1..N en orden de retrieval), el
+ * fragmento del `body` (máx. 2 líneas con ellipsis, o "Sin texto" si está en
+ * blanco) y el `track` como chip (o "Sin track"). Toda la tarjeta es clickeable y
+ * accesible ("Abrir nota fuente", `Role.Button`); el rank y el `track` se
+ * comunican con texto, no sólo con color (`DESIGN.md`).
+ */
+@Composable
+private fun SourceCitation(
+    rank: Int,
+    source: RetrievedNote,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val note = source.note
+    Card(
+        modifier = modifier.clickable(
+            onClickLabel = "Abrir nota fuente",
+            role = Role.Button,
+            onClick = onClick,
+        ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                text = "Fuente $rank",
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = note.body.ifBlank { "Sin texto" },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LabelChip(text = note.track?.code ?: "Sin track")
         }
     }
 }

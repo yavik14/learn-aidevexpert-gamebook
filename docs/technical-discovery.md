@@ -16,7 +16,8 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
   **híbrida por fases, cloud-first** detrás del puerto (ver "AI Decisions
   (ai-runtime-decision)" y `docs/adr/0001-ai-runtime-decision.md`). `embed` lo
   consume `NoteIndexingService` (`embeddings-generation`) y `generate` el
-  `RagQueryService` (`rag-query`, ver "RAG Decisions").
+  `RagQueryService` (`rag-query`, ver "RAG Decisions"). `rag-answer-citations`
+  renderiza las Notas fuente de la respuesta como citas navegables.
 - **Integraciones nativas:** speech-to-text (voz) y cámara (foto de bocetos).
 
 ## Data and Storage
@@ -478,9 +479,18 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   `note-enrichment-status-ui`/`offline-pending-retry`.
 - **Asincronía en la UI sin `ViewModel`/Flow:** la llamada `suspend` se invoca con
   `rememberCoroutineScope()` (único patrón nuevo); `App` mapea el `RagAnswer` a
-  `AskUiState` (`Idle`/`Asking`/`Answered`/`NoIndexedNotes`/`Error`). La pantalla
-  `AskNotesScreen` muestra sólo el **texto** de la respuesta (las citas son
-  `rag-answer-citations`) y comunica los estados con texto.
+  `AskUiState` (`Idle`/`Asking`/`Answered(text, sources)`/`NoIndexedNotes`/`Error`).
+  La pantalla `AskNotesScreen` muestra el **texto** de la respuesta y, debajo, la
+  sección **"Fuentes"** con una cita numerada por `RetrievedNote` (rank, fragmento
+  del `body`, chip de `track`), clickeable para abrir la Nota (`Edit`); sin fuentes
+  no hay sección. Comunica los estados con texto (`rag-answer-citations`).
+- **Citas de la respuesta (`rag-answer-citations`):** la UI no descarta más
+  `sources`: `AskUiState.Answered` lleva `List<RetrievedNote>` tal cual lo devuelve
+  `RagQueryService` (mismo orden/top-K), y `App` cablea `onOpenSource` a
+  `NotesDestination.Edit(noteId)`. La cita es sólo de presentación/navegación: **no**
+  se persiste (eso es `semantic-linking`/`note-links-ui`) y no hay score crudo en la
+  UI (no calibrado). Si la Nota fuente se borró, `Edit` detecta la ausencia y vuelve
+  a la lista (comportamiento existente).
 - **Sin esquema ni deps:** se reusan `note`/`embedding`/`note_tag`/`attachment`
   (esquema v4, sin `.sqm` nuevos); Compose y `kotlinx-coroutines` ya estaban.
 - **Límite honesto (runtime real):** no hay adaptador cloud/on-device; la
