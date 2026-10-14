@@ -53,3 +53,19 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   `track`/`tags`/`body`/`owner`/timestamps (la clasificación es del usuario; el
   re-indexado sólo llama `updateStatus`). Razón: la clasificación IA está
   descartada y el reintento/`FAILED` pertenece a `offline-pending-retry`.
+
+## Observabilidad / diagnóstico
+
+- `Diagnostics.recordFailure` **MUST** ser best-effort: **nunca** lanza ni bloquea
+  al llamador; una implementación que falle al escribir (storage/IO) **MUST**
+  tragarse el error. Razón: el diagnóstico nunca debe romper el flujo observado
+  (captura local-first tolerante a fallos).
+- El log de diagnóstico **MUST NOT** contener datos de contenido ni sensibles:
+  `body`, preguntas del usuario, rutas de adjuntos, IDs ni secrets. Sólo se
+  registran la fuente, un resumen **estable** y (si aplica) el mensaje de
+  excepción recortado. Razón: privacidad; el archivo es legible en el dispositivo.
+- La observabilidad **MUST NOT** usar telemetría remota, crash reporting ni
+  librerías de logging en el MVP; el sink es local y se limita a **fallos** (no
+  caminos de éxito). Razón: MVP local-first sin red/terceros (ver ADR 0001).
+- El log **MUST NOT** introducir esquema ni tabla: es infraestructura, no modelo de
+  dominio. Razón: no crear migraciones por observabilidad.

@@ -59,8 +59,10 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - Prueba manual end-to-end en Android y iOS.
 
 ## Observability
-- Mínimo: logging local de fallos de indexado e integraciones nativas.
-- Sin telemetría remota en el MVP.
+- Mínimo: **logging local de fallos** de indexado/consulta de IA e integraciones
+  nativas vía el puerto `Diagnostics` (best-effort, sin telemetría remota ni
+  librería de logging). Sink acotado por cantidad en `diagnostics.log` (privado).
+  Ver "Observability Decisions (enrichment-observability-logging)".
 
 ## Constraints
 - **API keys y costos:** a resolver si se elige cloud; nunca commitear keys.
@@ -873,3 +875,37 @@ Implementado 2026-10-13. Detalle en `ARCHITECTURE.md`.
   no se agregaron dependencias y `init.sh` no cambió. `LOCAL_OWNER_ID`/`:core`
   sin cambios de contrato.
 
+
+## Observability Decisions (enrichment-observability-logging)
+
+Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` y `CONSTRAINTS.md`.
+
+- **Puerto `Diagnostics` best-effort, sin librería ni telemetría:** un único
+  método `recordFailure(source, summary, detail?)` que **nunca** lanza ni bloquea.
+  No se adoptó Timber/Kermit/`os_log` ni crash reporting remoto (no permitido en el
+  MVP). Sólo se registran **fallos**, no caminos de éxito; sin niveles/sampling/
+  rotación multi-archivo.
+- **Default no-op retrocompatible:** `NoteIndexingService`/`RagQueryService` y
+  `App` reciben `diagnostics: Diagnostics = NoOpDiagnostics`, así los callers y
+  tests existentes siguen intactos; los composition roots inyectan el sink real.
+- **Sink local acotado, sin esquema:** `FileDiagnostics` escribe líneas
+  `<ts>\t<source>\t<summary>\t<detail|->` en un archivo privado; retención **por
+  cantidad** (`maxEntries`, default 200) y `detail` recortado a ~200 chars. El log
+  es **infra**, no modelo: no hay entidad `Log`, ni tabla, ni `.sqm` (esquema v5).
+  `DiagnosticStorage` es `expect`/`actual` (`java.io.File` en Android/JVM;
+  `NSFileManager`/`NSString` con append = read + overwrite en iOS).
+- **Path por plataforma:** `filesDir/diagnostics.log` (Android) y
+  `Application Support/diagnostics.log` (iOS), provisto por cada composition root.
+- **Privacidad (durable):** sólo fuente, resumen estable y mensaje de excepción
+  recortado. **Nunca** `body`, pregunta, rutas, IDs ni secrets. El `detail` de
+  `STORAGE` se omite a propósito (las excepciones de IO/SQL pueden traer rutas).
+- **Instrumentación:** `AI_INDEXING` en cada `Failed` de indexado (excepción o
+  respuesta inválida); `AI_QUERY` en cada `Failed` de RAG; `NoIndexedNotes` no
+  registra. `VOICE`/`IMAGE` en los `onError` nativos (con el nombre del error) y
+  `STORAGE` en los `catch (Throwable)` de persistencia de adjuntos.
+- **Verificación:** `verifyDiagnostics(driver)` cubre los escenarios 1–7 en
+  `commonTest` (Android/JVM e iOS) y `verifyDiagnosticStorage(...)` ejercita el
+  `actual` real de cada plataforma; smoke Android real con el log
+  `IMAGE image_failed PERMISSION_DENIED` tras denegar el permiso de cámara.
+  Control negativo reproducido y restaurado (sin registro de `AI_INDEXING`; sin
+  retención).

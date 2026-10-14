@@ -220,13 +220,13 @@ Sin cambios en `init.sh`, `gradle/libs.versions.toml`, `iosApp/**`, `.sq`/`.sqm`
 
 ## Implementation Tasks
 
-- [ ] Crear `Diagnostics`/`DiagnosticSource`/`DiagnosticEntry`/`NoOpDiagnostics`/`InMemoryDiagnostics`.
-- [ ] Crear `DiagnosticStorage` + `expect diagnosticStorage(path)` + actuals y `FileDiagnostics` (cap + try/catch + `rawLog`).
-- [ ] Registrar `AI_INDEXING` en `NoteIndexingService` y `AI_QUERY` en `RagQueryService` (default `NoOpDiagnostics`).
-- [ ] Instrumentar `App` (VOICE/IMAGE/STORAGE) y cablear el sink en los composition roots.
-- [ ] Escribir `DiagnosticsCheck` + `DiagnosticsAndroidTest`/`DiagnosticsIosTest`.
-- [ ] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`.
-- [ ] Correr verificación + control negativo y registrar evidencia.
+- [x] Crear `Diagnostics`/`DiagnosticSource`/`DiagnosticEntry`/`NoOpDiagnostics`/`InMemoryDiagnostics`.
+- [x] Crear `DiagnosticStorage` + `expect diagnosticStorage(path)` + actuals y `FileDiagnostics` (cap + try/catch + `rawLog`).
+- [x] Registrar `AI_INDEXING` en `NoteIndexingService` y `AI_QUERY` en `RagQueryService` (default `NoOpDiagnostics`).
+- [x] Instrumentar `App` (VOICE/IMAGE/STORAGE) y cablear el sink en los composition roots.
+- [x] Escribir `DiagnosticsCheck` + `DiagnosticsAndroidTest`/`DiagnosticsIosTest` (+ tests del `actual` real por plataforma).
+- [x] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`.
+- [x] Correr verificación + control negativo y registrar evidencia.
 
 ## Verification Plan
 
@@ -277,3 +277,22 @@ Sin cambios en `init.sh`, `gradle/libs.versions.toml`, `iosApp/**`, `.sq`/`.sqm`
 - [ ] `feature_list.json` y `PROGRESS.md` actualizados con evidencia.
 - [ ] No hay E2E persistente y la spec lo justifica.
 - [ ] `init.sh` sin cambios, no bloqueante y sin procesos de larga duración.
+
+## Implementation Notes (2026-10-14)
+
+Desvíos menores, todos dentro del alcance y documentados:
+
+- **`rawLog()` normaliza el `\n` final** (`storage.read().trimEnd('\n')`) para que
+  el conteo de líneas del Scenario 6 sea determinista; el formato por línea no
+  cambia.
+- **Best-effort en el borde:** las implementaciones provistas
+  (`NoOp`/`InMemory`/`File`) nunca lanzan y `FileDiagnostics` envuelve el storage
+  en try/catch (Scenario 5 se verifica con un `DiagnosticStorage` que lanza). Los
+  servicios llaman a `recordFailure` directo confiando en el contrato del puerto.
+- **`App(..., diagnostics = NoOpDiagnostics)`** agrega default para no romper
+  callers existentes; los composition roots pasan el `FileDiagnostics` real.
+- **Tests extra** `DiagnosticsStorage{Android,Ios}Test` ejercitan el `actual` real
+  de cada plataforma (el `Diagnostics*Test` compartido usa un storage fake).
+- **Smoke iOS interactivo no ejecutado** por falta de input automation
+  (`idb`/`cliclick`); el `actual` iOS se cubre en runtime por su test y los
+  escenarios 1–7 corren en `:core:iosSimulatorArm64Test`.
