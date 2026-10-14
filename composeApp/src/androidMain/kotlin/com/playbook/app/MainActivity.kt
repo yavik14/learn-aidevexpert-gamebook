@@ -10,18 +10,21 @@ import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.AndroidDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
+import com.playbook.core.linking.SemanticLinkingService
 import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.platform.randomNoteId
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.EmbeddingRepository
+import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
 import com.playbook.core.repository.SqlDelightAttachmentRepository
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
+import com.playbook.core.repository.SqlDelightNoteLinkRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
 
 class MainActivity : ComponentActivity() {
-    // Se instancia al arrancar para aplicar el esquema local (v4) y alimentar los
-    // repositorios de notas, adjuntos y embeddings que consume la UI.
+    // Se instancia al arrancar para aplicar el esquema local (v5) y alimentar los
+    // repositorios de notas, adjuntos, embeddings y enlaces que consume la UI.
     private lateinit var database: PlaybookDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,11 +44,16 @@ class MainActivity : ComponentActivity() {
             database = database,
             clock = ::currentTimeMillis,
         )
+        val noteLinkRepository: NoteLinkRepository = SqlDelightNoteLinkRepository(
+            database = database,
+            clock = ::currentTimeMillis,
+        )
         // Runtime de IA por defecto: fake determinista y sin red (el adaptador real
         // es follow-up del ADR 0001). `generate` materializa el RAG.
         val aiClient = FakeAiClient()
         val noteIndexingService = NoteIndexingService(aiClient, embeddingRepository)
         val ragQueryService = RagQueryService(aiClient, noteRepository, embeddingRepository)
+        val semanticLinkingService = SemanticLinkingService(embeddingRepository, noteLinkRepository)
         // El adaptador registra el permission launcher, por eso se construye aquí
         // (onCreate) y no dentro del composable.
         val voiceTranscriber = AndroidVoiceTranscriber(this)
@@ -56,6 +64,8 @@ class MainActivity : ComponentActivity() {
                 voiceTranscriber = voiceTranscriber,
                 noteIndexingService = noteIndexingService,
                 ragQueryService = ragQueryService,
+                noteLinkRepository = noteLinkRepository,
+                semanticLinkingService = semanticLinkingService,
             )
         }
     }

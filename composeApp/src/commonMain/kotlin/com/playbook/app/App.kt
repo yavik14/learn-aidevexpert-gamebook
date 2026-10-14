@@ -18,12 +18,16 @@ import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.NoteIndexingService
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.linking.RelatedNote
+import com.playbook.core.linking.SemanticLinkingService
+import com.playbook.core.linking.buildRelatedNotes
 import com.playbook.core.model.Attachment
 import com.playbook.core.model.AttachmentKind
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
 import com.playbook.core.repository.AttachmentRepository
+import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
 import kotlinx.coroutines.launch
 
@@ -43,6 +47,9 @@ sealed interface NotesDestination {
 
     /** Creación con una imagen recién capturada/elegida, todavía en memoria. */
     data class CreateWithImage(val image: PickedImage) : NotesDestination
+
+    /** Notas relacionadas por similitud, desde una Nota de origen. */
+    data class Related(val noteId: String) : NotesDestination
 }
 
 /**
@@ -67,12 +74,15 @@ fun App(
     voiceTranscriber: VoiceTranscriber,
     noteIndexingService: NoteIndexingService,
     ragQueryService: RagQueryService,
+    noteLinkRepository: NoteLinkRepository,
+    semanticLinkingService: SemanticLinkingService,
 ) {
     MaterialTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
         var attachments by remember { mutableStateOf(emptyList<Attachment>()) }
         var destination by remember { mutableStateOf<NotesDestination>(NotesDestination.List) }
         var refreshKey by remember { mutableStateOf(0) }
+        var relatedNotes by remember { mutableStateOf(emptyList<RelatedNote>()) }
         var voiceState by remember { mutableStateOf<VoiceUiState>(VoiceUiState.Idle) }
         var askState by remember { mutableStateOf<AskUiState>(AskUiState.Idle) }
         var showImageSourceDialog by remember { mutableStateOf(false) }
@@ -241,6 +251,31 @@ fun App(
                 onBack = ::goToList,
             )
 
+            is NotesDestination.Related -> {
+                val sourceNote = notes.firstOrNull { it.id == current.noteId }
+                if (sourceNote == null) {
+                    // La Nota de origen ya no existe (p. ej. se borró): volver a la lista.
+                    LaunchedEffect(current.noteId) { goToList() }
+                } else {
+                    // Recomputo best-effort al abrir: materializa los enlaces desde los
+                    // embeddings actuales; un fallo se ignora y se muestra lo persistido.
+                    LaunchedEffect(current.noteId, refreshKey) {
+                        runCatching { semanticLinkingService.recomputeAll() }
+                        relatedNotes = buildRelatedNotes(
+                            noteId = current.noteId,
+                            links = noteLinkRepository.getLinksForNote(current.noteId),
+                            notes = notes,
+                        )
+                    }
+                    RelatedNotesScreen(
+                        note = sourceNote,
+                        related = relatedNotes,
+                        onOpenNote = { noteId -> destination = NotesDestination.Edit(noteId) },
+                        onBack = ::goToList,
+                    )
+                }
+            }
+
             NotesDestination.Create -> NoteEditorScreen(
                 initialBody = "",
                 initialTrack = null,
@@ -263,6 +298,7 @@ fun App(
                 onDelete = null,
                 onCancel = ::goToList,
                 onRemoveImage = null,
+                onOpenRelated = null,
             )
 
             is NotesDestination.CreateWithImage -> NoteEditorScreen(
@@ -277,6 +313,7 @@ fun App(
                 onDelete = null,
                 onCancel = ::goToList,
                 onRemoveImage = { destination = NotesDestination.Create },
+                onOpenRelated = null,
             )
 
             is NotesDestination.Edit -> {
@@ -313,6 +350,7 @@ fun App(
                         },
                         onCancel = ::goToList,
                         onRemoveImage = null,
+                        onOpenRelated = { destination = NotesDestination.Related(note.id) },
                     )
                 }
             }

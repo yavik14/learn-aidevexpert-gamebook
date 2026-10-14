@@ -261,19 +261,20 @@ No se esperan cambios en `core/**/sqldelight/**`, `NoteLink.sq`/`embedding.sq`/
 
 ## Implementation Tasks
 
-- [ ] Crear `RelatedNote` + `buildRelatedNotes` en `:core` (orden/desempate,
+- [x] Crear `RelatedNote` + `buildRelatedNotes` en `:core` (orden/desempate,
       exclusión, omisión, no-mutación).
-- [ ] Crear `RelatedNotesTest` (puro, `@Test` en `commonTest`).
-- [ ] Crear `RelatedNotesScreen` (header, estado vacío, tarjetas con score textual,
+- [x] Crear `RelatedNotesTest` (puro, `@Test` en `commonTest`).
+- [x] Crear `RelatedNotesScreen` (header, estado vacío, tarjetas con score textual,
       navegación/Volver).
-- [ ] Extender `App.kt` (params, `NotesDestination.Related`, estado, recomputo
+- [x] Extender `App.kt` (params, `NotesDestination.Related`, estado, recomputo
       best-effort, navegación).
-- [ ] Agregar `onOpenRelated` + botón en `NoteEditorScreen`.
-- [ ] Cablear `MainActivity` y `MainViewController` con `SqlDelightNoteLinkRepository`
+- [x] Agregar `onOpenRelated` + botón en `NoteEditorScreen` (en fila propia; ver
+      desvío en `docs/technical-discovery.md`).
+- [x] Cablear `MainActivity` y `MainViewController` con `SqlDelightNoteLinkRepository`
       + `SemanticLinkingService`.
-- [ ] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`,
+- [x] Actualizar `ARCHITECTURE.md`, `docs/technical-discovery.md`,
       `docs/risks-and-open-questions.md`, `AGENTS.md`.
-- [ ] Correr verificación + smoke real en ambas plataformas y registrar evidencia.
+- [x] Correr verificación + smoke real (Android; iOS arranque) y registrar evidencia.
 
 ## Verification Plan
 
