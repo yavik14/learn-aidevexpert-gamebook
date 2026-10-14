@@ -46,3 +46,10 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   a `offline-pending-retry`. El indexado sólo escribe `INDEXED`/`PENDING` (nunca
   `FAILED`). Aplica a features que dependen de ésta
   (`offline-pending-retry`, `note-enrichment-status-ui`).
+- La **UI de estado de enriquecimiento** (`note-enrichment-status-ui`) **MUST
+  NOT** reintentar automáticamente, agendar ni detectar conectividad: el
+  re-indexado es **manual** (un tap del usuario) y los estados visibles provienen
+  de `NoteStatus`, no de clasificación IA. El enriquecimiento **MUST NOT** pisar
+  `track`/`tags`/`body`/`owner`/timestamps (la clasificación es del usuario; el
+  re-indexado sólo llama `updateStatus`). Razón: la clasificación IA está
+  descartada y el reintento/`FAILED` pertenece a `offline-pending-retry`.

@@ -48,10 +48,11 @@ IA a la app) quedó `accepted` (validación independiente). `rag-answer-citation
 sólo UI, `:core` sin cambios) quedó `accepted` (validación independiente `accept`).
 Con `semantic-linking`, `voice-attachment-storage` y `rag-query` ya `accepted`,
 `note-links-ui` (proyección `buildRelatedNotes` + `RelatedNotesScreen` + wiring)
-quedó `accepted` (validación independiente `accept`). Las próximas en cola son
-`note-enrichment-status-ui`, `offline-pending-retry` y
-`enrichment-observability-logging` (dependen de `ai-enrichment-classify-tags-type`,
-ya `accepted`); ya tienen spec.
+quedó `accepted` (validación independiente `accept`). `note-enrichment-status-ui`
+(wiring de `NoteIndexingOrchestrator` en `App` + badge de estado textual +
+re-indexado manual) quedó `accepted` (validación independiente `accept`). Las
+próximas en cola son `offline-pending-retry` y `enrichment-observability-logging`
+(dependen de `ai-enrichment-classify-tags-type`, ya `accepted`); ya tienen spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

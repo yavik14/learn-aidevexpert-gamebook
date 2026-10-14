@@ -495,6 +495,42 @@ relacionadas)").
   OCR); se verificó el arranque de la app en simulador (wiring + esquema v5) y el
   `commonMain` compartido se ejercita en Android.
 
+## Enrichment Status UI Decisions (note-enrichment-status-ui)
+
+Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` ("UI", "AI").
+
+- **`App` usa el orquestador, no el servicio directo.** `indexBestEffort(note)`
+  llama `NoteIndexingOrchestrator.index` y hace `reload()` al resolver el
+  `suspend`; así el `NoteStatus` transiciona de verdad (`CAPTURED → INDEXED` o
+  `→ PENDING`) y el badge deja de mentir. Se mantiene el contrato: `body` en
+  blanco no se indexa y un fallo del runtime no bloquea el guardado.
+- **Badge textual, no sólo color.** `EnrichmentStatus.kt` expone
+  `statusLabel`/`StatusBadge` (borde + texto), reutilizado por la lista y el
+  editor; reemplaza el `status.code` crudo. La etiqueta coincide con
+  `NoteStatus.code` ("capturada"/"pendiente"/"indexada"/"fallida") pero queda
+  desacoplada del valor persistido.
+- **Re-indexado manual, separado del automático.** El editor muestra el badge
+  (sólo lectura) y un botón "Re-indexar" habilitado sólo si `status != INDEXED` y
+  el `body` no está en blanco. Es un tap del usuario (`App.reindex(note)` →
+  orquestador + `reload()`): **sin** scheduling, conectividad ni `FAILED` (frontera
+  con `offline-pending-retry`). Re-indexar sólo llama `updateStatus`; **no** pisa
+  `track`/`tags`/`body`/`owner`/timestamps (regresión cubierta en
+  `NoteIndexingOrchestratorCheck`).
+- **Sin esquema ni dependencias.** Sigue **v5** (sin `.sqm` nuevo); Compose y
+  `kotlinx-coroutines` ya estaban. Los composition roots construyen
+  `NoteIndexingOrchestrator(noteIndexingService, noteRepository)` y lo inyectan en
+  `App(...)` (el servicio se sigue construyendo para el orquestador; sin DI).
+- **Tests y smoke.** `:core` Android/JVM e iOS 40/0 (incluye la regresión de
+  re-indexado). Smoke real Android (emulador dedicado, `adb shell input` +
+  `uiautomator` + sembrado de DB por `run-as`): guardar texto → "indexada" + fila
+  `embedding`; sembrar `pendiente` → lista/editor "pendiente" + "Re-indexar"
+  habilitado; tocarlo → "indexada" conservando `track=mecánicas`/tag `jefe`
+  (verificado en DB); nota sin texto → "capturada" + "Re-indexar" deshabilitado;
+  nota indexada → "Re-indexar" deshabilitado. **Limitación iOS:** sólo
+  install/launch + lista renderizada; sin input automation/OCR y con el container
+  del simulador no accesible, no se pudieron verificar los badges/el botón (el
+  `commonMain` se ejercita en Android).
+
 ## RAG Decisions (rag-query)
 
 Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.

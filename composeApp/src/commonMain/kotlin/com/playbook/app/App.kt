@@ -15,7 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
-import com.playbook.core.ai.NoteIndexingService
+import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.linking.RelatedNote
@@ -66,13 +66,20 @@ sealed interface NotesDestination {
  * al tocar "Grabar" (para que el permiso sea explícito), el texto final se
  * persiste como `body` de una Nota (`track = null`, `status = CAPTURED`) por el
  * mismo camino que el texto, y al salir del destino se libera el micrófono.
+ *
+ * El enriquecimiento (embedding + `NoteStatus`) pasa por
+ * [NoteIndexingOrchestrator]: al guardar una Nota con `body` no vacío se indexa
+ * best-effort (`indexBestEffort`, nunca bloquea el guardado) y el estado real se
+ * refleja al refrescar. El usuario puede **re-indexar manualmente** una Nota no
+ * indexada desde el editor ([reindex]); no hay reintento automático/scheduling
+ * (eso es de `offline-pending-retry`).
  */
 @Composable
 fun App(
     noteRepository: NoteRepository,
     attachmentRepository: AttachmentRepository,
     voiceTranscriber: VoiceTranscriber,
-    noteIndexingService: NoteIndexingService,
+    noteIndexingOrchestrator: NoteIndexingOrchestrator,
     ragQueryService: RagQueryService,
     noteLinkRepository: NoteLinkRepository,
     semanticLinkingService: SemanticLinkingService,
@@ -112,16 +119,30 @@ fun App(
         }
 
         /**
-         * Indexado best-effort al guardar: genera el embedding de la Nota sin
-         * bloquear ni fallar el guardado y sin tocar `NoteStatus`. Una Nota con
-         * `body` en blanco (p. ej. sólo imagen) no se indexa. Los fallos del
-         * runtime se ignoran (la fuente de verdad de "tiene embedding" es la fila
-         * en `embedding`).
+         * Indexado best-effort al guardar: corre [NoteIndexingOrchestrator.index]
+         * (embedding + transición real de `NoteStatus`) sin bloquear ni fallar el
+         * guardado, y refresca la lista cuando el `suspend` resuelve para que el
+         * badge muestre el estado verdadero. Una Nota con `body` en blanco (p. ej.
+         * sólo imagen) no se indexa.
          */
         fun indexBestEffort(note: Note) {
             if (note.body.isBlank()) return
             scope.launch {
-                noteIndexingService.index(note)
+                noteIndexingOrchestrator.index(note)
+                reload()
+            }
+        }
+
+        /**
+         * Re-indexado **manual** disparado por el usuario desde el editor. Reusa
+         * el mismo orquestador y refresca la UI; no agenda nada, no detecta
+         * conectividad (eso es de `offline-pending-retry`) y no toca
+         * `track`/`tags`/`body`.
+         */
+        fun reindex(note: Note) {
+            scope.launch {
+                noteIndexingOrchestrator.index(note)
+                reload()
             }
         }
 
@@ -351,6 +372,8 @@ fun App(
                         onCancel = ::goToList,
                         onRemoveImage = null,
                         onOpenRelated = { destination = NotesDestination.Related(note.id) },
+                        initialStatus = note.status,
+                        onReindex = { reindex(note) },
                     )
                 }
             }

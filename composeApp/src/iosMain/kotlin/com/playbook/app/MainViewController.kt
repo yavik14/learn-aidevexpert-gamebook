@@ -3,6 +3,7 @@ package com.playbook.app
 import androidx.compose.ui.window.ComposeUIViewController
 import com.playbook.app.voice.IosVoiceTranscriber
 import com.playbook.core.ai.FakeAiClient
+import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.IosDatabaseDriverFactory
@@ -31,6 +32,7 @@ private var embeddingRepository: EmbeddingRepository? = null
 private var noteLinkRepository: NoteLinkRepository? = null
 private var aiClient: FakeAiClient? = null
 private var noteIndexingService: NoteIndexingService? = null
+private var noteIndexingOrchestrator: NoteIndexingOrchestrator? = null
 private var ragQueryService: RagQueryService? = null
 private var semanticLinkingService: SemanticLinkingService? = null
 private var voiceTranscriber: IosVoiceTranscriber? = null
@@ -64,6 +66,11 @@ fun MainViewController(): UIViewController {
     val indexing = noteIndexingService ?: NoteIndexingService(ai, embeddings).also {
         noteIndexingService = it
     }
+    // Orquestador de indexado: envuelve el servicio y persiste la transición
+    // real de `NoteStatus` (la UI lo usa al guardar y al re-indexar a mano).
+    val orchestrator = noteIndexingOrchestrator ?: NoteIndexingOrchestrator(indexing, notes).also {
+        noteIndexingOrchestrator = it
+    }
     val rag = ragQueryService ?: RagQueryService(ai, notes, embeddings).also {
         ragQueryService = it
     }
@@ -71,5 +78,5 @@ fun MainViewController(): UIViewController {
         semanticLinkingService = it
     }
     val transcriber = voiceTranscriber ?: IosVoiceTranscriber().also { voiceTranscriber = it }
-    return ComposeUIViewController { App(notes, attachments, transcriber, indexing, rag, links, linking) }
+    return ComposeUIViewController { App(notes, attachments, transcriber, orchestrator, rag, links, linking) }
 }
