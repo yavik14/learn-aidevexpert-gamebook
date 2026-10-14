@@ -186,8 +186,11 @@ composeApp (Android app / commonMain) ──▶ core
   (`notesConsidered`, `linksWritten`): lee `EmbeddingRepository.getAll()`, borra
   todos los enlaces y reconstruye los pares con `score >= threshold` (inclusivo,
   inyectable, `require(threshold in -1.0..1.0)`). Determinista e idempotente.
-  **No** toca `NoteStatus` ni los embeddings, y hoy no se cablea a la app (el
-  trigger del recomputo es un follow-up).
+  **No** toca `NoteStatus` ni los embeddings. Ya se cablea a la app: se construye
+  en los composition roots y se inyecta en `App(...)`; la UI de lectura es
+  `RelatedNotesScreen` y el **único** trigger es un recomputo best-effort al abrir
+  "Notas relacionadas" (ver "Enlaces (notas relacionadas)"); el trigger de ciclo de
+  vida sigue como follow-up.
 - **IDs y tiempo** (`com.playbook.core.platform`): `expect`/`actual`
   `randomNoteId()`/`currentTimeMillis()` (Android `UUID`/`System`; iOS
   `NSUUID`/`NSDate`). En tests se inyectan fakes deterministas; no se usa
@@ -418,11 +421,13 @@ composeApp (Android app / commonMain) ──▶ core
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
   attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber,
-  noteIndexingService: NoteIndexingService, ragQueryService: RagQueryService)`
+  noteIndexingService: NoteIndexingService, ragQueryService: RagQueryService,
+  noteLinkRepository: NoteLinkRepository, semanticLinkingService: SemanticLinkingService)`
   es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
   (`mutableStateOf`), `destination` (`NotesDestination`:
-  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`/`Ask`),
-  `refreshKey`, `voiceState` (`VoiceUiState`), `askState` (`AskUiState`) y el
+  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`/`Ask`/
+  `Related(noteId)`),
+  `refreshKey`, `relatedNotes`, `voiceState` (`VoiceUiState`), `askState` (`AskUiState`) y el
   estado de captura de imagen (`showImageSourceDialog`/`imageError`). La lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
@@ -453,10 +458,13 @@ composeApp (Android app / commonMain) ──▶ core
   **y** no hay `initialImage` (una nota sólo-imagen es válida); `Cancelar`; y en
   edición `Borrar` con `AlertDialog`. Cuando llega `initialImage` muestra la
   previsualización decodificada (`decodeImageBitmap`), "Quitar imagen" y el
-  placeholder de fallo si no decodifica. Mantiene el borrador local
+  placeholder de fallo si no decodifica. En edición, si llega `onOpenRelated` no
+  nulo, ofrece "Ver relacionadas" en una **fila propia** (en pantallas angostas no
+  cabe junto a Borrar/Cancelar/Guardar y empujaría "Guardar" fuera del borde).
+  Mantiene el borrador local
   (`body`/`track`/`tags`) y emite
-  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`; la
-  persistencia y el refresco los maneja `App`. No hay control de
+  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`;
+  la persistencia, el refresco y la navegación los maneja `App`. No hay control de
   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
 - **`VoiceCaptureScreen`**: pantalla "tonta" de dictado. Recibe
   `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
@@ -541,20 +549,57 @@ composeApp (Android app / commonMain) ──▶ core
   `App` (recargados por `refreshKey`); no lee la base dentro del cuerpo de
   composición. No hay DI/`ViewModel`/Flow ni esquema/dependencias nuevos.
 
+## Enlaces (notas relacionadas)
+
+- **Proyección pura en `:core`** (`com.playbook.core.linking`): `RelatedNote(note,
+  score)` y `buildRelatedNotes(noteId, links, notes): List<RelatedNote>`. Resuelve
+  el otro extremo del enlace con `NoteLink.otherNoteId(noteId)` (el enlace es no
+  dirigido: sirve abrirlo desde cualquiera de los dos lados), lo busca en `notes`
+  (**omite** si falta), nunca devuelve la propia Nota, y ordena por `score` **desc**
+  con desempate por `note.id` **asc** (determinista). Sin enlaces → lista vacía. No
+  muta entradas; no depende de SQLDelight ni de `AiClient`.
+- **Pantalla `RelatedNotesScreen`** (`:composeApp/commonMain`): render fino sobre
+  `RelatedNote`. Encabezado "Notas relacionadas", el `body` de la Nota de origen
+  (máx. 2 líneas, ellipsis) y "Volver"; estado vacío explícito ("No hay notas
+  relacionadas" + línea de apoyo); con resultados, un `LazyColumn` de tarjetas
+  (`key = { it.note.id }`) con el `body` de la relacionada (máx. 2 líneas), el
+  `score` como **texto** ("Similitud 0.92", formateado sin depender del locale) y
+  chips de `track`/`status`/Etiquetas; cada tarjeta es `clickable(onClickLabel =
+  "Abrir nota", role = Role.Button)`. Todo se comunica con texto, no sólo color.
+- **Navegación:** en `NoteEditorScreen` (modo edición) "Ver relacionadas" →
+  `NotesDestination.Related(noteId)`; tocar una tarjeta → `NotesDestination.Edit(noteId)`;
+  "Volver" → `List`. Si el `id` de origen ya no existe, se vuelve a la lista. No hay
+  librería de navegación.
+- **Trigger mínimo (recomputo best-effort al abrir):** al entrar a
+  `NotesDestination.Related(noteId)`, un `LaunchedEffect(noteId, refreshKey)` corre
+  `runCatching { semanticLinkingService.recomputeAll() }` (materializa los enlaces
+  desde los embeddings actuales) y luego proyecta con
+  `buildRelatedNotes(noteId, noteLinkRepository.getLinksForNote(noteId), notes)`.
+  Un fallo del recomputo **se ignora** (no propaga ni bloquea la navegación) y se
+  muestra lo persistido (o el estado vacío). Es el **único** disparador del
+  recomputo; el trigger de ciclo de vida (al indexar/editar, offline) sigue como
+  follow-up. `recomputeAll()` es síncrono y O(n²) sobre los embeddings: corre en el
+  dispatcher principal dentro del `LaunchedEffect`, aceptable para una biblioteca
+  personal.
+- **Sin cambios de esquema:** sigue **v5** (sin `.sqm` nuevo), sin dependencias
+  nuevas. `NoteLinkRepository`/`SemanticLinkingService` se construyen en los
+  composition roots y se inyectan por constructor (sin DI).
+
 ## Runtime surfaces
 
 - **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v5 con
   `createDatabase(AndroidDatabaseDriverFactory(...))`, construye
   `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository` +
-  `SqlDelightEmbeddingRepository`, un `FakeAiClient`, `NoteIndexingService` y
-  `RagQueryService`, y monta `App(..., AndroidVoiceTranscriber(this))`.
-  (`NoteLinkRepository`/`SemanticLinkingService` **no** se cablean todavía.)
-- **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
-  local (singletons perezosos), construye los tres repositorios, el
+  `SqlDelightEmbeddingRepository` + `SqlDelightNoteLinkRepository`, un
   `FakeAiClient`, `NoteIndexingService`, `RagQueryService` y
-  `IosVoiceTranscriber()`, y envuelve
-  `App(notes, attachments, transcriber, indexing, rag)`; lo llama `ComposeView`
-  (SwiftUI) en `iosApp`.
+  `SemanticLinkingService`, y monta `App(..., AndroidVoiceTranscriber(this),
+  noteLinkRepository, semanticLinkingService)`.
+- **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
+  local (singletons perezosos), construye los cuatro repositorios, el
+  `FakeAiClient`, `NoteIndexingService`, `RagQueryService` y
+  `SemanticLinkingService`, y envuelve
+  `App(notes, attachments, transcriber, indexing, rag, noteLinkRepository,
+  semanticLinkingService)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
 
 ## Identifiers
 
@@ -655,11 +700,13 @@ Comandos manuales equivalentes:
 - Edición de adjuntos de una Nota existente, reproducción del audio y render de la
   imagen/audio en la lista o detalle (hoy sólo chips de texto "Imagen"/"Audio" +
   previsualización de la imagen al crear).
-- Enlaces: la generación ya existe (`semantic-linking`), pero su **UI** de lectura
-  (`note-links-ui`) y el **trigger** del recomputo (`recomputeAll`) siguen
-  pendientes. `rag-query` expone `cosineSimilarity` y hace retrieval **efímero**
-  (no crea filas `link` ni define umbral); `rag-answer-citations` renderiza esas
-  fuentes como citas y navega a la Nota, sin persistir el enlace. El wiring de
+- Enlaces: la generación (`semantic-linking`) y su **UI** de lectura
+  (`note-links-ui`: `RelatedNotesScreen`) ya existen; el recomputo es
+  **best-effort al abrir "Notas relacionadas"**. Queda pendiente el **trigger de
+  ciclo de vida** (al indexar/editar, offline) y el recomputo incremental.
+  `rag-query` expone `cosineSimilarity` y hace retrieval **efímero** (no crea
+  filas `link` ni define umbral); `rag-answer-citations` renderiza esas fuentes
+  como citas y navega a la Nota, sin persistir el enlace. El wiring de
   estados/reintento del indexado
   (`note-enrichment-status-ui`, `offline-pending-retry`) sigue pendiente; el
   indexado best-effort de `rag-query` no transiciona `NoteStatus`. El
@@ -668,9 +715,10 @@ Comandos manuales equivalentes:
 - Adaptador on-device concreto (fase 2 de la estrategia híbrida).
 - Reproducción del audio original del dictado (playback/controles/waveform); el
   Adjunto `AUDIO` ya se persiste y es visible (`voice-attachment-storage`).
-- Detalle de nota de sólo lectura (`note-links-ui`/posterior). La vista de GDD
-  (`gdd-view`) ya está implementada; volver al GDD tras editar desde él queda
-  fuera de alcance (ver sección GDD).
+- Detalle de nota de sólo lectura (posterior). La vista de GDD (`gdd-view`) y la
+  de Notas relacionadas (`note-links-ui`) ya están implementadas; volver al GDD (o
+  a las relacionadas) tras editar desde allí queda fuera de alcance (ver secciones
+  GDD y Enlaces).
 - Manejo del back físico Android/iOS en el editor y en la captura de voz (hoy sólo
   "Cancelar").
 - Formalización de `DESIGN.md` (sigue `provisional`; sin entrega de UI/UX).

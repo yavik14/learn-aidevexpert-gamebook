@@ -451,6 +451,50 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   (simulador): `user_version` 4 → 5, tabla `note_link` + índice creados y Notas
   preservadas, sin crashes.
 
+## Linking UI Decisions (note-links-ui)
+
+Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` ("Enlaces (notas
+relacionadas)").
+
+- **Proyección pura en `:core`, pantalla "tonta".** La resolución del otro extremo
+  (`NoteLink.otherNoteId`), la exclusión de la propia Nota y el orden
+  (`score` desc / `note.id` asc) viven en `buildRelatedNotes(noteId, links, notes)`
+  (`com.playbook.core.linking`), testeada cross-platform; `RelatedNotesScreen` sólo
+  renderiza y emite `onOpenNote`/`onBack` (mismo patrón que `buildGdd`/`GddScreen`).
+  Evita que la UI dependa de SQLDelight y deja el orden determinista y verificable.
+- **Trigger mínimo: recomputo best-effort al abrir.** `semantic-linking` no tenía
+  disparador, así que una UI de sólo lectura habría quedado siempre vacía. Al
+  entrar a `NotesDestination.Related(noteId)`, un `LaunchedEffect` corre
+  `runCatching { SemanticLinkingService.recomputeAll() }` y luego lee los enlaces.
+  `recomputeAll()` es síncrono y O(n²) sobre los embeddings; corre en el dispatcher
+  principal (igual que `getAll()`), aceptable para una biblioteca personal. Un
+  fallo **no** propaga ni bloquea: se muestra lo persistido o el estado vacío. El
+  trigger de ciclo de vida (al indexar/editar, offline) y el recomputo incremental
+  permanecen como follow-ups.
+- **`score` como texto, sin semáforo.** La tarjeta muestra "Similitud 0.92" (dos
+  decimales, formateados sin depender del locale) más chips de `track`/`status`/
+  Etiquetas; la información nunca depende sólo del color (`DESIGN.md`). No se
+  expone el umbral ni top-K en la UI.
+- **Layout del editor.** "Ver relacionadas" va en una **fila propia** sobre la fila
+  de acciones: en edición, ponerlo junto a Borrar/Cancelar/Guardar desbordaba una
+  pantalla de 1080px y empujaba "Guardar" fuera del borde (detectado en el smoke
+  real Android y corregido).
+- **Sin cambios de esquema ni dependencias.** Sigue **v5** (sin `.sqm` nuevo),
+  `gradle/libs.versions.toml`/`build.gradle.kts`/`init.sh` sin cambios. Los
+  composition roots construyen `SqlDelightNoteLinkRepository` +
+  `SemanticLinkingService` y los inyectan en `App(...)` (sin DI).
+- **Tests y smoke.** `RelatedNotesTest` (7 casos puros en `commonTest`: otro
+  extremo desde ambos lados, orden `score` desc, desempate por `id`, omisión de
+  ausentes, exclusión de la propia Nota/enlaces ajenos, sin enlaces, no-mutación y
+  determinismo) corre en Android/JVM e iOS; control negativo (orden asc) rompe
+  `ordersByScoreDescending`. Smoke real Android (emulador, `adb shell input` +
+  `uiautomator`): una Nota sin enlaces → estado vacío; dos Notas con el mismo
+  cuerpo → embeddings idénticos (`FakeAiClient`) → coseno 1.0 → tarjeta
+  "Similitud 1.00"; tocar la tarjeta abre la Nota y "Volver" regresa. **Limitación:**
+  no se pudo ejecutar el mismo camino interactivo en iOS (sin input automation ni
+  OCR); se verificó el arranque de la app en simulador (wiring + esquema v5) y el
+  `commonMain` compartido se ejercita en Android.
+
 ## RAG Decisions (rag-query)
 
 Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.

@@ -46,8 +46,12 @@ retrieval por similitud coseno + `RagQueryService` + primer wiring del runtime d
 IA a la app) quedó `accepted` (validación independiente). `rag-answer-citations`
 (la respuesta lista sus Notas fuente como citas numeradas y permite abrirlas;
 sólo UI, `:core` sin cambios) quedó `accepted` (validación independiente `accept`).
-La feature en curso es `note-links-ui` (depende de `semantic-linking`, ya
-`accepted`).
+Con `semantic-linking`, `voice-attachment-storage` y `rag-query` ya `accepted`,
+`note-links-ui` (proyección `buildRelatedNotes` + `RelatedNotesScreen` + wiring)
+quedó `accepted` (validación independiente `accept`). Las próximas en cola son
+`note-enrichment-status-ui`, `offline-pending-retry` y
+`enrichment-observability-logging` (dependen de `ai-enrichment-classify-tags-type`,
+ya `accepted`); ya tienen spec.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
