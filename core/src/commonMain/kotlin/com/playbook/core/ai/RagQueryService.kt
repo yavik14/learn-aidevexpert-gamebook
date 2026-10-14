@@ -1,5 +1,8 @@
 package com.playbook.core.ai
 
+import com.playbook.core.diagnostics.Diagnostics
+import com.playbook.core.diagnostics.DiagnosticSource
+import com.playbook.core.diagnostics.NoOpDiagnostics
 import com.playbook.core.model.Note
 import com.playbook.core.repository.EmbeddingRepository
 import com.playbook.core.repository.NoteRepository
@@ -32,12 +35,16 @@ sealed interface RagAnswer {
  * runtime se mapean a [RagAnswer.Failed] sin propagar la excepción.
  *
  * @param maxSources máximo de Notas fuente a recuperar (top-K).
+ * @param diagnostics sink de diagnóstico (default [NoOpDiagnostics]); los fallos
+ *   del runtime se reportan como `AI_QUERY` de forma best-effort y sin registrar
+ *   la pregunta.
  */
 class RagQueryService(
     private val aiClient: AiClient,
     private val noteRepository: NoteRepository,
     private val embeddingRepository: EmbeddingRepository,
     private val maxSources: Int = DEFAULT_MAX_SOURCES,
+    private val diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     /**
      * Responde [question] a partir de las Notas indexadas. `question` no puede
@@ -61,20 +68,21 @@ class RagQueryService(
         val questionEmbedding = try {
             aiClient.embed(listOf(question.trim()))
         } catch (cause: AiClientException) {
+            diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
             return RagAnswer.Failed(cause)
         }
         if (questionEmbedding.size != 1) {
-            return RagAnswer.Failed(
-                AiClientException(
-                    "Se esperaba exactamente 1 embedding, se recibieron ${questionEmbedding.size}",
-                ),
+            val cause = AiClientException(
+                "Se esperaba exactamente 1 embedding, se recibieron ${questionEmbedding.size}",
             )
+            diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
+            return RagAnswer.Failed(cause)
         }
         val questionVector = questionEmbedding.single().values
         if (questionVector.isEmpty()) {
-            return RagAnswer.Failed(
-                AiClientException("El runtime devolvió un embedding de dimensión 0"),
-            )
+            val cause = AiClientException("El runtime devolvió un embedding de dimensión 0")
+            diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
+            return RagAnswer.Failed(cause)
         }
 
         // Similitud coseno sólo contra candidatos de dimensión compatible; el
@@ -95,6 +103,7 @@ class RagQueryService(
                 GenerateRequest(prompt = question.trim(), context = top.map { it.note.body }),
             )
         } catch (cause: AiClientException) {
+            diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
             return RagAnswer.Failed(cause)
         }
 
@@ -104,5 +113,8 @@ class RagQueryService(
     companion object {
         /** Máximo de Notas fuente recuperadas por defecto. */
         const val DEFAULT_MAX_SOURCES: Int = 5
+
+        /** Resumen estable (sin datos del usuario) para los fallos de consulta. */
+        private const val SUMMARY_FAILED = "query_failed"
     }
 }

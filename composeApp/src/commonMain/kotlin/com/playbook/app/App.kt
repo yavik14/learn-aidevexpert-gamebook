@@ -18,6 +18,9 @@ import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.diagnostics.DiagnosticSource
+import com.playbook.core.diagnostics.Diagnostics
+import com.playbook.core.diagnostics.NoOpDiagnostics
 import com.playbook.core.linking.RelatedNote
 import com.playbook.core.linking.SemanticLinkingService
 import com.playbook.core.linking.buildRelatedNotes
@@ -33,6 +36,12 @@ import kotlinx.coroutines.launch
 
 /** Owner único del MVP: lo provee la UI al construir cada [NoteDraft]. */
 private const val LOCAL_OWNER_ID = "local"
+
+// Resúmenes estables (sin datos del usuario) para el diagnóstico de fallos
+// nativos. El `detail` nunca lleva rutas ni contenido.
+private const val VOICE_FAILED = "voice_failed"
+private const val IMAGE_FAILED = "image_failed"
+private const val STORAGE_FAILED = "storage_failed"
 
 /** Destino de navegación local (sin librería de navegación). */
 sealed interface NotesDestination {
@@ -83,6 +92,7 @@ fun App(
     ragQueryService: RagQueryService,
     noteLinkRepository: NoteLinkRepository,
     semanticLinkingService: SemanticLinkingService,
+    diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     MaterialTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
@@ -101,7 +111,11 @@ fun App(
 
         val imagePicker = rememberImagePicker(
             onResult = { picked -> destination = NotesDestination.CreateWithImage(picked) },
-            onError = { error -> imageError = error },
+            onError = { error ->
+                // Fallo de integración nativa: registrar sin cambiar la UI.
+                diagnostics.recordFailure(DiagnosticSource.IMAGE, IMAGE_FAILED, error.name)
+                imageError = error
+            },
         )
         val fileStore = rememberAttachmentFileStore()
 
@@ -187,6 +201,7 @@ fun App(
                             } catch (_: Throwable) {
                                 // Degradación tolerante: conservar la Nota sin
                                 // Adjunto y no dejar el archivo huérfano.
+                                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
                                 fileStore.delete(audio.relativePath)
                             }
                         }
@@ -197,6 +212,8 @@ fun App(
                     }
                 },
                 onError = { error ->
+                    // Fallo de integración nativa: registrar sin cambiar la UI.
+                    diagnostics.recordFailure(DiagnosticSource.VOICE, VOICE_FAILED, error.name)
                     voiceState = VoiceUiState.Error(error)
                 },
             )
@@ -236,6 +253,7 @@ fun App(
             } catch (_: Throwable) {
                 // Nada quedó persistido (o la nota se creó sin adjunto): no dejar
                 // el archivo recién guardado huérfano.
+                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
                 fileStore.delete(stored.relativePath)
             }
             goToList()
