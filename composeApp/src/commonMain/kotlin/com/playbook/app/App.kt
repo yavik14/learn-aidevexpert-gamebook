@@ -121,7 +121,7 @@ fun App(
             askState = AskUiState.Asking
             scope.launch {
                 askState = when (val result = ragQueryService.ask(question)) {
-                    is RagAnswer.Answer -> AskUiState.Answered(result.text)
+                    is RagAnswer.Answer -> AskUiState.Answered(result.text, result.sources)
                     RagAnswer.NoIndexedNotes -> AskUiState.NoIndexedNotes
                     is RagAnswer.Failed -> AskUiState.Error
                 }
@@ -334,6 +334,7 @@ fun App(
             NotesDestination.Ask -> AskNotesScreen(
                 state = askState,
                 onAsk = ::ask,
+                onOpenSource = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
             )
         }
