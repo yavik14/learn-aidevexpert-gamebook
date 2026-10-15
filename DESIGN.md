@@ -47,6 +47,13 @@ components:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     rounded: "{rounded.sm}"
+  genre-chip:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+  fab:
+    backgroundColor: "{colors.primary}"
+    textColor: "#FFFDF8"
 ---
 
 # Design Direction
@@ -55,31 +62,38 @@ components:
 > los define el equipo de UI/UX a partir del brief en
 > `docs/design/ui-ux-brief.md`. Los tokens YAML de arriba son un punto de
 > partida para agentes, **no** una fuente de verdad.
+>
+> **2026-10-15:** revisión de alcance (Android-first). Se suma la pantalla
+> principal rediseñada (TopAppBar "Playbook" + iconos + FAB desplegable), el
+> wizard de Brainstorming, Géneros (reemplazan etiquetas) y bocetos con miniatura.
 
 ## Overview
 
 Playbook es un cuaderno de diseño de juegos para un único autor (game dev
 aficionado). El MVP se organiza en tres tracks: `mecánicas`, `personajes` e
-`historia`. La UI es Compose Multiplatform (Material 3) para Android e iOS.
+`historia`, y clasifica las Notas con **Géneros** (catálogo + personalizados). El
+eje del producto es el **GDD de un Proyecto de Juego**. La UI es Compose
+Multiplatform (Material 3). **Android-first**: iOS queda congelado.
 
 ## Existing Design Assets
 
-Ninguno. Solo existe el icono de app por defecto en `iosApp`. Se parte de cero.
+Ninguno. Solo existe el icono de app por defecto. Se parte de cero.
 
 ## Generated Concept Images
 
-Ninguna todavía. El equipo de UI/UX producirá los conceptos; cuando se acepten,
-guardarlos bajo `docs/design/concepts/` y referenciarlos acá.
+Ninguna. No hay skill de generación de imágenes disponible en el runtime actual;
+la dirección se describe en prosa. El equipo de UI/UX producirá los conceptos.
 
 ## Product Feel
 
 **Cuaderno creativo / editorial cálido.** Debe sentirse como "mis ideas": papel,
 tinta, tipografía con carácter, calidez. Ni corporativo ni frío, ni un IDE
-denso. La captura es el gesto central y debe sentirse inmediata y sin fricción.
+denso. La captura es el gesto central y debe sentirse inmediata y sin fricción;
+el GDD debe leerse como un documento del juego.
 
 ## Colors
 
-Provisional (ver front matter). Base papel cálido (`#F7F1E6`) + tinta
+Provisional (ver front matter). Base papel cálida (`#F7F1E6`) + tinta
 (`#2B2118`), primario terracota, secundario verde profundo, acento ámbar. Cada
 track debería poder distinguirse con un color/acento propio, siempre con
 contraste AA.
@@ -93,33 +107,53 @@ legibles a tamaño pequeño.
 ## Layout
 
 - Mobile-first, una columna; navegación por track clara.
+- **Pantalla principal:** `TopAppBar` con título **"Playbook"** y, a la derecha,
+  tres **iconos** (Ver GDD, Brainstorming, Preguntar); **FAB desplegable**
+  (speed-dial) abajo-derecha con Nota de texto, Galería y Cámara.
 - Jerarquía por agrupación (track → nota), no por densidad.
-- Insets/edge-to-edge correctos en Android e iOS.
+- Insets/edge-to-edge correctos.
 
 ## Shapes
 
-Radios suaves (`sm`/`md`), sin esquinas duras. Bordes sutiles tipo papel.
+Radios suaves (`sm`/`md`), sin esquinas duras. Bordes sutiles tipo papel. Las
+miniaturas de boceto usan `rounded.md` con recorte.
 
 ## Components
 
+- **TopAppBar:** título "Playbook" + acciones por **icono** (con `contentDescription`
+  para accesibilidad).
+- **FAB desplegable (speed-dial):** acción principal "Nueva nota" que despliega
+  Nota de texto / Galería / Cámara.
 - **Selector de Track:** control primario de organización (elegir uno de tres).
-- **Chip de Track / Chip de Etiqueta:** identificadores rápidos y editables.
-- **Tarjeta de Nota:** cuerpo + track + etiquetas + estado de indexado.
+- **Chip de Track / Chip de Género:** identificadores rápidos y editables. El de
+  Género se elige del catálogo o se escribe uno personalizado.
+- **Chip de categoría de mecánica:** `Movimiento`/`Interacción`/`Conflicto`.
+- **Tarjeta de Nota:** cuerpo + track + géneros + estado de indexado; si es un
+  boceto, **miniatura** de la imagen (además del contenido).
 - **Acción de Captura:** entrada rápida a texto / voz / imagen.
+- **Dictado inline:** en "Nueva nota", con **barra de progreso de 30s** y
+  auto-stop.
 - **Badge de Estado:** `capturada`, `pendiente`, `indexada`, `fallida`.
-- **Referencia de Nota (cita):** usada en las respuestas RAG.
+- **Referencia de Nota (cita):** usada en las respuestas del Q&A.
+- **Wizard de Brainstorming:** stepper de 9 pasos con progreso (Paso X/9),
+  navegación atrás/siguiente y, por paso, hasta 2 **sugerencias** y un campo
+  propio.
+- **Botón "Sugerir" / "Guardar como Nota":** acciones por paso/respuesta.
 
 ## Core Screens
 
-1. **Inicio / GDD:** notas agrupadas y resumidas por track.
-2. **Lista de Notas:** por track; con estado vacío.
-3. **Detalle / Lectura de Nota.**
-4. **Editor de Nota de Texto:** cuerpo + track + etiquetas.
-5. **Captura de Voz:** grabando / transcribiendo.
-6. **Captura de Imagen:** cámara / galería.
-7. **Estado de Indexado:** pendiente/fallida + reintento.
-8. **Notas Relacionadas:** enlaces por similitud.
-9. **Consulta RAG:** pregunta + respuesta con citas a notas.
+1. **Pantalla principal (Playbook):** notas agrupadas por track; TopAppBar
+   ("Playbook" + iconos GDD/Brainstorming/Preguntar); FAB desplegable de captura.
+2. **Nueva nota / Editor:** cuerpo + track + géneros; **dictado inline 30s**.
+3. **Bocetos (captura):** cámara / galería → Nota con imagen (+ **miniatura** en
+   listas).
+4. **Brainstorming (wizard):** 9 pasos para crear/iterar el Proyecto de Juego;
+   sugerencias de IA; crear Nota por paso.
+5. **GDD (documento del Proyecto):** ficha del Proyecto (Proyecto, Historia/Lore,
+   Personajes) + Notas por track; exportar/compartir.
+6. **Preguntar (Q&A):** pregunta + respuesta con citas; "Guardar como Nota".
+7. **Notas Relacionadas:** enlaces por similitud desde una nota.
+8. **Estado de indexado:** pendiente/fallida + reintento (discreto).
 
 ## Responsive Baseline
 
@@ -129,13 +163,14 @@ Sin Desktop/Web en el MVP.
 ## Accessibility Baseline
 
 - Contraste AA (≥ 4.5:1 texto normal).
-- Objetivos táctiles ≥ 48dp.
+- Objetivos táctiles ≥ 48dp (incluye iconos de la TopAppBar y el FAB).
 - Soporte de tipografía dinámica / tamaños de sistema.
-- Estados no comunicados solo por color (track y estado también con forma/texto).
+- Estados e iconos no comunicados solo por color (con forma/texto/`contentDescription`).
 
 ## Do's and Don'ts
 
-- **Sí:** calidez, papel/tinta, jerarquía por agrupación, captura inmediata.
+- **Sí:** calidez, papel/tinta, jerarquía por agrupación, captura inmediata,
+  GDD como documento.
 - **Sí:** distinguir track y estado con más que color.
 - **No:** look corporativo/frío, dashboards densos, decoración que estorbe la
   captura.
@@ -146,4 +181,7 @@ Sin Desktop/Web en el MVP.
 - ¿Cómo representar visualmente cada track con colores, a la vez accesibles?
 - ¿Cómo se ve "sin indexar / pendiente / fallida" sin parecer error?
 - ¿Cómo se diferencia visualmente enlace semántico de relación manual (futuro)?
-- ¿Indicador de estado de IA discreto que no bloquee la captura?
+- Relación visual entre la **miniatura** de un boceto y el chip de estado.
+- Presentación de las **2 sugerencias** de IA en cada paso del wizard (inline,
+  tarjetas, carrusel).
+- Aspecto del **FAB desplegable** y su expansión/colapso.
