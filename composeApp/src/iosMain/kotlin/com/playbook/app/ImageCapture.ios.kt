@@ -31,7 +31,6 @@ import platform.PhotosUI.PHPickerFilter
 import platform.PhotosUI.PHPickerResult
 import platform.PhotosUI.PHPickerViewController
 import platform.PhotosUI.PHPickerViewControllerDelegateProtocol
-import platform.UIKit.UIApplication
 import platform.UIKit.UIImage
 import platform.UIKit.UIImageJPEGRepresentation
 import platform.UIKit.UIImagePickerController
@@ -40,8 +39,6 @@ import platform.UIKit.UIImagePickerControllerOriginalImage
 import platform.UIKit.UIImagePickerControllerSourceType
 import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.UIKit.UIViewController
-import platform.UIKit.UIWindow
-import platform.UIKit.UIWindowScene
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
@@ -195,21 +192,6 @@ private class GalleryPickerDelegate(
             }
         }
     }
-}
-
-/** Controlador superior: la jerarquía puede tener pickers presentados encima. */
-private fun topViewController(): UIViewController? {
-    var controller = UIApplication.sharedApplication.keyWindow?.rootViewController
-    if (controller == null) {
-        val scene = UIApplication.sharedApplication.connectedScenes
-            .firstOrNull { it is UIWindowScene } as? UIWindowScene
-        val window = scene?.windows?.firstOrNull { (it as? UIWindow)?.keyWindow == true } as? UIWindow
-        controller = window?.rootViewController
-    }
-    while (controller?.presentedViewController != null) {
-        controller = controller.presentedViewController
-    }
-    return controller
 }
 
 actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =

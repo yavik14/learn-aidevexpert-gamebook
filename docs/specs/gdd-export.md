@@ -419,16 +419,30 @@ ni `DESIGN.md`.
 
 ## Implementation Tasks
 
-- [ ] Crear `buildGddMarkdown(notes, now)` en `:core` con el "Format Contract".
-- [ ] Implementar el escapado de Markdown del contenido de usuario.
-- [ ] Escribir `verifyGddMarkdown()` + `GddMarkdown{Android,Ios}Test`.
-- [ ] Crear `GddSharer` (`expect`/`actual`) y `currentTimestampLabel()`.
-- [ ] Extraer `topViewController()` a un helper interno de `iosMain` y reusarlo.
-- [ ] Sumar "Compartir" + snackbar en `GddScreen` (sin tocar `App.kt`).
-- [ ] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`.
-- [ ] Correr verificación + controles negativos y registrar evidencia.
-- [ ] Smoke manual Android del share; declarar el límite de iOS.
-- [ ] Actualizar `feature_list.json`, `PROGRESS.md` y `AGENTS.md`.
+- [x] Crear `buildGddMarkdown(notes, now)` en `:core` con el "Format Contract".
+- [x] Implementar el escapado de Markdown del contenido de usuario.
+- [x] Escribir `verifyGddMarkdown()` + `GddMarkdown{Android,Ios}Test`.
+- [x] Crear `GddSharer` (`expect`/`actual`) y `currentTimestampLabel()`.
+- [x] Extraer `topViewController()` a un helper interno de `iosMain` y reusarlo.
+- [x] Sumar "Compartir" + snackbar en `GddScreen` (sin tocar `App.kt`).
+- [x] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`.
+- [x] Correr verificación + controles negativos y registrar evidencia.
+- [x] Smoke manual Android del share; declarar el límite de iOS.
+- [x] Actualizar `feature_list.json`, `PROGRESS.md` y `AGENTS.md`.
+
+## Implementation Findings (implementer, 2026-10-15)
+
+- **`Schema.version` real = 5, no 6.** La spec asumía `== 6` porque
+  `offline-pending-retry` (que introduce la v6) se trabajaría en paralelo; en este
+  worktree esa feature **no** está implementada, así que
+  `PlaybookDatabaseImpl.Schema.version == 5`, con `1.sqm`–`4.sqm` y sin `.sqm`
+  nuevo. `gdd-export` no toca el esquema: el requisito real ("no agrega `.sqm` ni
+  cambia `Schema.version`") se cumple. No cambia el alcance.
+- **Smoke interactivo no ejecutado.** No había `adb`/emulador Android en el
+  entorno y el gesto de compartir iOS no es automatizable (sin
+  `idb`/`cliclick`/`applesimutils`). Se declaró honestamente y no se fabricó
+  evidencia; la generación del documento se cubre con tests del core en dos
+  plataformas y la app compila/enlaza en Android e iOS.
 
 ## Verification Plan
 

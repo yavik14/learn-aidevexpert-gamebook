@@ -36,6 +36,9 @@ numeradas** con navegación a la Nota, sin persistirlas.
 `PENDING` al arrancar (`PendingIndexingRetry`) y promueve a `FAILED` las que
 agotan el presupuesto (`index_attempts`, esquema v6 con `5.sqm`); la
 disponibilidad de la IA es un puerto inyectable (`AiAvailability`).
+`gdd-export` cierra el GDD como documento compartible: proyección pura a Markdown
+(`buildGddMarkdown`) + el puerto de share `GddSharer` (expect/actual, texto en
+memoria).
 
 ## Modules
 
@@ -581,7 +584,8 @@ composeApp (Android app / commonMain) ──▶ core
   vista agregada sobre las Notas (`docs/domain-model.md`), sin tabla, query ni
   migración propias.
 - **Pantalla `GddScreen`** (`:composeApp/commonMain`): render fino sobre
-  `buildGdd`. Encabezado "GDD" + resumen del total ("N notas"); un botón "Volver";
+  `buildGdd`. Encabezado "GDD" + resumen del total ("N notas"); los botones
+  "Volver" y **"Compartir"** (deshabilitado si `notes.isEmpty()`);
   una sección por `track` (o "Sin track") con su conteo ("N notas") y el texto
   "Sin notas en este track" cuando está vacía; y las notas en un `LazyColumn`
   (`key = { it.id }`). Cada nota resume el `body` (máx. 2 líneas, ellipsis) y
@@ -597,6 +601,32 @@ composeApp (Android app / commonMain) ──▶ core
 - **Refresco:** `GddScreen` recibe `notes`/`attachmentCounts` ya hoisteados por
   `App` (recargados por `refreshKey`); no lee la base dentro del cuerpo de
   composición. No hay DI/`ViewModel`/Flow ni esquema/dependencias nuevos.
+- **Export a Markdown (`gdd-export`, proyección pura en `:core`):**
+  `com.playbook.core.gdd.buildGddMarkdown(notes, now): String` reusa `buildGdd`
+  para agrupar/ordenar y **omite** las secciones vacías. Documento determinista:
+  encabezado sin fecha (`# GDD — Playbook` + `Total: N notas`, singular
+  `Total: 1 nota`), secciones `## <track.code>`/`## Sin track` en orden fijo, por
+  Nota `### <título>` (primera línea del `body` trim, escapada; fallback
+  `Nota <now>` con `body` vacío), el **resto** del `body` (escapado, sin repetir
+  la primera línea) y `Etiquetas: a, b — Estado: <status.code>` (Etiquetas
+  escapadas, `status.code` no; sin Etiquetas, sólo `Estado: ...`). Bloques
+  separados por una línea en blanco y documento terminado en `\n`. El escapado es
+  un backslash-escape del set `` \ ` * _ { } [ ] ( ) # + - . ! | > ``. `now` es un
+  `String` inyectado (lo formatea la plataforma) para que `:core` no dependa de
+  APIs de fecha. Sin tabla, query, migración ni dependencias.
+- **Puerto de share `GddSharer` (`:composeApp`, expect/actual):** `interface
+  GddSharer { fun share(markdown: String): Boolean }` +
+  `@Composable expect fun rememberGddSharer()` y
+  `expect fun currentTimestampLabel()`. Android usa `Intent(ACTION_SEND)` con
+  `text/plain` + `EXTRA_TEXT` y `Intent.createChooser` (devuelve `false` si no hay
+  app); iOS presenta un `UIActivityViewController` desde el `topViewController()`
+  compartido (`IosViewControllers.kt`, reusado por `ImageCapture.ios.kt`).
+  `currentTimestampLabel()` es `SimpleDateFormat("yyyy-MM-dd HH:mm")` en Android y
+  `NSDateFormatter` en iOS. Todo **en memoria**: sin archivos, `FileProvider`,
+  permisos, persistencia ni backend. "Compartir" construye el Markdown, llama
+  `share` y muestra un **snackbar** ("Listo para compartir"/"No disponible") con un
+  `Scaffold`/`SnackbarHostState` local a la pantalla (sin agregar parámetros a
+  `GddScreen`, por lo que `App` no cambia).
 
 ## Enlaces (notas relacionadas)
 
