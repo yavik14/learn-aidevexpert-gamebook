@@ -28,6 +28,10 @@ no hay búsqueda semántica sobre lo ya capturado.
 - Enlazar notas por similitud semántica.
 - Consultar en lenguaje natural sobre las notas/GDD propias (Q&A) y poder guardar
   una respuesta como Nota.
+- Integrar **IA real** (proveedor propio, OpenAI-compatible) en cada caso de uso:
+  generación (Q&A/Brainstorming), embeddings (indexado), transcripción de audio,
+  lectura en voz alta (tts), generación de imagen y sugerencia de clasificación
+  (texto → Track/Género; el usuario confirma).
 - Aprender: IA integrada en un flujo real, KMP compartido de verdad, al menos
   una integración nativa, y base escalable a la Fase B sin refactor mayor.
 
@@ -37,9 +41,9 @@ no hay búsqueda semántica sobre lo ya capturado.
 - Multi-usuario, cuentas, autenticación o colaboración (MVP single-user
   local-first).
 - **Múltiples Proyectos** y **Banco de ideas** (post-MVP).
-- Clasificación/tipificación automática por IA (categoría, tipo, o Género
-  inferido de la imagen) — descartada del MVP; el usuario elige el track y los
-  Géneros.
+- **Clasificación automática por IA sin confirmación:** la IA **puede sugerir**
+  `Track`/`Género` (el usuario **confirma o edita**), pero **no** asigna
+  automáticamente; no hay `Categoría`/`Tipo`. (Non-goal revisado 2026-10-15.)
 - Editor de niveles 2D, generación automática de niveles, evaluación de
   dificultad y export a Godot/Unity/LÖVE (Fase B).
 - Desktop y Web.
@@ -66,6 +70,10 @@ todo en paralelo). Orden preliminar (a re-derivar en la fase harness):
    Historia/Lore, Personajes) y las Notas agrupadas por Track, con export.
 7. **Q&A (Preguntar):** consulta en lenguaje natural sobre las Notas/GDD con
    citas y "guardar como Nota".
+8. **IA real (6 modelos):** proveedor propio OpenAI-compatible detrás de puertos;
+   chat (Q&A/Brainstorming), embedding (indexado), transcribe (Adjunto AUDIO),
+   tts (lectura en voz alta), image (generación desde texto) y jev (sugerencia de
+   clasificación), con alternancia **fake/real** por build flag.
 
 El detalle granular de features y su criterio de done se deriva en la fase
 harness, no en este brief.
@@ -102,3 +110,8 @@ harness, no en este brief.
   bocetos con miniatura y "guardar respuesta como Nota". Múltiples Proyectos y
   Banco de ideas quedan post-MVP. `feature_list.json` debe re-derivarse antes de
   la próxima implementación.
+- **2026-10-15: IA real en el MVP.** Se integra un proveedor **propio,
+  OpenAI-compatible** (`https://inference.devexpert.io/v1`) con modelos
+  chat/embedding/transcribe/tts/image/jev (mínimo un caso de uso por modelo),
+  alternando **fake/real** por build flag (key nunca versionada; tests/gate
+  siempre fake). Decisión en `docs/adr/0004-ai-real-integration.md`.

@@ -25,9 +25,10 @@
 - **Runtime de IA (cloud / on-device / híbrido):** **decidido** en
   `ai-runtime-decision` (2026-10-09). Estrategia **híbrida por fases, cloud-first**
   detrás del puerto `AiClient` (`docs/adr/0001-ai-runtime-decision.md`, evidencia en
-  `docs/spikes/ai-runtime-spike.md`). Proveedor, modelo, dimensión y gestión de
-  keys quedan como follow-ups del ADR. El Brainstorming reusa este puerto para las
-  sugerencias.
+  `docs/spikes/ai-runtime-spike.md`). El **proveedor real del MVP** quedó definido
+  en `docs/adr/0004-ai-real-integration.md` (propio, OpenAI-compatible;
+  chat/embedding/transcribe/tts/image/jev; key por build flag; fake/real). El
+  Brainstorming reusa este puerto para las sugerencias.
 - **Enlaces (direccionalidad, umbral y recálculo):** **resuelto** en
   `semantic-linking` (2026-10-13); UI de lectura en `note-links-ui` (2026-10-14).
   Follow-up: el **trigger de ciclo de vida** del recomputo (al indexar/editar,
@@ -45,6 +46,10 @@
   reutiliza la tabla N—N.
 
 ## Implementation-Time Questions
+- **IA real (proveedor propio):** modelos y dimensión concretos de embedding;
+  comportamiento ante fallos de red/timeout por caso (chat/embedding/transcribe/
+  tts/image/jev); límites de costo/cuota; y cómo se degrada cada superficie cuando
+  no hay key (modo fake) o la API falla.
 - **Pre-clasificación por contexto** al "guardar como Nota": mapeo propuesto por
   paso de Brainstorming (Título→sin Track; Género→Género; Core Loop→`mecánicas`;
   Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin Track;
@@ -96,6 +101,10 @@
   la auto-organización no es un requisito del MVP.
 
 ## Risks
+- **IA real (red/costo/clave):** la integración con el proveedor real depende de
+  red, cuota y una API key (build-time, nunca versionada). Mitigación: `fake` por
+  defecto y en tests/gate; tolerancia a fallos (indexado `PENDING`/reintento); key
+  fuera del repo; el gate no usa red.
 - **Congelar iOS** puede generar drift/deuda si se retoma: nuevos `expect` sin
   `actual` iOS completo. Mitigación: se provee un `actual` mínimo y se conserva el
   build; el ADR define los disparadores de re-evaluación.

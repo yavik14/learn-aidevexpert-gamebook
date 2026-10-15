@@ -3,9 +3,10 @@ set -euo pipefail
 
 echo "Repository: $(pwd)"
 echo "Harness status: bootstrapped (Kotlin Multiplatform + Compose Multiplatform + SQLDelight)"
+echo "Platform scope: Android-first (iOS congelado; ver docs/adr/0003-ios-congelado-mvp.md)"
 echo ""
 
-# --- Requisitos del entorno -----------------------------------------------
+# --- Requisitos del entorno (Android-only) --------------------------------
 missing=0
 
 if ! command -v java >/dev/null 2>&1; then
@@ -22,15 +23,6 @@ else
   echo "Android SDK: ${ANDROID_HOME:-$(grep -E '^sdk\.dir=' local.properties | cut -d= -f2-)}"
 fi
 
-if [ "$(uname -s)" = "Darwin" ]; then
-  if ! command -v xcodebuild >/dev/null 2>&1; then
-    echo "ERROR: falta Xcode. Instalalo desde la App Store y ejecutá 'xcode-select --install'." >&2
-    missing=1
-  else
-    echo "Xcode: $(xcodebuild -version 2>/dev/null | head -1)"
-  fi
-fi
-
 if [ "$missing" -ne 0 ]; then
   echo "" >&2
   echo "init.sh abortado: faltan requisitos del entorno (ver arriba)." >&2
@@ -42,32 +34,13 @@ echo ""
 echo ">> Compilando Android y corriendo tests del core..."
 ./gradlew :composeApp:assembleDebug :core:testDebugUnitTest --console=plain
 
-# --- Compilación del framework iOS (solo en macOS) ------------------------
-if [ "$(uname -s)" = "Darwin" ]; then
-  if [ "$(uname -m)" = "arm64" ]; then
-    IOS_LINK_TASK=":composeApp:linkDebugFrameworkIosSimulatorArm64"
-    IOS_CORE_TEST_TASK=":core:iosSimulatorArm64Test"
-  else
-    IOS_LINK_TASK=":composeApp:linkDebugFrameworkIosX64"
-    IOS_CORE_TEST_TASK=":core:iosX64Test"
-  fi
-  echo ""
-  echo ">> Compilando el framework iOS ($IOS_LINK_TASK)..."
-  ./gradlew "$IOS_LINK_TASK" --console=plain
-  echo ""
-  echo ">> Corriendo tests del core en iOS ($IOS_CORE_TEST_TASK)..."
-  ./gradlew "$IOS_CORE_TEST_TASK" --console=plain
-fi
-
 # --- Comandos manuales (no se ejecutan aquí) ------------------------------
 echo ""
 echo "Checks OK. Comandos manuales para lanzar la app:"
 echo "  Android (emulador/device conectado):"
 echo "    ./gradlew :composeApp:installDebug"
 echo "    adb shell am start -n com.playbook.app/.MainActivity"
-echo "  iOS (simulador):"
-echo "    xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp \\"
-echo "      -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build"
-echo "    (o abrí iosApp/iosApp.xcodeproj en Xcode y presioná Run)"
 echo ""
 echo "Nota: este script NO inicia dev servers ni sesiones de emulador/simulador."
+echo "Nota: iOS está congelado; el gate valida solo Android. El proyecto iOS se"
+echo "conserva y debe seguir compilando (los nuevos expect aportan un actual mínimo)."

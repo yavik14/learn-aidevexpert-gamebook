@@ -18,7 +18,9 @@ core Kotlin Multiplatform (KMP). iOS queda **congelado** desde 2026-10-15 (ver
   (ai-runtime-decision)" y `docs/adr/0001-ai-runtime-decision.md`). `embed` lo
   consume `NoteIndexingService` (`embeddings-generation`) y `generate` el
   `RagQueryService` (`rag-query`, ver "RAG Decisions"). `rag-answer-citations`
-  renderiza las Notas fuente de la respuesta como citas navegables.
+  renderiza las Notas fuente de la respuesta como citas navegables. El
+  **proveedor real** del MVP (propio, OpenAI-compatible) y los 6 modelos/casos de
+  uso están en `docs/adr/0004-ai-real-integration.md`.
 - **Integraciones nativas:** speech-to-text (voz) y cámara (foto de bocetos).
 
 ## Data and Storage
@@ -37,11 +39,13 @@ core Kotlin Multiplatform (KMP). iOS queda **congelado** desde 2026-10-15 (ver
 - **Cámara / galería:** captura de bocetos; el OCR (si existe) es texto derivado.
   **OCR descartado del MVP** (`image-ocr-optional`): ver "OCR Decision
   (image-ocr-optional)" y `docs/adr/0002-ocr-decision.md`.
-- **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto
-  implementado y runtime decidido (híbrido, cloud-first); `FakeAiClient` es el
-  adaptador inyectado hoy y el adaptador real es follow-up del ADR 0001. El flujo
-  de **Brainstorming** usa el mismo puerto (`generate`) para sugerir 2 ideas por
-  paso.
+- **Proveedor de IA (real, MVP):** proveedor **propio** compatible con la API de
+  OpenAI (`https://inference.devexpert.io/v1`) detrás de `AiClient`/puertos;
+  modelos **chat** (generación: Q&A/Brainstorming), **embedding** (indexado),
+  **transcribe** (Adjunto AUDIO), **tts** (lectura en voz alta), **image**
+  (generación desde texto) y **jev** (sugerencia de clasificación Track/Género).
+  Alternancia **fake/real** por **build flag** (key nunca versionada; tests y
+  gate siempre fake). Decisión en `docs/adr/0004-ai-real-integration.md`.
 
 ## Authentication and Authorization
 - Ninguna en el MVP (single-user local-first).
@@ -1025,3 +1029,24 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0003-ios-congelado-mvp.m
 - **Catálogo de Géneros:** constante de la app (Platformer, Metroidvania, JRPG,
   ActionRPG, Roguelike, Shooter, Puzzle, Adventure, Towerdefense, Novel, Farming,
   Arcade); los personalizados se guardan por Nota y no engordan el catálogo global.
+
+## AI Real Integration Decisions (proveedor propio)
+
+Revisión de alcance 2026-10-15. Decisión en `docs/adr/0004-ai-real-integration.md`.
+
+- **Proveedor propio, OpenAI-compatible:** base `https://inference.devexpert.io/v1`.
+  Un solo proveedor para los 6 modelos; `AiClient` (hoy text-only: `embed`+
+  `generate`) se extiende con puertos para los demás (transcribe/tts/image/jev) —
+  diseño en `ai-client-ports`.
+- **Un caso de uso por modelo (mínimo):** chat → Q&A/Brainstorming; embedding →
+  indexado/enlaces/RAG; transcribe → Adjunto AUDIO; tts → lectura en voz alta
+  (Q&A/Nota/GDD); image → generación desde texto; jev → sugerencia de
+  clasificación (Track/Género, con confirmación).
+- **Fake/real por build flag:** `fake` (determinista, **default y siempre en
+  tests/gate**) o `real` (requiere **API key**). La key **nunca** se versiona
+  (env/gradle property, gitignored). `init.sh` **no** usa la API real (sin red).
+- **Manejo de fallos/offline:** los usos de IA respetan la tolerancia a fallos ya
+  existente (indexado → `PENDING`/reintento; respuestas no bloquean la captura).
+- **Sugerencia de clasificación (non-goal revisado):** la IA **sugiere** `Track`/
+  `Género`; el usuario **confirma o edita**; **nunca** auto-asigna. El indexado
+  sigue sin clasificar (`CONSTRAINTS.md`).
