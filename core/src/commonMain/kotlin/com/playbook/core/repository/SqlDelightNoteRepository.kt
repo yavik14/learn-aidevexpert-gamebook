@@ -60,6 +60,17 @@ class SqlDelightNoteRepository(
         return row.toDomain(tags)
     }
 
+    override fun getByStatus(status: NoteStatus): List<Note> {
+        // Misma estrategia que `getAll`: una sola consulta de etiquetas agrupada
+        // en memoria para evitar el N+1.
+        val tagsByNote = database.noteTagQueries.selectAllNoteTags()
+            .executeAsList()
+            .groupBy({ it.note_id }, { it.label })
+        return database.noteQueries.selectNotesByStatus(status.code)
+            .executeAsList()
+            .map { row -> row.toDomain(tagsByNote[row.id].orEmpty()) }
+    }
+
     override fun update(note: Note): Boolean {
         val tags = normalizeTags(note.tags)
         return database.transactionWithResult {
@@ -87,6 +98,14 @@ class SqlDelightNoteRepository(
     override fun updateStatus(id: String, status: NoteStatus): Boolean {
         val rowsAffected = database.noteQueries.updateNoteStatus(
             status = status.code,
+            id = id,
+        ).value
+        return rowsAffected > 0
+    }
+
+    override fun setIndexAttempts(id: String, attempts: Int): Boolean {
+        val rowsAffected = database.noteQueries.updateNoteIndexAttempts(
+            index_attempts = attempts.toLong(),
             id = id,
         ).value
         return rowsAffected > 0

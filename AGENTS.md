@@ -53,7 +53,10 @@ quedó `accepted` (validación independiente `accept`). `note-enrichment-status-
 re-indexado manual) quedó `accepted` (validación independiente `accept`).
 `enrichment-observability-logging` (puerto `Diagnostics` + sink local acotado +
 instrumentación de fallos de IA y nativos) quedó `accepted` (validación
-independiente `accept`). La próxima en cola es `offline-pending-retry`.
+independiente `accept`). `offline-pending-retry` (reintento de indexado pendiente
++ promoción a `fallida`; esquema v6 con `5.sqm` + `PendingIndexingRetry` y
+`AiAvailability`) quedó `accepted` (validación independiente `accept`). La próxima
+en cola es `gdd-export`.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

@@ -146,14 +146,14 @@ fun verifyNoteTags(driver: SqlDriver) {
 }
 
 /**
- * Verifica la migración real v1 -> v5 (aplica todos los `.sqm` del repo). El
+ * Verifica la migración real v1 -> v6 (aplica todos los `.sqm` del repo). El
  * [driver] debe representar una base **v1** ya existente (tabla `note` sin
  * `note_tag`); los tests de plataforma la crean con [NoteV1Schema]:
  *
  * - Android/JVM: `JdbcSqliteDriver.IN_MEMORY` + `NoteV1Schema.create(driver)`.
  * - iOS: `inMemoryDriver(NoteV1Schema)`.
  *
- * Siembra una fila v1, corre `Schema.migrate(driver, 1, 5)` y comprueba que la
+ * Siembra una fila v1, corre `Schema.migrate(driver, 1, 6)` y comprueba que la
  * nota sobrevive y que la tabla nueva `note_tag` queda operable.
  */
 fun verifyNoteTagMigration(driver: SqlDriver) {
@@ -169,8 +169,8 @@ fun verifyNoteTagMigration(driver: SqlDriver) {
     )
     driver.execute(identifier = null, sql = "PRAGMA user_version = 1", parameters = 0).value
 
-    // Corre la migración real v1 -> v5 (aplica 1.sqm, 2.sqm, 3.sqm y 4.sqm).
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 5)
+    // Corre la migración real v1 -> v6 (aplica 1.sqm, 2.sqm, 3.sqm, 4.sqm y 5.sqm).
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 6)
 
     val database = PlaybookDatabase(driver)
     val migrated = database.noteQueries.selectNoteById("note-v1").executeAsOneOrNull()

@@ -23,6 +23,13 @@ interface NoteRepository {
     fun getById(id: String): Note?
 
     /**
+     * Devuelve las Notas con [status] (con sus etiquetas), ordenadas
+     * `updated_at DESC, id DESC` como [getAll]. Sólo lectura; lo consume el
+     * reintento de indexado (`PendingIndexingRetry`).
+     */
+    fun getByStatus(status: NoteStatus): List<Note>
+
+    /**
      * Actualiza `body`/`track`/`status`/`tags` de la Nota y re-sella `updatedAt`
      * con el reloj actual (el `updatedAt` del argumento se ignora). Las
      * etiquetas se normalizan y **reemplazan** el conjunto anterior. Devuelve
@@ -37,6 +44,13 @@ interface NoteRepository {
      * la lista). Devuelve `true` si la fila existía.
      */
     fun updateStatus(id: String, status: NoteStatus): Boolean
+
+    /**
+     * Actualiza sólo el contador de intentos de indexado de la Nota (efecto de
+     * sistema): **no** toca `body`/`track`/`status`/`tags`/`owner` ni
+     * `created_at`/`updated_at`. Devuelve `true` si la fila existía.
+     */
+    fun setIndexAttempts(id: String, attempts: Int): Boolean
 
     /** Borra la Nota con [id] y limpia sus etiquetas. Devuelve `true` si la fila existía. */
     fun delete(id: String): Boolean

@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.NoteIndexingOrchestrator
+import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.diagnostics.DiagnosticSource
@@ -80,8 +81,13 @@ sealed interface NotesDestination {
  * [NoteIndexingOrchestrator]: al guardar una Nota con `body` no vacío se indexa
  * best-effort (`indexBestEffort`, nunca bloquea el guardado) y el estado real se
  * refleja al refrescar. El usuario puede **re-indexar manualmente** una Nota no
- * indexada desde el editor ([reindex]); no hay reintento automático/scheduling
- * (eso es de `offline-pending-retry`).
+ * indexada desde el editor ([reindex]); el reintento automático de las `PENDING`
+ * ocurre al arrancar (ver más abajo), no en el guardado.
+ *
+ * El ciclo offline/online lo cierra [PendingIndexingRetry]: al abrir/reabrir la
+ * app se reintentan las Notas `PENDING` contra la IA; las exitosas quedan
+ * `INDEXED` y las irrecuperables (tras agotar el presupuesto) pasan a `FAILED`.
+ * Es un efecto de arranque (una vez); si la IA no está disponible es un no-op.
  */
 @Composable
 fun App(
@@ -89,6 +95,7 @@ fun App(
     attachmentRepository: AttachmentRepository,
     voiceTranscriber: VoiceTranscriber,
     noteIndexingOrchestrator: NoteIndexingOrchestrator,
+    pendingIndexingRetry: PendingIndexingRetry,
     ragQueryService: RagQueryService,
     noteLinkRepository: NoteLinkRepository,
     semanticLinkingService: SemanticLinkingService,
@@ -128,6 +135,16 @@ fun App(
             refreshKey++
         }
 
+        // Al abrir/reabrir la app se reintentan las Notas `PENDING`
+        // (`offline-pending-retry`): las exitosas quedan `INDEXED` y las
+        // irrecuperables `FAILED`. Es un efecto de arranque (una vez), no
+        // polling/scheduling; `retryPending` es no-op si la IA no está
+        // disponible y nunca bloquea la UI.
+        LaunchedEffect(Unit) {
+            pendingIndexingRetry.retryPending()
+            reload()
+        }
+
         fun goToList() {
             destination = NotesDestination.List
         }
@@ -149,9 +166,9 @@ fun App(
 
         /**
          * Re-indexado **manual** disparado por el usuario desde el editor. Reusa
-         * el mismo orquestador y refresca la UI; no agenda nada, no detecta
-         * conectividad (eso es de `offline-pending-retry`) y no toca
-         * `track`/`tags`/`body`.
+         * el mismo orquestador y refresca la UI; no agenda nada. El reintento
+         * automático de las `PENDING` ocurre al arrancar ([PendingIndexingRetry]);
+         * esto es sólo el tap del usuario.
          */
         fun reindex(note: Note) {
             scope.launch {

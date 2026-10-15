@@ -53,6 +53,15 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   `track`/`tags`/`body`/`owner`/timestamps (la clasificación es del usuario; el
   re-indexado sólo llama `updateStatus`). Razón: la clasificación IA está
   descartada y el reintento/`FAILED` pertenece a `offline-pending-retry`.
+- El estado `FAILED` **MUST NOT** escribirse en el indexado directo
+  (`NoteIndexingService`/`NoteIndexingOrchestrator`): sólo `PendingIndexingRetry`
+  lo escribe, y sólo tras agotar `budget` intentos fallidos (`index_attempts`,
+  esquema v6). Razón: un fallo de IA no debe degradar la captura ni marcar
+  irrecuperable una Nota sin presupuesto durable.
+- Cuando `AiAvailability.isAvailable()` es `false`, el reintento **MUST** ser
+  no-op: **MUST NOT** consumir presupuesto, cambiar estados ni llamar a
+  `AiClient`. Razón: "IA no disponible" no es un fallo de la Nota; no debe contar
+  para el presupuesto ni promover a `FAILED`.
 
 ## Observabilidad / diagnóstico
 

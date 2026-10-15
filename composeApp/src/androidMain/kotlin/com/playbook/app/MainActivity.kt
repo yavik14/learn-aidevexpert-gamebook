@@ -7,6 +7,7 @@ import com.playbook.app.voice.AndroidVoiceTranscriber
 import com.playbook.core.ai.FakeAiClient
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
+import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.AndroidDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
@@ -64,6 +65,9 @@ class MainActivity : ComponentActivity() {
         // Orquestador de indexado: envuelve el servicio y persiste la transición
         // real de `NoteStatus` (la UI lo usa al guardar y al re-indexar a mano).
         val noteIndexingOrchestrator = NoteIndexingOrchestrator(noteIndexingService, noteRepository)
+        // Reintento de indexado pendiente (`offline-pending-retry`): al arrancar la
+        // app reintenta las Notas `PENDING` y promueve a `FAILED` las irrecuperables.
+        val pendingIndexingRetry = PendingIndexingRetry(noteIndexingOrchestrator, noteRepository)
         val ragQueryService = RagQueryService(
             aiClient,
             noteRepository,
@@ -80,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 attachmentRepository = attachmentRepository,
                 voiceTranscriber = voiceTranscriber,
                 noteIndexingOrchestrator = noteIndexingOrchestrator,
+                pendingIndexingRetry = pendingIndexingRetry,
                 ragQueryService = ragQueryService,
                 noteLinkRepository = noteLinkRepository,
                 semanticLinkingService = semanticLinkingService,

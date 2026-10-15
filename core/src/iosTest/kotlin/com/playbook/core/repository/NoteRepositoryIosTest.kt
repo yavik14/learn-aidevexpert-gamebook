@@ -26,11 +26,21 @@ class NoteRepositoryIosTest {
     }
 
     @Test
-    fun migrationV1ToV5PreservesNotes() {
+    fun migrationV1ToV6PreservesNotes() {
         // Driver in-memory creado como base v1 (sólo la tabla note).
         val driver = inMemoryDriver(NoteV1Schema)
         try {
             verifyNoteTagMigration(driver)
+        } finally {
+            driver.close()
+        }
+    }
+
+    @Test
+    fun retryQueriesRoundTrip() {
+        val driver = inMemoryDriver(PlaybookDatabase.Schema)
+        try {
+            verifyNoteRetryQueries(driver)
         } finally {
             driver.close()
         }

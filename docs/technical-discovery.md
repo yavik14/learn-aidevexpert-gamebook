@@ -533,6 +533,44 @@ Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` ("UI", "AI").
   del simulador no accesible, no se pudieron verificar los badges/el botón (el
   `commonMain` se ejercita en Android).
 
+## Retry Decisions (offline-pending-retry)
+
+Implementado 2026-10-15. Detalles en `ARCHITECTURE.md` y `CONSTRAINTS.md`.
+
+- **Presupuesto durable (esquema v6, `5.sqm`).** `note.index_attempts INTEGER NOT
+  NULL DEFAULT 0` (`ALTER TABLE note ADD COLUMN`); las Notas v5 existentes se
+  conservan y arrancan en `0`. El contador persiste los fallos entre arranques, así
+  la promoción a `FAILED` es durable. `setIndexAttempts`/`updateStatus` **no**
+  re-sellan `updated_at` (efecto de sistema; no reordena la lista).
+- **Disponibilidad como seam (`AiAvailability`).** No hay red ni runtime real
+  (ADR 0001), así que "la IA volvió" no se puede observar: un puerto
+  `suspend fun isAvailable(): Boolean` con default `AlwaysAvailableAiAvailability`
+  desacopla la decisión. Si es `false`, `retryPending()` es **no-op** (no consume
+  presupuesto, no cambia estados, no llama a `AiClient`). La sonda real de
+  conectividad es follow-up del ADR.
+- **Trigger: arranque de la app.** `App` corre
+  `LaunchedEffect(Unit) { pendingRetry.retryPending(); reload() }`. Se aproxima la
+  "vuelta de la IA" con reabrir la app; **no** hay `WorkManager`/`BGTaskScheduler`
+  ni reintento continuo (fuera de alcance). El guardado ya indexa con el
+  orquestador; el reintento cubre las `PENDING` de sesiones previas.
+- **Sólo `PENDING` participan.** `NoteRepository.getByStatus(PENDING)` (sólo
+  lectura, orden `updated_at DESC, id DESC`, etiquetas agrupadas) acota el trabajo;
+  `CAPTURED`/`INDEXED`/`FAILED` no se tocan. Una `FAILED` es terminal para el
+  reintento hasta que una edición la reindexe (`NoteIndexingOrchestrator`).
+- **`FAILED` sólo lo escribe el reintento.** El indexado directo
+  (`NoteIndexingService`/`NoteIndexingOrchestrator`) nunca escribe `FAILED` ni
+  bloquea la captura; la promoción ocurre en `PendingIndexingRetry` sólo tras
+  agotar `budget` (`DEFAULT_RETRY_BUDGET = 3`, `require(budget > 0)`).
+- **Tests.** `verifyPendingIndexingRetry(driver)` cubre los escenarios 1–5
+  (éxito→`INDEXED`+reset, fallo bajo presupuesto, agotar→`FAILED`,
+  `AiAvailability=false` no-op sin llamar al runtime, sólo `PENDING`), corrido en
+  Android/JVM (`PendingIndexingRetryAndroidTest`) e iOS
+  (`PendingIndexingRetryIosTest`). `verifyNoteRetryQueries` cubre
+  `getByStatus`/`setIndexAttempts`; `verifyMigrationV1ToV6`/`verifyMigrationV5ToV6`
+  y `DatabaseMigrationCheck` la migración a v6 (`index_attempts` default `0`, sin
+  pérdida de Notas). Control negativo (c): renombrar la columna en `5.sqm` rompe
+  la migración con `no such column: note.index_attempts`.
+
 ## RAG Decisions (rag-query)
 
 Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.

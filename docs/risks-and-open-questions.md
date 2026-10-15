@@ -74,7 +74,7 @@
   `embedding`) quedó cubierta por `verifyDatabaseMigration` en Android/JVM e iOS, y
   verificada en el simulador iOS real (`user_version` 1→2 con notas preservadas y
   tabla `embedding`). La v4 → v5 (`4.sqm`, tabla `note_link`) quedó cubierta por
-  `verifyDatabaseMigration`/`verifyMigrationV1ToV5`/`verifyNoteTagMigration` y
+  `verifyDatabaseMigration`/`verifyMigrationV1ToV6`/`verifyNoteTagMigration` y
   verificada en Android (emulador) e iOS (simulador) con `user_version` 4→5,
   `note_link` + índice y Notas preservadas. Sin bloqueos.
 - **`FileProvider` + cámara Android:** `ActivityResultContracts.TakePicture` no
