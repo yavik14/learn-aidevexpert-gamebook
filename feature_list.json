@@ -789,5 +789,20 @@
       "2026-10-14 (validación independiente, accept): `CI=true ./init.sh` exit 0 (sin dev servers/simuladores); `./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → 42/42 Android/JVM y 42/42 iOS, 0 failures (`Diagnostics*Test` 1/1 por plataforma + actuals de storage reales); `:composeApp:assembleDebug`/`linkDebugFrameworkIosSimulatorArm64` OK; `Schema.version == 5` sin `.sqm` nuevo ni deps. Control negativo propio reproducido y restaurado byte-idéntico: (a) sin `recordFailure(AI_INDEXING)` en `NoteIndexingService` → falla Scenario 1; (b) sin `enforceRetention()` en `FileDiagnostics` → falla Scenario 6. Escenarios 1–7 verificados en `:core` (2 plataformas); privacidad sin `body`/pregunta/rutas/IDs/secrets; smoke Android `IMAGE image_failed PERMISSION_DENIED`. Hallazgos Low no bloqueantes (typo cosmético corregido en ARCHITECTURE.md; VOICE/STORAGE sólo por inspección; `detail`=mensaje de excepción a vigilar al cablear el adaptador cloud). Registro en `docs/validations/enrichment-observability-logging.md`."
     ],
     "notes": "Observabilidad mínima del MVP (docs/technical-discovery.md → Observability). Puerto `Diagnostics` best-effort (`NoOpDiagnostics`/`InMemoryDiagnostics`/`FileDiagnostics`) + `DiagnosticStorage` expect/actual; instrumenta `AI_INDEXING`/`AI_QUERY` (servicios) y `VOICE`/`IMAGE`/`STORAGE` (`App`); sink `FileDiagnostics` cableado en los composition roots (`filesDir/diagnostics.log` Android, `Application Support/diagnostics.log` iOS). Sin esquema (v5), sin `.sqm`, sin dependencias nuevas ni UI. `accepted` (validación independiente `accept`, 2026-10-14)."
+  },
+  {
+    "id": "gdd-export",
+    "area": "gdd",
+    "title": "Exportar/compartir el GDD como Markdown",
+    "user_visible_behavior": "Desde la vista de GDD, el usuario comparte el documento (secciones por track con sus notas, etiquetas y estado) como texto Markdown usando el share sheet del sistema; el botón está deshabilitado si no hay notas.",
+    "depends_on": [
+      "gdd-view"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: `buildGddMarkdown(notes, now)` determinista cubierto en `:core` (Android/JVM e iOS); 'Compartir' deshabilitado sin notas; sin cambios de esquema ni dependencias."
+    ],
+    "evidence": [],
+    "notes": "Feature derivada (no estaba en el brief original): cierra el GDD como documento compartible. Proyección pura en `:core` (`buildGddMarkdown`, `now` inyectado) + share nativo (expect/actual `GddSharer`) desde `GddScreen`; sin tocar `App.kt` para minimizar conflictos con `offline-pending-retry`. Sin esquema ni deps."
   }
 ]
