@@ -1,8 +1,9 @@
 # Technical Discovery
 
 ## Product Surface
-App móvil para **Android + iOS en paralelo**. UI en Compose Multiplatform y
-lógica de dominio en un core Kotlin Multiplatform (KMP).
+App móvil **Android-first**. UI en Compose Multiplatform y lógica de dominio en un
+core Kotlin Multiplatform (KMP). iOS queda **congelado** desde 2026-10-15 (ver
+"Platform Scope Decisions" y `docs/adr/0003-ios-congelado-mvp.md`).
 
 ## Candidate Stack
 - **Core:** Kotlin Multiplatform (lógica compartida real, sin duplicar por
@@ -25,6 +26,10 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 - SQLDelight en ambas plataformas como única fuente de verdad local.
 - Vectores de embeddings como BLOB en SQLDelight; similitud coseno en memoria
   (suficiente para una biblioteca personal).
+- **Esquema v7 (previsto, 2026-10-15):** nueva entidad **Proyecto** (ficha
+  estructurada + 5 mecánicas clave con categoría) y renombre de la N—N de
+  Etiquetas a **Géneros** (catálogo fijo + personalizados); migración `6.sqm`
+  v6→v7 conservando los datos (etiquetas libres → Géneros personalizados).
 - `Owner` presente en el modelo aunque el MVP sea single-user.
 
 ## Integrations
@@ -34,7 +39,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
   (image-ocr-optional)" y `docs/adr/0002-ocr-decision.md`.
 - **Proveedor de IA:** embeddings + LLM detrás de `AiClient` — puerto
   implementado y runtime decidido (híbrido, cloud-first); `FakeAiClient` es el
-  adaptador inyectado hoy y el adaptador real es follow-up del ADR 0001.
+  adaptador inyectado hoy y el adaptador real es follow-up del ADR 0001. El flujo
+  de **Brainstorming** usa el mismo puerto (`generate`) para sugerir 2 ideas por
+  paso.
 
 ## Authentication and Authorization
 - Ninguna en el MVP (single-user local-first).
@@ -56,7 +63,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
 ## Testing and Verification
 - Tests unitarios del core KMP con un `AiClient` fake (deterministas, sin red).
 - Tests de persistencia SQLDelight.
-- Prueba manual end-to-end en Android y iOS.
+- Gate `init.sh` **Android-only** (desde 2026-10-15): `:composeApp:assembleDebug` +
+  `:core:testDebugUnitTest` (Android/JVM). iOS sale del gate con el congelamiento.
+- Prueba manual end-to-end en **Android** (emulador/dispositivo).
 
 ## Observability
 - Mínimo: **logging local de fallos** de indexado/consulta de IA e integraciones
@@ -70,6 +79,9 @@ lógica de dominio en un core Kotlin Multiplatform (KMP).
   reintenta.
 - **Costo de KMP × 2 plataformas:** Android + iOS duplica el trabajo nativo
   (permisos, STT, cámara) y requiere entorno macOS/Xcode.
+- **iOS congelado (2026-10-15):** no se exige paridad ni verificación iOS; el
+  código se conserva y compila. Los nuevos `expect` requieren un `actual` iOS
+  mínimo para no romper el build iOS. El gate deja de construir/linkear iOS.
 
 ## Bootstrap Decisions (kmp-project-bootstrap)
 
@@ -989,3 +1001,27 @@ Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` y `CONSTRAINTS.md`.
   `IMAGE image_failed PERMISSION_DENIED` tras denegar el permiso de cámara.
   Control negativo reproducido y restaurado (sin registro de `AI_INDEXING`; sin
   retención).
+
+## Platform Scope Decisions (Android-first / iOS congelado)
+
+Revisión de alcance 2026-10-15. Decisión en `docs/adr/0003-ios-congelado-mvp.md`.
+
+- **Android-first; iOS congelado:** iOS sale del alcance del MVP y de la
+  verificación. Se conservan `iosApp/` y los `actual` de `iosMain`; el proyecto
+  sigue **compilando** iOS, pero no se exige paridad ni se ejecuta en el gate.
+- **Gate `init.sh` Android-only:** deja de correr
+  `:composeApp:linkDebugFrameworkIosSimulatorArm64` y `:core:iosSimulatorArm64Test`.
+  Pasa a: `:composeApp:assembleDebug` + `:core:testDebugUnitTest`.
+- **Nuevos `expect`:** deben seguir aportando un `actual` iOS mínimo (aunque no se
+  verifique) para no romper el build compartido.
+- **Sugerencias de Brainstorming:** vía `AiClient.generate` (2 por paso, a
+  demanda); hoy `FakeAiClient`.
+- **Miniaturas de imagen:** se extiende `AttachmentFileStore` con
+  `read(relativePath): ByteArray?` y se decodifica con `decodeImageBitmap()`
+  existente (sin deps nuevas).
+- **Esquema v7 (previsto):** entidad **Proyecto** (ficha + 5 mecánicas) y renombre
+  N—N a **Géneros** (catálogo fijo + personalizados), con `6.sqm` v6→v7 y migración
+  de etiquetas libres a Géneros personalizados.
+- **Catálogo de Géneros:** constante de la app (Platformer, Metroidvania, JRPG,
+  ActionRPG, Roguelike, Shooter, Puzzle, Adventure, Towerdefense, Novel, Farming,
+  Arcade); los personalizados se guardan por Nota y no engordan el catálogo global.

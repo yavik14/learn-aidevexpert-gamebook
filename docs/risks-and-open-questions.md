@@ -3,139 +3,121 @@
 ## Blocking Next Phase
 - **¿Los Adjuntos sin texto entran al RAG?** Definir si un audio sin transcribir
   o un boceto sin OCR son indexables (y cómo). Afecta el pipeline de indexado.
-  Precisión tras `image-ocr-optional` (2026-10-13): el **OCR del boceto queda
-  descartado del MVP** (ver "Resolved"), así que un `Adjunto` de imagen **no**
-  aporta texto indexable. Con `voice-attachment-storage` ya existen Adjuntos
-  `AUDIO` reales (además de `IMAGE`), pero la transcripción sigue viviendo en el
-  `body` de la Nota. `rag-query` sólo indexa `note.body` no vacío: un audio sin
-  transcribir o un boceto sin OCR hoy no participan del RAG. La pregunta se reduce
-  a si un `Adjunto` sin texto participa del RAG o se excluye, y la decide la
-  feature de indexado/RAG.
+  Precisión: el **OCR del boceto queda descartado del MVP**
+  (`docs/adr/0002-ocr-decision.md`), así que un `Adjunto` de imagen **no** aporta
+  texto indexable; un Adjunto `AUDIO` sí existe pero la transcripción vive en el
+  `body`. `rag-query` sólo indexa `note.body` no vacío. La pregunta se reduce a si
+  un `Adjunto` sin texto participa del RAG o se excluye, y la decide la feature de
+  indexado/RAG.
+- **Re-derivar `feature_list.json`.** El alcance cambió el 2026-10-15
+  (Android-first, Géneros, Proyecto/Brainstorming, GDD híbrido). El backlog actual
+  está agotado (todo `accepted` salvo el upload iOS `blocked`); hay que derivar las
+  features del MVP revisado antes de la próxima implementación (fase harness).
 
 ## Resolved
+- **Plataforma iOS (congelar):** **decidido** el 2026-10-15 (Android-first). iOS
+  queda fuera del alcance y del gate; se conserva el código. Ver
+  `docs/adr/0003-ios-congelado-mvp.md`.
 - **OCR del boceto (`image-ocr-optional`):** **descartado del MVP** (2026-10-13).
-  Decisión, alternativas (ML Kit / iOS Vision / `AiClient`+visión / OCR cloud /
-  descartar), trade-offs y **disparadores de re-evaluación** en
-  `docs/adr/0002-ocr-decision.md`. Motivo: el objetivo es texto **manuscrito** de
-  calidad incierta con los motores on-device de bajo costo, Android exigiría una
-  dependencia pesada (ML Kit) poco compartida, y `AiClient` es text-only. Sin
-  código/deps/esquema nuevos. Si se reabre, el patrón sería un puerto
-  `TextRecognizer` + adaptadores nativos (patrón `VoiceTranscriber`).
+  Decisión, alternativas y disparadores en `docs/adr/0002-ocr-decision.md`. Sin
+  código/deps/esquema nuevos. Si se reabre, patrón puerto `TextRecognizer` +
+  adaptadores nativos.
 - **Runtime de IA (cloud / on-device / híbrido):** **decidido** en
   `ai-runtime-decision` (2026-10-09). Estrategia **híbrida por fases, cloud-first**
-  detrás del puerto `AiClient`; decisión y trade-offs en
-  `docs/adr/0001-ai-runtime-decision.md`, evidencia en
-  `docs/spikes/ai-runtime-spike.md`. Ya no bloquea el flujo de IA; el primer
-  adaptador real lo materializa `embeddings-generation`/`rag-query`. Proveedor,
-  modelo, dimensión y gestión de keys quedan como follow-ups del ADR.
+  detrás del puerto `AiClient` (`docs/adr/0001-ai-runtime-decision.md`, evidencia en
+  `docs/spikes/ai-runtime-spike.md`). Proveedor, modelo, dimensión y gestión de
+  keys quedan como follow-ups del ADR. El Brainstorming reusa este puerto para las
+  sugerencias.
 - **Enlaces (direccionalidad, umbral y recálculo):** **resuelto** en
-  `semantic-linking` (2026-10-13). Enlaces **bidireccionales guardados una sola
-  vez** con orden canónico `note_a_id < note_b_id` (se leen desde ambos lados);
-  umbral inclusivo `score >= 0.8` (`DEFAULT_SIMILARITY_THRESHOLD`, inyectable);
-  recomputo explícito e idempotente (`SemanticLinkingService.recomputeAll()`). La
-  **UI de lectura** quedó **resuelta** en `note-links-ui` (2026-10-14;
-  `RelatedNotesScreen` + proyección `buildRelatedNotes`), con un **trigger mínimo
-  best-effort al abrir** "Notas relacionadas". Queda como **follow-up**: el
-  **trigger de ciclo de vida** del recomputo (al indexar/editar, offline) y el
-  recomputo incremental/background.
+  `semantic-linking` (2026-10-13); UI de lectura en `note-links-ui` (2026-10-14).
+  Follow-up: el **trigger de ciclo de vida** del recomputo (al indexar/editar,
+  offline) y el recomputo incremental/background.
 - **Respuesta RAG desde las Notas propias:** **resuelto** en `rag-query`
-  (2026-10-13). El retrieval por similitud coseno es real y la respuesta se genera
-  con `GenerateRequest(prompt, context = cuerpos recuperados)`; sin Notas
-  indexadas devuelve `NoIndexedNotes` y **no** llama al runtime (nunca usa
-  conocimiento externo). Queda abierto el **runtime real** (hoy `FakeAiClient`) y,
-  por lo tanto, la **calidad** de la respuesta, que no es verificable hasta elegir
-  proveedor/modelo (ADR 0001).
+  (2026-10-13). Retrieval por similitud coseno real + `GenerateRequest(prompt,
+  context)`; sin Notas indexadas devuelve `NoIndexedNotes` y **no** llama al
+  runtime. Queda abierto el **runtime real** (hoy `FakeAiClient`) y la **calidad**.
+- **Miniaturas de imagen:** **decidido** el 2026-10-15: extender el puerto
+  `AttachmentFileStore` con `read(relativePath): ByteArray?` y decodificar con
+  `decodeImageBitmap()` existente (sin deps nuevas). El cacheo de miniaturas
+  redimensionadas queda diferido.
+- **Migración de Etiquetas → Géneros:** **decidido** el 2026-10-15: las etiquetas
+  libres existentes se conservan como **Géneros personalizados** de cada Nota; se
+  reutiliza la tabla N—N.
 
 ## Implementation-Time Questions
+- **Pre-clasificación por contexto** al "guardar como Nota": mapeo propuesto por
+  paso de Brainstorming (Título→sin Track; Género→Género; Core Loop→`mecánicas`;
+  Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin Track;
+  Fantasía→`historia`; Keys→`mecánicas`; Out→sin Track) y **sin Track único** para
+  respuestas del Q&A. A refinar en la spec.
+- **UI fina del wizard** de Brainstorming (progreso X/9, navegación, disposición de
+  las 2 sugerencias) y comportamiento al reabrir para iterar.
+- **Normalización de Géneros** (case-insensitive, trim) y deduplicación contra el
+  catálogo (un personalizado que coincide con el catálogo se trata como de
+  catálogo).
+- **Esquema v7:** forma de la tabla del Proyecto/ficha y de las 5 mecánicas
+  (categoría + descripción); `6.sqm` v6→v7.
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
-- El **STT** (`voice-capture-stt`) y la **cámara** (`image-capture-camera`) ya se
-  resolvieron: `SpeechRecognizer`/`SFSpeechRecognizer` para voz; `CAMERA` +
-  `FileProvider`/`PickVisualMedia` en Android y
-  `UIImagePickerController`/`PHPickerViewController` en iOS (galería sin permiso)
-  para imagen.
-- El **audio del dictado como Adjunto** (`voice-attachment-storage`) ya se
-  resolvió: se graba en la misma sesión de micrófono (`MediaRecorder` AAC/
-  MPEG-4 en Android; tap de `AVAudioEngine` → `AVAudioFile` AAC en iOS) y se
-  persiste como `AttachmentKind.AUDIO` (`audio/<uuid>.m4a`, `audio/mp4`) sin
-  cambio de esquema. La reproducción del audio queda diferida.
-- Modelo, proveedor y dimensión del embedding concreto; gestión de keys cloud
-  (usuario vs build) — follow-ups del ADR 0001.
-- Runtime on-device concreto para la fase 2 (híbrida).
+- El **STT**, la **cámara** y el **audio del dictado como Adjunto** ya se
+  resolvieron en features previas (ver `docs/technical-discovery.md`). La
+  **reproducción** del audio queda diferida.
 - ¿El umbral de similitud de `semantic-linking` aplica también al RAG? Hoy el
   retrieval del RAG es top-K **sin umbral**.
 - Comportamiento al cambiar el `track` de una Nota ya indexada.
-- Orden final y granularidad de las features del MVP (fase harness). Requiere
-  **re-derivar `feature_list.json`** tras el cambio de alcance (se descartó el
-  enriquecimiento/clasificación IA y se introdujeron los tracks).
 
 ## Resolved / Tooling Limitations
-- **Migración de esquema sin precedentes:** la v1 → v2 (`1.sqm` + tabla
-  `embedding`) quedó cubierta por `verifyDatabaseMigration` en Android/JVM e iOS, y
-  verificada en el simulador iOS real (`user_version` 1→2 con notas preservadas y
-  tabla `embedding`). La v4 → v5 (`4.sqm`, tabla `note_link`) quedó cubierta por
-  `verifyDatabaseMigration`/`verifyMigrationV1ToV6`/`verifyNoteTagMigration` y
-  verificada en Android (emulador) e iOS (simulador) con `user_version` 4→5,
-  `note_link` + índice y Notas preservadas. Sin bloqueos.
-- **`FileProvider` + cámara Android:** `ActivityResultContracts.TakePicture` no
-  agrega los flags de grant de URI y la app de cámara no podía escribir el output;
-  resuelto con un intent `ACTION_IMAGE_CAPTURE` explícito con
-  `FLAG_GRANT_READ/WRITE_URI_PERMISSION` + `clipData`.
-- **Cámara iOS fuera del harness:** el simulador no expone cámara; la captura real
-  de cámara en iOS sólo se valida en dispositivo físico → se mapea a
-  `CAMERA_UNAVAILABLE` y no se fabrica evidencia. La galería (`PHPicker`) queda
-  verificada por build/link/launch, sin input automation iOS disponible
-  (`idb`/`cliclick` ausentes; `osascript`/System Events bloqueado), igual que en
-  features previas de UI.
+- **Migración de esquema sin precedentes:** v1→v2 (`1.sqm` + `embedding`), v4→v5
+  (`4.sqm` + `note_link`) y v5→v6 (`5.sqm` + `note.index_attempts`) quedaron
+  cubiertas por tests de migración en Android/JVM e iOS. Sin bloqueos.
+- **`FileProvider` + cámara Android:** resuelto con un intent
+  `ACTION_IMAGE_CAPTURE` explícito con flags de grant de URI + `clipData`.
+- **Cámara iOS fuera del harness:** el simulador no expone cámara; se mapea a
+  `CAMERA_UNAVAILABLE` y no se fabrica evidencia. Relevancia menor desde el
+  congelamiento de iOS.
+- **Smoke interactivo iOS:** sin input automation (`idb`/`cliclick` ausentes;
+  `osascript` bloqueado). Relevancia menor desde el congelamiento de iOS.
 
 ## Later / Not MVP
+- **Múltiples Proyectos** (varios juegos) y **Banco de ideas**.
+- **Descongelar iOS** (retomar paridad y verificación).
 - Multi-usuario, cuentas, sync y backend.
 - Fase B: editor de niveles, generación desde prompt, dificultad, export
   Tiled/Godot/Unity/LÖVE.
 - Desktop y Web.
 
 ## Assumptions
+- **Android-first** en el MVP; un único Proyecto (singleton) por instalación.
 - Un único usuario por instalación.
 - La captura nunca debe bloquearse por la IA.
 - SQLDelight + similitud en memoria alcanza sin una vector DB dedicada.
 - Los criterios de éxito son de aprendizaje, no de escala.
-- Sin clasificación IA, el usuario organiza cada Nota eligiendo un `track`; la
-  auto-organización no es un requisito del MVP.
+- Sin clasificación IA, el usuario organiza cada Nota eligiendo `track` y Géneros;
+  la auto-organización no es un requisito del MVP.
 
 ## Risks
-- **Android + iOS en paralelo** duplica esfuerzo nativo y puede retrasar el
-  primer flujo end-to-end.
-- **Alcance amplio del MVP** (texto + voz + imagen + GDD + RAG): sin respetar la
-  secuencia, se corre el riesgo de terminar varias cosas a medias y ninguna
-  end-to-end.
-- **Sin clasificación IA**, notas mal clasificadas por el usuario ensucian el
-  GDD; el diseño de UI debe hacer fácil elegir y corregir el track.
-- **Sin tokens visuales definitivos**, drift visual en las features de UI
-  mientras el equipo de UI/UX no entregue la dirección.
-- **Verificación del STT no determinista:** no hay harness de UI/E2E ni forma de
-  inyectar audio o simular el motor de voz nativo; el emulador/simulador puede no
-  tener entrada de audio o servicio de reconocimiento. La integración se verifica
-  con smoke manual (permiso concedido/denegado, cancelar, sin habla) y el happy
-  path de audio real → Nota puede requerir dispositivo físico. Se documenta como
-  limitación de entorno, no como fallo del código (`voice-capture-stt`).
-- **Doble cliente de micrófono en Android (`voice-attachment-storage`):**
-  `MediaRecorder` y `SpeechRecognizer` comparten el micrófono en simultáneo y
-  algunos dispositivos lo rechazan. Mitigación implementada: degradación
-  tolerante (Nota sin Adjunto, sin crash) si la grabación no puede iniciar/escribir;
-  en el emulador el `MediaRecorder` sí arranca y produce un `.m4a` válido. Si
-  resultara poco confiable en dispositivos reales, la alternativa es un único
-  camino de audio y transcribir después (documentado como follow-up).
-- **Grabación de audio en iOS no determinista:** el tap de `AVAudioEngine` escribe
-  AAC a `AVAudioFile`, pero la reproducción/inyección de voz en simulador es
-  imposible; el happy path de dictado con audio real sólo se valida en dispositivo
-  físico. Se verifica el build/link/launch, el esquema y la UI por seed, sin
-  fabricar evidencia de grabación real.
+- **Congelar iOS** puede generar drift/deuda si se retoma: nuevos `expect` sin
+  `actual` iOS completo. Mitigación: se provee un `actual` mínimo y se conserva el
+  build; el ADR define los disparadores de re-evaluación.
+- **Alcance amplio del MVP ampliado** (principal + texto/voz 30s + bocetos +
+  Géneros + Proyecto/Brainstorming + GDD híbrido + Q&A): sin respetar la secuencia,
+  riesgo de terminar varias cosas a medias.
+- **Catálogo de Géneros rígido:** si falta un género frecuente, el usuario recurre a
+  personalizados que no se reutilizan; podría necesitar promoción al catálogo (no
+  MVP).
+- **Sugerencias de IA con `FakeAiClient`:** la calidad real no es verificable hasta
+  elegir proveedor/modelo (ADR 0001).
+- **Sin clasificación IA**, Notas mal clasificadas ensucian el GDD; la UI debe
+  facilitar elegir/corregir `track` y Géneros.
+- **Verificación del STT no determinista** (audio real puede requerir dispositivo
+  físico) y **doble cliente de micrófono en Android** (`MediaRecorder` +
+  `SpeechRecognizer`): mitigación por degradación tolerante; persistente desde
+  `voice-attachment-storage`.
 
 ## Research Tasks
-- **Hecho (2026-10-09):** spike comparativo de arquetipos cloud vs on-device
-  detrás de `AiClient` → `docs/spikes/ai-runtime-spike.md`; decisión en
-  `docs/adr/0001-ai-runtime-decision.md`.
+- **Hecho (2026-10-09):** spike cloud vs on-device detrás de `AiClient`
+  (`docs/spikes/ai-runtime-spike.md`; ADR 0001).
 - **Pendiente:** verificar latencia/calidad/costo cloud reales con la sonda
   key-gated del ADR (fuera del gate) al elegir proveedor/modelo.
-- Evaluar `sqlite-vec` u otra extensión vectorial si el volumen de notas crece
-  y la similitud en memoria deja de alcanzar.
+- Evaluar `sqlite-vec` u otra extensión vectorial si el volumen de notas crece y la
+  similitud en memoria deja de alcanzar.
