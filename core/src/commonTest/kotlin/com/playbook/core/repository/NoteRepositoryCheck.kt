@@ -203,3 +203,88 @@ fun verifyNoteCrud(driver: SqlDriver) {
         "updateStatus de un id inexistente devuelve false y no lanza",
     )
 }
+
+/**
+ * Ejercita las queries del reintento de indexado (`offline-pending-retry`) sobre
+ * un [SqlDriver] con el esquema v6: `getByStatus` (sólo lectura, filtrada y
+ * ordenada, con etiquetas agrupadas) y `setIndexAttempts` (efecto de sistema que
+ * sólo toca `index_attempts`). Vive en `commonTest` para correr en Android/JVM e
+ * iOS.
+ */
+fun verifyNoteRetryQueries(driver: SqlDriver) {
+    val database = PlaybookDatabase(driver)
+    var sequence = 0
+    var now = 1_700_000_000_000L
+    val repository = SqlDelightNoteRepository(
+        database = database,
+        idFactory = { "note-${sequence++}" },
+        clock = { now },
+    )
+
+    // `indexAttempts` arranca en 0 (default de esquema).
+    val pendingOlder = repository.create(
+        NoteDraft(
+            owner = "owner-1",
+            body = "pendiente vieja",
+            track = Track.MECHANICS,
+            status = NoteStatus.PENDING,
+            tags = listOf("jefe"),
+        ),
+    )
+    assertEquals(0, pendingOlder.indexAttempts, "create arranca con index_attempts = 0")
+
+    now += 1_000
+    val pendingNewer = repository.create(
+        NoteDraft("owner-1", "pendiente nueva", null, status = NoteStatus.PENDING),
+    )
+    now += 1_000
+    val captured = repository.create(
+        NoteDraft("owner-1", "capturada", null, status = NoteStatus.CAPTURED),
+    )
+    now += 1_000
+    repository.create(NoteDraft("owner-1", "indexada", null, status = NoteStatus.INDEXED))
+    now += 1_000
+    repository.create(NoteDraft("owner-1", "fallida", null, status = NoteStatus.FAILED))
+
+    // --- getByStatus: filtra por estado y ordena como getAll ------------------
+    val pending = repository.getByStatus(NoteStatus.PENDING)
+    assertEquals(
+        listOf(pendingNewer.id, pendingOlder.id),
+        pending.map { it.id },
+        "getByStatus filtra por status y ordena updated_at DESC, id DESC",
+    )
+    assertEquals(
+        listOf("jefe"),
+        pending.first { it.id == pendingOlder.id }.tags,
+        "getByStatus agrupa las etiquetas de cada Nota",
+    )
+    assertEquals(
+        listOf(NoteStatus.CAPTURED),
+        repository.getByStatus(NoteStatus.CAPTURED).map { it.status },
+        "getByStatus devuelve sólo el estado pedido",
+    )
+    assertTrue(
+        repository.getByStatus(NoteStatus.INDEXED).size == 1,
+        "getByStatus devuelve la Nota INDEXED sembrada",
+    )
+    assertTrue(repository.getAll().size == 5, "las 5 Notas siguen persistidas")
+    // `captured` se referencia para que su id participe del sembrado determinista.
+    assertTrue(repository.getByStatus(NoteStatus.CAPTURED).any { it.id == captured.id })
+
+    // --- setIndexAttempts: sólo toca el contador ------------------------------
+    val frozen = repository.getById(pendingOlder.id)!!
+    assertTrue(repository.setIndexAttempts(frozen.id, 2), "setIndexAttempts devuelve true")
+    val after = repository.getById(frozen.id)!!
+    assertEquals(2, after.indexAttempts, "setIndexAttempts actualiza el contador")
+    assertEquals(frozen.status, after.status, "setIndexAttempts no toca status")
+    assertEquals(frozen.body, after.body, "setIndexAttempts no toca body")
+    assertEquals(frozen.track, after.track, "setIndexAttempts no toca track")
+    assertEquals(frozen.tags, after.tags, "setIndexAttempts no toca tags")
+    assertEquals(frozen.owner, after.owner, "setIndexAttempts no toca owner")
+    assertEquals(frozen.createdAt, after.createdAt, "setIndexAttempts no toca createdAt")
+    assertEquals(frozen.updatedAt, after.updatedAt, "setIndexAttempts no re-sella updatedAt")
+    assertFalse(
+        repository.setIndexAttempts("no-existe", 1),
+        "setIndexAttempts de un id inexistente devuelve false y no lanza",
+    )
+}

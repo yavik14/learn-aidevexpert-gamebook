@@ -27,12 +27,12 @@ internal object EmptySqlSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Scenario 8 de la spec: migración v1 → v5 y bootstrap en ambos caminos.
+ * Scenario 8 de la spec: migración v1 → v6 y bootstrap en ambos caminos.
  *
  * [migratedDriver] debe ser una base **vacía** (sin esquema) sobre la que se
- * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v5 creado desde
+ * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v6 creado desde
  * cero (`Schema.create` en JVM o `inMemoryDriver(Schema)` en iOS). El esquema
- * final (columnas y foreign keys de `embedding` y `note_link`) debe coincidir
+ * final (columnas de `note`/`embedding`/`note_link` y foreign keys) debe coincidir
  * entre ambos caminos.
  */
 fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
@@ -49,14 +49,15 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         updated_at = 1_700_000_000_000L,
     )
 
-    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 5L)
+    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 6L)
 
-    assertEquals(5L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 5")
+    assertEquals(6L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 6")
 
     // La fila v1 sobrevive a la migración.
     val legacy = migratedDatabase.noteQueries.selectNoteById("legacy-1").executeAsOneOrNull()
     assertNotNull(legacy, "la fila v1 debe sobrevivir a la migración")
     assertEquals("nota legacy", legacy.body)
+    assertEquals(0L, legacy.index_attempts, "index_attempts (v6) arranca en 0")
 
     // La tabla `embedding` existe y es usable.
     migratedDatabase.embeddingQueries.upsertEmbedding(
@@ -93,7 +94,12 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "la tabla note_link debe existir y aceptar filas tras migrar",
     )
 
-    // Bootstrap desde cero produce el mismo esquema final (v5).
+    // Bootstrap desde cero produce el mismo esquema final (v6).
+    assertEquals(
+        noteColumns(migratedDriver),
+        noteColumns(freshDriver),
+        "las columnas de note deben coincidir entre migración y Schema.create",
+    )
     assertEquals(
         embeddingColumns(migratedDriver),
         embeddingColumns(freshDriver),
@@ -114,6 +120,14 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         noteLinkForeignKeys(freshDriver),
         "las foreign keys de note_link deben coincidir entre migración y Schema.create",
     )
+
+    // Esquema de `note`: la columna v6 `index_attempts` está presente con default 0.
+    val noteColumnsByName = noteColumns(migratedDriver).associateBy { it[1] }
+    val indexAttempts = noteColumnsByName["index_attempts"]
+    assertNotNull(indexAttempts, "index_attempts debe existir en note tras migrar a v6")
+    assertEquals("INTEGER", indexAttempts[2], "index_attempts debe ser INTEGER")
+    assertEquals("1", indexAttempts[3], "index_attempts debe ser NOT NULL")
+    assertEquals("0", indexAttempts[4], "index_attempts debe tener default 0")
 
     val columns = embeddingColumns(migratedDriver)
     assertEquals(
@@ -154,6 +168,9 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "note_link debe referenciar note(id) ON DELETE CASCADE por ambos lados",
     )
 }
+
+private fun noteColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(note)", columnCount = 6)
 
 private fun embeddingColumns(driver: SqlDriver): List<List<String?>> =
     pragmaRows(driver, "PRAGMA table_info(embedding)", columnCount = 6)

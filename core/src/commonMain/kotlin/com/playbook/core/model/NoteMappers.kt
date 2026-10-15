@@ -14,4 +14,6 @@ fun NoteRow.toDomain(tags: List<String> = emptyList()): Note = Note(
     createdAt = created_at,
     updatedAt = updated_at,
     tags = tags,
+    // SQLDelight mapea INTEGER a Long; el dominio usa Int (default 0).
+    indexAttempts = index_attempts.toInt(),
 )

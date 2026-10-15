@@ -32,6 +32,10 @@ con `4.sqm`, tabla `note_link`, `NoteLinkRepository` y `SemanticLinkingService`)
 wiring del runtime de IA a la app (indexado best-effort al guardar + pantalla de
 consulta). `rag-answer-citations` surfacea las Notas fuente como **citas
 numeradas** con navegación a la Nota, sin persistirlas.
+`offline-pending-retry` cierra el ciclo offline/online: reintenta las Notas
+`PENDING` al arrancar (`PendingIndexingRetry`) y promueve a `FAILED` las que
+agotan el presupuesto (`index_attempts`, esquema v6 con `5.sqm`); la
+disponibilidad de la IA es un puerto inyectable (`AiAvailability`).
 
 ## Modules
 
@@ -61,9 +65,11 @@ composeApp (Android app / commonMain) ──▶ core
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde los `.sq` de
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
-- **Esquema v5:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
-  `created_at`, `updated_at`; queries `insertNote`, `selectAllNotes`,
-  `selectNoteById`, `updateNote`, `updateNoteStatus`, `deleteNoteById`), tabla
+- **Esquema v6:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+  `created_at`, `updated_at`, `index_attempts` INTEGER NOT NULL DEFAULT 0; queries
+  `insertNote`, `selectAllNotes`, `selectNoteById`, `selectNotesByStatus`,
+  `updateNote`, `updateNoteStatus`, `updateNoteIndexAttempts`, `deleteNoteById`),
+  tabla
   `embedding` (`note_id`
   PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
   `indexed_at`), tabla `note_tag` (`note_id`, `label`, PK `(note_id, label)`; N—N
@@ -71,24 +77,25 @@ composeApp (Android app / commonMain) ──▶ core
   `note_id`, `kind`, `mime_type`, `file_path`, `byte_size`, `created_at` + índice
   `attachment_note_id`) y tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id)`
   `ON DELETE CASCADE`, `score`, `updated_at`, PK `(note_a_id, note_b_id)`,
-  `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`). La tabla `note`
-  no cambió en estas features; los bytes de la imagen **no** se guardan en la base
-  (sólo metadatos + ruta relativa).
-- **Migraciones (v1 → v2 → v3 → v4 → v5):** `embeddings-generation` introdujo
+  `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`). La columna
+  `index_attempts` la agrega `offline-pending-retry`; los bytes de la imagen **no**
+  se guardan en la base (sólo metadatos + ruta relativa).
+- **Migraciones (v1 → v2 → v3 → v4 → v5 → v6):** `embeddings-generation` introdujo
   `1.sqm` (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 → v3,
-  `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`) y
-  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice). Los `.sq` describen
-  el esquema más reciente y los `.sqm` hacen upgrade; los drivers
+  `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`),
+  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice) y
+  `offline-pending-retry` `5.sqm` (v5 → v6, `note.index_attempts`). Los `.sq`
+  describen el esquema más reciente y los `.sqm` hacen upgrade; los drivers
   (`AndroidSqliteDriver`/`NativeSqliteDriver` con `PlaybookDatabase.Schema`)
   detectan `user_version` y ejecutan `Schema.migrate`.
-  `PlaybookDatabase.Schema.version = 5`. `INSERT OR REPLACE` en lugar de
+  `PlaybookDatabase.Schema.version = 6`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
   `minSdk = 24`.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
   `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
   de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`,
-  `NoteTagCheck.verifyNoteTagMigration` y `verifyMigrationV1ToV5`) que corren en
-  Android/JVM e iOS.
+  `NoteTagCheck.verifyNoteTagMigration`, `verifyMigrationV1ToV6` y
+  `verifyMigrationV5ToV6`) que corren en Android/JVM e iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
 - **Entry point:** `createDatabase(factory)` en `:core` construye la base y fuerza
@@ -310,14 +317,36 @@ composeApp (Android app / commonMain) ──▶ core
   (`semantic-linking`). Es `suspend` y no agenda nada: el llamador decide cuándo
   invocarlo, fuera del camino de captura. La transición usa
   `NoteRepository.updateStatus` (sólo `status`, sin re-sellar `updated_at`).
-- **Wiring a la UI (`rag-query` 2026-10-13; `note-enrichment-status-ui` 2026-10-14):**
+- **Reintento de pendientes (`offline-pending-retry`, 2026-10-15):**
+  `com.playbook.core.ai.PendingIndexingRetry`
+  (`retryPending(): RetrySummary`, `suspend`) cierra el ciclo offline/online. Si
+  `AiAvailability.isAvailable()` es `false` es un **no-op** (no consume
+  presupuesto, no cambia estados, no llama a `AiClient`). Si está disponible,
+  recorre `NoteRepository.getByStatus(PENDING)` (sólo lectura) y por cada Nota
+  llama a `NoteIndexingOrchestrator.index`: éxito → `setIndexAttempts(id, 0)`;
+  fallo → `index_attempts + 1` y, al alcanzar `budget` (default
+  `DEFAULT_RETRY_BUDGET = 3`, `require(budget > 0)`),
+  `updateStatus(id, FAILED)`. `setIndexAttempts`/`updateStatus` no re-sellan
+  `updated_at`. Una `FAILED` es terminal para el reintento (no aparece en
+  `getByStatus(PENDING)`) hasta que una edición la reindexe con el orquestador.
+  El presupuesto es durable (`note.index_attempts`, esquema v6 con `5.sqm`).
+- **Disponibilidad de la IA (`AiAvailability`):** puerto en
+  `com.playbook.core.ai` (`suspend fun isAvailable(): Boolean`) con default
+  `AlwaysAvailableAiAvailability` (siempre `true`). No hay red ni runtime real en
+  el MVP (ADR 0001), así que la "vuelta de la IA" se aproxima con el arranque de
+  la app; la sonda real de conectividad es follow-up del ADR. Se inyecta por
+  constructor para poder degradar y testear sin runtime real.
+- **Wiring a la UI (`rag-query` 2026-10-13; `note-enrichment-status-ui` 2026-10-14;
+  `offline-pending-retry` 2026-10-15):**
   los composition roots construyen `SqlDelightEmbeddingRepository`, `FakeAiClient`,
-  `NoteIndexingService`, `NoteIndexingOrchestrator` y `RagQueryService` y los pasan
-  a `App(...)`. `App` indexa best-effort al guardar/editar una Nota con `body` no
-  vacío vía `NoteIndexingOrchestrator` (transiciona `NoteStatus` y refresca el
-  badge) y la pantalla de consulta invoca `RagQueryService.ask`. El editor permite
-  re-indexar a mano una Nota no indexada. El reintento automático, el scheduling y
-  la promoción `pendiente → fallida` siguen siendo de `offline-pending-retry`.
+  `NoteIndexingService`, `NoteIndexingOrchestrator`, `PendingIndexingRetry` y
+  `RagQueryService` y los pasan a `App(...)`. `App` indexa best-effort al
+  guardar/editar una Nota con `body` no vacío vía `NoteIndexingOrchestrator`
+  (transiciona `NoteStatus` y refresca el badge) y la pantalla de consulta invoca
+  `RagQueryService.ask`. El editor permite re-indexar a mano una Nota no indexada.
+  En el arranque (`LaunchedEffect(Unit)`) se corre `PendingIndexingRetry.retryPending()`
+  y se refresca: las `PENDING` se reintentan y las irrecuperables pasan a `FAILED`.
+  No hay scheduling ni detección de conectividad real.
 - **Dependencias:** `kotlinx-coroutines-core` (commonMain) por el contrato
   `suspend`; `kotlinx-coroutines-test` (commonTest) para `runTest`. Versión
   **1.10.1**, compatible con Kotlin 2.1.21.
@@ -641,25 +670,27 @@ composeApp (Android app / commonMain) ──▶ core
   secrets (ver `CONSTRAINTS.md`). El `detail` de `STORAGE` se omite a propósito
   porque las excepciones de IO/SQL pueden contener rutas.
 - **Sin esquema ni deps:** el log es infra, no modelo de dominio (no hay entidad
-  `Log`, ni tabla, ni `.sqm`): esquema **v5** sin cambios, sin dependencias nuevas.
+  `Log`, ni tabla, ni `.sqm`): no cambia el esquema, sin dependencias nuevas.
 
 ## Runtime surfaces
 
-- **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v5 con
+- **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v6 con
   `createDatabase(AndroidDatabaseDriverFactory(...))`, construye
   `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository` +
   `SqlDelightEmbeddingRepository` + `SqlDelightNoteLinkRepository`, un
   `FakeAiClient`, un `FileDiagnostics` sobre `filesDir/diagnostics.log`,
-  `NoteIndexingService`, `RagQueryService` y `SemanticLinkingService`, y monta
+  `NoteIndexingService`, `NoteIndexingOrchestrator`, `PendingIndexingRetry`,
+  `RagQueryService` y `SemanticLinkingService`, y monta
   `App(..., AndroidVoiceTranscriber(this), noteLinkRepository,
   semanticLinkingService, diagnostics)`.
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
   local (singletons perezosos), construye los cuatro repositorios, el
   `FakeAiClient`, un `FileDiagnostics` sobre `Application Support/diagnostics.log`,
-  `NoteIndexingService`, `RagQueryService` y
+  `NoteIndexingService`, `NoteIndexingOrchestrator`, `PendingIndexingRetry`,
+  `RagQueryService` y
   `SemanticLinkingService`, y envuelve
-  `App(notes, attachments, transcriber, indexing, rag, noteLinkRepository,
-  semanticLinkingService)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
+  `App(notes, attachments, transcriber, orchestrator, retry, rag, links, linking,
+  diag)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
 
 ## Identifiers
 

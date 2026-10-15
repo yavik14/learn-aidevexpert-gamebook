@@ -1,0 +1,7 @@
+-- Migración v5 -> v6: agrega `index_attempts` a `note`. Es el presupuesto durable
+-- de reintentos del indexado (`offline-pending-retry`): `PendingIndexingRetry`
+-- incrementa la columna en cada fallo y promueve `pendiente -> fallida` al agotar
+-- el presupuesto. Las Notas v5 existentes conservan sus datos y quedan con
+-- `index_attempts = 0` (default). El DDL replica exactamente la columna de
+-- `Note.sq`; la equivalencia se cubre con `DatabaseMigrationCheck`.
+ALTER TABLE note ADD COLUMN index_attempts INTEGER NOT NULL DEFAULT 0;

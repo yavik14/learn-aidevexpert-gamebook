@@ -42,21 +42,22 @@ object BlankTestSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Prueba la migración v1 → v5 (todas las del repo: `1.sqm`..`4.sqm`). Asume un
+ * Prueba la migración v1 → v6 (todas las del repo: `1.sqm`..`5.sqm`). Asume un
  * driver vacío: construye el esquema v1 (`note` + una fila + `user_version = 1`),
- * aplica `PlaybookDatabase.Schema.migrate(1, 5)` y verifica que las notas v1 se
- * conservan intactas y que la tabla `note_link` (nueva en v5) queda disponible.
+ * aplica `PlaybookDatabase.Schema.migrate(1, 6)` y verifica que las notas v1 se
+ * conservan intactas, que la columna `index_attempts` (v6) queda con default `0`
+ * y que la tabla `note_link` (v5) queda disponible.
  *
  * No se usa `PlaybookDatabase.Schema.create` para la v1 porque eso aplicaría el
- * esquema v5; el DDL v1 se replica aquí a propósito.
+ * esquema v6; el DDL v1 se replica aquí a propósito.
  */
-fun verifyMigrationV1ToV5(driver: SqlDriver) {
+fun verifyMigrationV1ToV6(driver: SqlDriver) {
     // Given: base v1 existente con una fila.
     driver.execute(null, CREATE_NOTE_V1, 0)
     driver.execute(null, "PRAGMA user_version = 1", 0)
     driver.execute(null, INSERT_NOTE_V1, 0)
 
-    assertEquals(5L, PlaybookDatabase.Schema.version, "con 1.sqm+2.sqm+3.sqm+4.sqm el esquema debe ser v5")
+    assertEquals(6L, PlaybookDatabase.Schema.version, "con 1.sqm..5.sqm el esquema debe ser v6")
 
     // La tabla `note_link` todavía no existe en v1.
     val noteLinkTables = driver.executeQuery(
@@ -70,8 +71,8 @@ fun verifyMigrationV1ToV5(driver: SqlDriver) {
     ).value
     assertEquals(0L, noteLinkTables, "la tabla note_link no debe existir en v1")
 
-    // When: se aplica la migración v1 → v5.
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 5).value
+    // When: se aplica la migración v1 → v6.
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 6).value
 
     // Then: las notas previas se conservan intactas.
     val database = PlaybookDatabase(driver)
@@ -85,6 +86,7 @@ fun verifyMigrationV1ToV5(driver: SqlDriver) {
     assertEquals("capturada", note.status)
     assertEquals(1000L, note.created_at)
     assertEquals(1000L, note.updated_at)
+    assertEquals(0L, note.index_attempts, "index_attempts (v6) debe existir con default 0")
 
     // Then: la tabla `note_link` queda disponible y usable (FK exige 2 notas).
     database.noteQueries.insertNote(
@@ -107,4 +109,39 @@ fun verifyMigrationV1ToV5(driver: SqlDriver) {
     assertEquals("note-v1", links.first().note_a_id)
     assertEquals("note-v1b", links.first().note_b_id)
     assertEquals(0.75, links.first().score)
+}
+
+/**
+ * Prueba el paso aislado v5 → v6 (`5.sqm`): agrega `index_attempts` a `note` sin
+ * perder las Notas. Como la tabla `note` no cambió entre v1 y v5, su DDL v5 es el
+ * de v1; `migrate(5, 6)` corre sólo `5.sqm`.
+ */
+fun verifyMigrationV5ToV6(driver: SqlDriver) {
+    // Given: base v5 con la tabla `note` (sin `index_attempts`) y una fila.
+    driver.execute(null, CREATE_NOTE_V1, 0)
+    driver.execute(null, "PRAGMA user_version = 5", 0)
+    driver.execute(null, INSERT_NOTE_V1, 0)
+
+    // When: se aplica sólo la migración v5 → v6.
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 5, newVersion = 6).value
+
+    // Then: la Nota se conserva y `index_attempts` existe con default 0.
+    val database = PlaybookDatabase(driver)
+    val notes = database.noteQueries.selectAllNotes().executeAsList()
+    assertEquals(1, notes.size, "la migración v5 → v6 no debe perder notas")
+    val note = notes.first()
+    assertEquals("note-v1", note.id)
+    assertEquals("nota antes de migrar", note.body)
+    assertEquals("mecánicas", note.track)
+    assertEquals("capturada", note.status)
+    assertEquals(1000L, note.updated_at)
+    assertEquals(0L, note.index_attempts, "index_attempts debe existir con default 0")
+
+    // Then: la columna nueva es operable.
+    database.noteQueries.updateNoteIndexAttempts(index_attempts = 2L, id = "note-v1")
+    assertEquals(
+        2L,
+        database.noteQueries.selectNoteById("note-v1").executeAsOne().index_attempts,
+        "updateNoteIndexAttempts debe operar tras la migración",
+    )
 }

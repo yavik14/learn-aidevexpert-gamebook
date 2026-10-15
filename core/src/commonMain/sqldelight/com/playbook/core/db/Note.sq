@@ -8,7 +8,8 @@ CREATE TABLE note (
   track TEXT,
   status TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  index_attempts INTEGER NOT NULL DEFAULT 0
 );
 
 insertNote:
@@ -32,6 +33,17 @@ UPDATE note SET body = ?, track = ?, status = ?, updated_at = ? WHERE id = ?;
 -- ordena por `updated_at DESC`). Es un cambio de query, no de esquema (sigue v4).
 updateNoteStatus:
 UPDATE note SET status = ? WHERE id = ?;
+
+-- Lectura acotada por estado para el reintento de indexado (`PendingIndexingRetry`).
+-- Mismo orden determinista que `selectAllNotes`. Es un cambio de query, no de esquema.
+selectNotesByStatus:
+SELECT * FROM note WHERE status = ? ORDER BY updated_at DESC, id DESC;
+
+-- Presupuesto durable de reintentos (`index_attempts`, esquema v6, `5.sqm`).
+-- No re-sella `updated_at`, igual que `updateNoteStatus`: es un efecto de sistema,
+-- no una edición del usuario (no reordena la lista).
+updateNoteIndexAttempts:
+UPDATE note SET index_attempts = ? WHERE id = ?;
 
 deleteNoteById:
 DELETE FROM note WHERE id = ?;

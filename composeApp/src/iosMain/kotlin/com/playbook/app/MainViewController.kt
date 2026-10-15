@@ -5,6 +5,7 @@ import com.playbook.app.voice.IosVoiceTranscriber
 import com.playbook.core.ai.FakeAiClient
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
+import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagQueryService
 import com.playbook.core.db.IosDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
@@ -38,6 +39,7 @@ private var noteLinkRepository: NoteLinkRepository? = null
 private var aiClient: FakeAiClient? = null
 private var noteIndexingService: NoteIndexingService? = null
 private var noteIndexingOrchestrator: NoteIndexingOrchestrator? = null
+private var pendingIndexingRetry: PendingIndexingRetry? = null
 private var ragQueryService: RagQueryService? = null
 private var semanticLinkingService: SemanticLinkingService? = null
 private var voiceTranscriber: IosVoiceTranscriber? = null
@@ -91,6 +93,11 @@ fun MainViewController(): UIViewController {
     val orchestrator = noteIndexingOrchestrator ?: NoteIndexingOrchestrator(indexing, notes).also {
         noteIndexingOrchestrator = it
     }
+    // Reintento de indexado pendiente (`offline-pending-retry`): al arrancar la
+    // app reintenta las Notas `PENDING` y promueve a `FAILED` las irrecuperables.
+    val retry = pendingIndexingRetry ?: PendingIndexingRetry(orchestrator, notes).also {
+        pendingIndexingRetry = it
+    }
     val rag = ragQueryService ?: RagQueryService(
         ai,
         notes,
@@ -102,6 +109,6 @@ fun MainViewController(): UIViewController {
     }
     val transcriber = voiceTranscriber ?: IosVoiceTranscriber().also { voiceTranscriber = it }
     return ComposeUIViewController {
-        App(notes, attachments, transcriber, orchestrator, rag, links, linking, diag)
+        App(notes, attachments, transcriber, orchestrator, retry, rag, links, linking, diag)
     }
 }
