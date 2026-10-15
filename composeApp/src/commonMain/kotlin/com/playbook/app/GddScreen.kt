@@ -15,10 +15,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -26,7 +30,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.playbook.core.gdd.GddSection
 import com.playbook.core.gdd.buildGdd
+import com.playbook.core.gdd.buildGddMarkdown
 import com.playbook.core.model.Note
+import kotlinx.coroutines.launch
 
 /**
  * Vista de GDD: proyección agregada de las Notas agrupadas por `track`, sin
@@ -34,7 +40,8 @@ import com.playbook.core.model.Note
  * `:core`, cubierta por tests cross-platform).
  *
  * - Estado vacío explícito ("Todavía no hay notas") sin secciones.
- * - Encabezado con el total de notas y un botón "Volver".
+ * - Encabezado con el total de notas y los botones "Volver" y **"Compartir"**
+ *   (este último deshabilitado si no hay Notas).
  * - Una sección por `track` (`mecánicas`/`personajes`/`historia`) y, si hay
  *   notas sin `track`, "Sin track" al final; cada sección muestra su conteo.
  * - Cada nota resume el cuerpo (máx. 2 líneas) y muestra chips textuales de
@@ -42,8 +49,14 @@ import com.playbook.core.model.Note
  *   comunica con texto, no sólo color (`DESIGN.md`).
  * - Tocar una nota emite `onOpenNote(note.id)`: `App` la abre en el editor.
  *
+ * "Compartir" construye el Markdown con [buildGddMarkdown] (timestamp de
+ * plataforma) y lo entrega a [GddSharer]; el resultado se comunica con un
+ * snackbar ("Listo para compartir"/"No disponible") sin salir de la pantalla.
+ *
  * La pantalla es "tonta": recibe `notes`/`attachmentCounts` y sólo emite
- * `onOpenNote`/`onBack`. Sin DI, `ViewModel`, Flow ni librería de navegación.
+ * `onOpenNote`/`onBack`. El [GddSharer] se obtiene con [rememberGddSharer]
+ * (sin parámetro nuevo, por lo que `App` no cambia). Sin DI, `ViewModel`, Flow ni
+ * librería de navegación.
  */
 @Composable
 fun GddScreen(
@@ -54,52 +67,76 @@ fun GddScreen(
     modifier: Modifier = Modifier,
 ) {
     val sections = remember(notes) { buildGdd(notes) }
+    val sharer = rememberGddSharer()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
         ) {
-            TextButton(onClick = onBack) {
-                Text(text = "Volver")
-            }
-        }
-        Text(text = "GDD", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = notesSummary(notes.size),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        if (notes.isEmpty()) {
-            EmptyGdd(modifier = Modifier.fillMaxWidth().weight(1f))
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                sections.forEach { section ->
-                    item(key = sectionKey(section)) {
-                        SectionHeader(section = section)
-                    }
-                    if (section.notes.isEmpty()) {
-                        item(key = "${sectionKey(section)}-empty") {
-                            Text(
-                                text = "Sin notas en este track",
-                                style = MaterialTheme.typography.bodyMedium,
+                TextButton(onClick = onBack) {
+                    Text(text = "Volver")
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = {
+                        val markdown = buildGddMarkdown(notes, currentTimestampLabel())
+                        val shared = sharer.share(markdown)
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = if (shared) "Listo para compartir" else "No disponible",
                             )
                         }
-                    } else {
-                        items(section.notes, key = { it.id }) { note ->
-                            GddNoteCard(
-                                note = note,
-                                hasAttachment = (attachmentCounts[note.id] ?: 0) > 0,
-                                onClick = { onOpenNote(note.id) },
-                            )
+                    },
+                    enabled = notes.isNotEmpty(),
+                ) {
+                    Text(text = "Compartir")
+                }
+            }
+            Text(text = "GDD", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = notesSummary(notes.size),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            if (notes.isEmpty()) {
+                EmptyGdd(modifier = Modifier.fillMaxWidth().weight(1f))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    sections.forEach { section ->
+                        item(key = sectionKey(section)) {
+                            SectionHeader(section = section)
+                        }
+                        if (section.notes.isEmpty()) {
+                            item(key = "${sectionKey(section)}-empty") {
+                                Text(
+                                    text = "Sin notas en este track",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        } else {
+                            items(section.notes, key = { it.id }) { note ->
+                                GddNoteCard(
+                                    note = note,
+                                    hasAttachment = (attachmentCounts[note.id] ?: 0) > 0,
+                                    onClick = { onOpenNote(note.id) },
+                                )
+                            }
                         }
                     }
                 }

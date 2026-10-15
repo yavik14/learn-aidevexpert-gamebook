@@ -914,6 +914,47 @@ Implementado 2026-10-13. Detalle en `ARCHITECTURE.md`.
   no se agregaron dependencias y `init.sh` no cambió. `LOCAL_OWNER_ID`/`:core`
   sin cambios de contrato.
 
+## GDD Export Decisions (gdd-export)
+
+Implementado 2026-10-15. Detalle en `ARCHITECTURE.md`.
+
+- **Export = proyección pura, no entidad ni archivo:** el GDD se comparte como
+  **texto Markdown en memoria**, sin `FileProvider`, sin guardar archivos, sin
+  permisos, sin PDF y sin backend. La construcción vive en `:core`
+  (`buildGddMarkdown(notes, now)`), es determinista y reusa `buildGdd` (misma
+  agrupación/orden por `track`, omitiendo secciones vacías). Sin tabla, query ni
+  migración: el esquema sigue en **v5** (sin `.sqm` nuevo). Nada de Adjuntos ni
+  Notas relacionadas en el documento (sólo Notas, Etiquetas y `status`).
+- **`now` inyectado como `String`:** el timestamp se formatea en la plataforma
+  (Android `SimpleDateFormat("yyyy-MM-dd HH:mm")`, iOS `NSDateFormatter`) y llega
+  a `:core` como `String`; así `:core` no agrega dependencia de fecha y los tests
+  fijan `now` → salida determinista. `now` sólo se usa en el fallback
+  `Nota <now>` de un `body` vacío.
+- **Escapado del contenido de usuario:** backslash-escape del set
+  `` \ ` * _ { } [ ] ( ) # + - . ! | > `` en título, cuerpo (resto) y Etiquetas.
+  Los valores generados (labels de sección `track.code`/`Sin track`, `status.code`
+  y el fallback `Nota <now>`) **no** se escapan. Cubierto por el escenario 6 en
+  `:core` (Android/JVM e iOS).
+- **Puerto de share `GddSharer` (expect/actual), sin DI:** `interface GddSharer
+  { fun share(markdown: String): Boolean }` + `@Composable expect fun
+  rememberGddSharer()` y `expect fun currentTimestampLabel()`. Android:
+  `ACTION_SEND` `text/plain` + `createChooser` (devuelve `false` sin app que lo
+  reciba); iOS: `UIActivityViewController` desde el `topViewController()` extraído
+  a un helper **interno compartido** (`IosViewControllers.kt`) y reusado por
+  `ImageCapture.ios.kt` (sin cambiar su lógica de captura). `share` devuelve un
+  `Boolean` honesto: la UI muestra "Listo para compartir"/"No disponible" en un
+  **snackbar**.
+- **Snackbar autocontenido en `GddScreen`:** se agregó un `Scaffold` con
+  `SnackbarHostState` + `rememberCoroutineScope()` **dentro** de la pantalla y un
+  `TextButton` "Compartir" (`enabled = notes.isNotEmpty()`). No se agregaron
+  parámetros a `GddScreen`, por lo que **`App.kt` no cambió** (evita el conflicto
+  con `offline-pending-retry`, que sí toca `App.kt`).
+- **Sin dependencias nuevas:** `Scaffold`/`SnackbarHost`/`rememberCoroutineScope`
+  ya estaban (`compose.material3` + coroutines); el timestamp usa APIs nativas.
+  `init.sh` no cambió. **Límite honesto:** el gesto de compartir en iOS no es
+  automatizable en este entorno (sin `idb`/`cliclick`/`applesimutils`) y no había
+  `adb`/emulador Android para el smoke interactivo; la lógica del documento queda
+  cubierta por tests del core en dos plataformas y la app compila/enlaza en ambas.
 
 ## Observability Decisions (enrichment-observability-logging)
 

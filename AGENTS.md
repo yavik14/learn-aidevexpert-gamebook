@@ -55,8 +55,11 @@ re-indexado manual) quedó `accepted` (validación independiente `accept`).
 instrumentación de fallos de IA y nativos) quedó `accepted` (validación
 independiente `accept`). `offline-pending-retry` (reintento de indexado pendiente
 + promoción a `fallida`; esquema v6 con `5.sqm` + `PendingIndexingRetry` y
-`AiAvailability`) quedó `accepted` (validación independiente `accept`). La próxima
-en cola es `gdd-export`.
+`AiAvailability`) quedó `accepted` (validación independiente `accept`). `gdd-export`
+(export del GDD a Markdown con `buildGddMarkdown` en `:core` + puerto `GddSharer`
++ botón "Compartir" y snackbar en `GddScreen`, sin tocar `App.kt`) quedó `accepted`
+(validación independiente `accept`). No hay features listas en cola
+(`ios-release-pipeline-first-upload` sigue `blocked`, account-gated).
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
