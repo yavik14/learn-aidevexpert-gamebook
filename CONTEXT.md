@@ -90,6 +90,31 @@ y sus embeddings. Superficie "Preguntar", distinta del flujo de Brainstorming.
 Proceso asíncrono que genera el embedding de una Nota y, con él, sus Enlaces.
 No clasifica ni etiqueta: eso lo decide el usuario.
 
+### Proveedor de IA
+Servicio de inferencia del MVP: **propio, compatible con la API de OpenAI**
+(`https://inference.devexpert.io/v1`), con modelos **chat, embedding, transcribe,
+tts, image y jev**. Se accede detrás de puertos de IA; la **API key** no se versiona.
+
+### Entorno fake / real (IA)
+Modo de ejecución de la IA elegido por **build flag**: `fake` (determinista, sin
+red; default y siempre en tests/gate) o `real` (usa el proveedor y la API key).
+
+### Transcripción de audio
+Uso del modelo `transcribe`: convertir el Adjunto `AUDIO` de una Nota en texto
+(que pasa al `body` de la Nota). Es un texto derivado, distinto del Adjunto.
+
+### Lectura en voz alta (TTS)
+Uso del modelo `tts`: reproducir por audio un texto (respuestas del Q&A, el cuerpo
+de una Nota o la narración del GDD).
+
+### Generación de imagen
+Uso del modelo `image`: crear una imagen a partir de un texto y adjuntarla a una
+Nota como Adjunto.
+
+### Sugerencia de clasificación (IA)
+Uso del modelo `jev`: proponer `Track`/`Género` a partir de texto. La IA **sugiere**;
+el usuario **confirma o edita**. Nunca se auto-asigna (non-goal revisado 2026-10-15).
+
 ### Owner
 Identificador del dueño de una Nota. En el MVP es único (single-user), pero se
 modela para no cerrar la puerta a multi-usuario.
@@ -99,7 +124,8 @@ modela para no cerrar la puerta a multi-usuario.
 ### Categoría / Tipo de nota
 Descartados del MVP. La Nota se clasifica con un único `Track` fijo
 (`mecánicas`/`personajes`/`historia`) elegido por el usuario; no hay `Categoría`
-ni `Tipo` inferidos por IA.
+ni `Tipo`. La IA puede **sugerir** `Track`/`Género` (con confirmación del usuario),
+pero no existe clasificación automática `Categoría`/`Tipo`.
 
 ### Etiqueta (Tag)
 **Sustituida por `Género`.** La Nota ya no tiene vocabulario libre genérico; su

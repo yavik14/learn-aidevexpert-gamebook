@@ -36,11 +36,11 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
 
 ## Indexado de IA
 
-- El pipeline de indexado **MUST NOT** clasificar ni etiquetar la Nota (la IA no
-  asigna `categoría`/`tipo`/`Etiquetas`) ni bloquear la captura: un fallo de IA
-  deja la Nota `PENDING` y nunca lanza hacia el llamador. Razón: la clasificación
-  IA está descartada (`CONTEXT.md`) y la captura es local-first/tolerante a
-  fallos.
+- El pipeline de indexado **MUST NOT** clasificar ni etiquetar la Nota ni
+  bloquear la captura: un fallo de IA deja la Nota `PENDING` y nunca lanza hacia
+  el llamador. Razón: la captura es local-first/tolerante a fallos. (La
+  **sugerencia** de clasificación es una acción explícita y separada: ver
+  "Géneros y clasificación asistida".)
 - La transición `pendiente → fallida`, los reintentos, el scheduling y la
   detección de conectividad **MUST NOT** implementarse en el indexado: pertenecen
   a `offline-pending-retry`. El indexado sólo escribe `INDEXED`/`PENDING` (nunca
@@ -78,3 +78,44 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   caminos de éxito). Razón: MVP local-first sin red/terceros (ver ADR 0001).
 - El log **MUST NOT** introducir esquema ni tabla: es infraestructura, no modelo de
   dominio. Razón: no crear migraciones por observabilidad.
+
+## Géneros y clasificación asistida (revisión 2026-10-15)
+
+- Una Nota **MUST NOT** volver a tener **Etiquetas genéricas libres**: su
+  clasificación descriptiva múltiple son los **Géneros** (catálogo fijo constante
+  de 12 + personalizados por Nota). Razón: `CONTEXT.md`; el catálogo fijo no debe
+  "engordarse" globalmente con cada valor escrito.
+- La IA **MAY** **sugerir** `Track`/`Género` (vía `AiClient`, caso de uso `jev`)
+  como una acción **explícita y separada** del indexado. La sugerencia **MUST**
+  requerir confirmación del usuario (confirmar o editar) y **MUST NOT**
+  auto-asignar ni persistir la clasificación sin confirmación. Razón: se revisó el
+  non-goal "sin clasificación IA" (2026-10-15); el indexado sigue sin clasificar.
+- Las secciones de clasificación del GDD **MUST** derivarse de `Track`/`Género`
+  elegidos por el usuario; la sugerencia de IA no reemplaza esa decisión.
+
+## Plataforma (Android-first, iOS congelado)
+
+- Las features **MUST NOT** exigir paridad ni verificación iOS; `init.sh` valida
+  **solo Android** (`:composeApp:assembleDebug` + `:core:testDebugUnitTest`) y no
+  debe levantar dev servers ni simuladores. Razón: revisión de alcance 2026-10-15
+  (`docs/adr/0003-ios-congelado-mvp.md`).
+- Todo `expect` nuevo **MUST** aportar un `actual` iOS **mínimo** para no romper el
+  build compartido de iOS (aunque iOS no se verifique en el gate). Razón: iOS se
+  conserva y debe seguir compilando.
+
+## IA real (proveedor y credenciales)
+
+- La **API key** de IA **MUST NOT** versionarse: se provee por **build flag**
+  (env/gradle property, gitignored). Razón: `AGENTS.md` prohíbe secrets.
+- Los **tests** y el **gate** (`init.sh`) **MUST** usar la **IA fake**
+  (determinista, sin red ni key); el adapter **real** **MUST NOT** ejecutarse en el
+  gate. Razón: el gate es offline/ determinista; el costo/red no son verificables
+  en CI.
+- Proveedor del MVP: **propio, compatible con OpenAI** (`https://inference.devexpert.io/v1`),
+  modelos chat/embedding/transcribe/tts/image/jev (ver `docs/adr/0004-ai-real-integration.md`).
+
+## GDD
+
+- El GDD **MUST** ser **híbrido**: ficha estructurada del **Proyecto** + proyección
+  de **Notas** agrupadas por `Track`. **MUST NOT** persistir una tabla que duplique
+  las Notas. Razón: `docs/domain-model.md`.

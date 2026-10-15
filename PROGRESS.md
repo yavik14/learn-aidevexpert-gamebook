@@ -4,7 +4,7 @@
 
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
-- Standard verification path: `./init.sh` corre `:composeApp:assembleDebug`, `:core:testDebugUnitTest`, `:composeApp:linkDebugFrameworkIosSimulatorArm64` y (en macOS) `:core:iosSimulatorArm64Test`, sin levantar dev servers.
+- Standard verification path: `./init.sh` (gate no bloqueante **Android-only**) corre `:composeApp:assembleDebug` + `:core:testDebugUnitTest`, sin levantar dev servers. iOS está congelado (ADR 0003).
 - Última feature `accepted`: `gdd-export` (2026-10-15; Session 045; export del GDD a Markdown + puerto `GddSharer`; validación independiente `accept`); antes `offline-pending-retry` (Session 044).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
@@ -27,7 +27,8 @@
 - `enrichment-observability-logging` `accepted` (2026-10-14; Session 042; validación independiente `accept`): observabilidad mínima del MVP — puerto `Diagnostics` best-effort (`NoOpDiagnostics` default + `InMemoryDiagnostics` + `FileDiagnostics` con `DiagnosticStorage` expect/actual) en `:core`; instrumenta `AI_INDEXING`/`AI_QUERY` (`NoteIndexingService`/`RagQueryService`, retrocompatibles con `NoOpDiagnostics`) y `VOICE`/`IMAGE`/`STORAGE` (`App`); sink `FileDiagnostics` cableado en los composition roots (`filesDir/diagnostics.log` Android, `Application Support/diagnostics.log` iOS). Sin esquema (sigue v5), sin `.sqm`, sin dependencias nuevas ni UI/telemetría remota.
 - `offline-pending-retry` `accepted` (2026-10-15; Session 044; validación independiente `accept` en `docs/validations/offline-pending-retry.md`): cierra el ciclo offline/online — reintenta las Notas `PENDING` al arrancar y promueve a `FAILED` las que agotan el presupuesto. Esquema **v6** con `5.sqm` (`note.index_attempts INTEGER NOT NULL DEFAULT 0`); `Note.indexAttempts`; `NoteRepository.getByStatus`/`setIndexAttempts`; `PendingIndexingRetry` + `AiAvailability` (`AlwaysAvailableAiAvailability` default; `false` = no-op); wiring en `App` (`LaunchedEffect(Unit) { retryPending(); reload() }`) + roots. `FAILED` sólo lo escribe el reintento; sin conectividad real ni scheduling. Ver `feature_list.json` y `docs/technical-discovery.md`.
 - `gdd-export` `accepted` (2026-10-15; Session 045; validación independiente `accept` en `docs/validations/gdd-export.md`): export del GDD a Markdown (`buildGddMarkdown(notes, now)` en `:core`, proyección pura con el "Format Contract") + puerto `GddSharer` (expect/actual; `ACTION_SEND` en Android, `UIActivityViewController` en iOS; share **en memoria**, sin archivos/permisos) + botón "Compartir" (deshabilitado sin Notas) y snackbar en `GddScreen` (`Scaffold`/`SnackbarHostState` local, sin nuevos parámetros, por lo que **`App.kt` no cambió**); `topViewController()` extraído a `IosViewControllers.kt` compartido con `ImageCapture.ios.kt`. No agrega `.sqm` ni dependencias nuevas (el esquema global queda en **v6** por `offline-pending-retry`).
-- Current next ready features: ninguna (el backlog queda agotado salvo `ios-release-pipeline-first-upload`, `blocked`/account-gated).
+- **Revisión de alcance 2026-10-15 (Android-first):** iOS **congelado** (ADR 0003); Etiquetas→**Géneros** (catálogo fijo + personalizados); **Proyecto de Juego** (ficha singleton) + **Brainstorming**; GDD **documento híbrido** (ficha + secciones por Track); principal rediseñada (top bar "Playbook" + iconos + FAB desplegable), bocetos con miniatura, dictado inline 30s, Q&A "guardar como Nota"; e **IA real** con proveedor propio OpenAI-compatible (`https://inference.devexpert.io/v1`; modelos chat/embedding/transcribe/tts/image/jev; alternancia fake/real por build flag; la IA **sugiere** y el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png`). Esquema previsto **v7** (Géneros) y **v8** (Proyecto). Backlog re-derivado: **20 features `not_started`**.
+- Current next ready features: `genres-catalog-persistence` (primera de las 20 nuevas; ver `feature_list.json`).
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-15.
 
@@ -957,3 +958,21 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `docs/validations/gdd-export.md` (nuevo).
 - Known risk or unresolved issue: hallazgos Low no bloqueantes — la cobertura del test de escapado omite `{ } +` (la implementación sí los incluye), sin smoke interactivo Android/iOS (sin `adb`/input automation, declarado honestamente) y nit de checkbox de smoke en la spec. La spec aún dice `Schema.version == 6` (asunción de `offline-pending-retry`, no integrada en este worktree); el valor real v5 quedó registrado honestamente.
 - Next best step: continuar con `offline-pending-retry` (depende de `ai-enrichment-classify-tags-type`, ya `accepted`; última por el esquema v6).
+
+### Session 047
+
+- Date: 2026-10-15
+- Goal: revisión de descubrimiento (build-brief) del MVP Android-first y re-derivación del harness/backlog (sin implementar producto).
+- Completed:
+  - Discovery (rama `docs/mvp-android-root-discovery`): `CONTEXT.md`, `docs/build-brief.md`, `docs/domain-model.md`, `docs/risks-and-open-questions.md`, `docs/technical-discovery.md`, `DESIGN.md` y `docs/adr/0003-ios-congelado-mvp.md` (iOS congelado).
+  - Re-derivación del harness: `init.sh` pasa a gate **Android-only** (`:composeApp:assembleDebug` + `:core:testDebugUnitTest`; sin Xcode ni tareas iOS); `feature_list.json` conserva las 26 entradas (anotando las reemplazadas) y suma **20 features `not_started`** (12 producto + 8 IA; `ai-client-ports`, `ai-suggest-classification`); `AGENTS.md` (Android-first + IA real + backlog); `CONSTRAINTS.md` (Género ≥ Etiqueta; Android-first + `actual` iOS mínimo; key nunca versionada; tests/gate siempre fake; clasificación IA sugerida con confirmación; GDD híbrido).
+  - IA: docs de descubrimiento actualizados (non-goal revisado: la IA sugiere, el usuario confirma) + `docs/adr/0004-ai-real-integration.md` (proveedor propio OpenAI-compatible; mapeo modelo→caso de uso; puertos; keys por build flag).
+  - `DESIGN.md` iterado con la paleta del autor (`docs/design/paleta.png`) y las superficies de IA (tts, generación de imagen, transcripción, sugerencia de clasificación, indicador fake/real).
+- Verification run:
+  - `python3` (json.load + chequeo de `depends_on`/ciclos/`priority`) → `feature_list.json` válido; 46 entradas (25 `accepted`, 1 `blocked`, 20 `not_started`), 0 problemas.
+  - `bash init.sh` → exit 0 con el gate Android-only, sin dev servers ni red.
+  - `git diff --stat` sin cambios en código de producto ni esquema.
+- Evidence captured: `feature_list.json` (20 nuevas + anotaciones), `bash init.sh` exit 0, y los documentos actualizados listados arriba.
+- Files or artifacts updated: `init.sh`, `feature_list.json`, `AGENTS.md`, `PROGRESS.md`, `CONSTRAINTS.md`, `CONTEXT.md`, `docs/build-brief.md`, `docs/domain-model.md`, `docs/risks-and-open-questions.md`, `docs/technical-discovery.md`, `docs/adr/0004-ai-real-integration.md` (nuevo), `DESIGN.md`, `docs/design/paleta.png` (nuevo).
+- Known risk or unresolved issue: iOS congelado (se conserva y debe seguir compilando; los nuevos `expect` necesitan `actual` iOS mínimo, ya no forzado por el gate); IA real con clave por build flag (nunca versionada) y costos/offline abiertos (ver `docs/risks-and-open-questions.md`); esquema v7/v8 previstos.
+- Next best step: al mergear el PR #32 a `develop`, derivar la spec de `genres-catalog-persistence` con `$feature-spec` y avanzar por el backlog con `$feature-flow` (una feature a la vez, WIP=1).

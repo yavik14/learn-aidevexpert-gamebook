@@ -52,6 +52,20 @@
   `personajes`).
 - **Mecánicas / Notas:** Notas agrupadas por `Track`.
 
+## Capacidades de IA
+- **Generación (chat):** sugerencias del Brainstorming y respuestas del Q&A.
+- **Embeddings:** indexado de la Nota (y los Enlaces/RAG que dependen de él).
+- **Transcripción (transcribe):** transcribe el Adjunto `AUDIO` → texto al `body`
+  (texto derivado); dispara re-indexado.
+- **Lectura en voz alta (tts):** reproduce texto (Q&A/Nota/GDD); no crea entidades.
+- **Generación de imagen (image):** crea una imagen desde texto y la persiste como
+  `Adjunto` de una Nota.
+- **Sugerencia de clasificación (jev):** propone `Track`/`Género`; el usuario
+  confirma o edita (**nunca** auto-asigna).
+
+Todas operan detrás de puertos de IA; en tests/gate, con adaptador **fake**
+(determinista, sin red). El proveedor del MVP es propio (OpenAI-compatible).
+
 ## States and Lifecycles
 **Nota:**
 - `capturada` → `indexada`: el embedding se generó con éxito.
@@ -96,3 +110,9 @@
   conservan).
 - Género escrito a mano que coincide con el catálogo: se trata como de catálogo
   (normalización case-insensitive).
+- **Transcripción no disponible/falla:** la Nota queda sin texto derivado, sin
+  bloquear la captura.
+- **Imagen generada:** se persiste como `Adjunto` (igual que un boceto) y es
+  visible con su miniatura.
+- **Sugerencia de clasificación descartada:** si el usuario no confirma, no se
+  persiste ningún `Track`/`Género`.

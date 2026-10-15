@@ -184,7 +184,7 @@
       "2026-10-09: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración. Capturas/UI dumps/DBs en el directorio ignorado `composeApp/build/smoke-evidence/`; los datos QA se limpiaron de emulador/simulador.",
       "2026-10-09: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL in 43s (66 tareas) con NoteRepository 3/3 + NotePersistence 2/2 + AiClient 3/3 + Greeting 1/1 por plataforma, 0 failures, y `./init.sh` exit 0; confirmó `Schema.version = 2`, la migración compilada (`create()`/`migrateInternal` emiten `note_tag`), `Note.sq` sin cambios (`git diff` vacío) y sin cambios en build files/`init.sh`/`iosApp`/`Track.kt`. Control negativo propio del validador (renombrar la tabla en `migrations/1.sqm` a `note_tag_broken`) reproduce `SQLiteException: ... no such table: note_tag` y se restaura byte-idéntico. Corroboración independiente con `sqlite3` de los artefactos de smoke: `android-before-migration.db` (v1, sólo `note`), `android-after-migration.db` (v2, `note`+`note_tag`, fila v1 intacta), `android-06-interactive.db` (`arte`/`jefe`, `JEFE` deduplicado) y `android-08-after-edit.db` (`jefe`/`nivel` reemplazados, `track`/`status` intactos); UI dumps sin control Categoría/Tipo/Nivel. Escenarios 1–9 cubiertos. Findings Low no bloqueantes: CRUD interactivo iOS no automatizado (limitación de tooling, declarada honestamente) y orden de etiquetas case-insensitive en memoria vs `ORDER BY label` (BINARY) en SQL, que respeta el contrato de la spec y es determinista en cada lectura."
     ],
-    "notes": "Agrega Etiquetas libres, múltiples y editables a la Nota (`Note.tags`/`NoteDraft.tags` + `normalizeTags`), persistidas en la tabla N—N `note_tag` (esquema v2, primer `.sqm` v1→v2). UI: campo/chips en `NoteEditorScreen` y chips en `NoteCard`. La clasificación fija por `Track` (enum único) ya existía y no se tocó; no hay Categoría/Tipo/Nivel ni IA/GDD/filtros/gestión global de etiquetas. Sin DI/ViewModel/Flow; sin dependencias nuevas; `init.sh` sin cambios. Ver docs/technical-discovery.md y ARCHITECTURE.md."
+    "notes": "Agrega Etiquetas libres, múltiples y editables a la Nota (`Note.tags`/`NoteDraft.tags` + `normalizeTags`), persistidas en la tabla N—N `note_tag` (esquema v2, primer `.sqm` v1→v2). UI: campo/chips en `NoteEditorScreen` y chips en `NoteCard`. La clasificación fija por `Track` (enum único) ya existía y no se tocó; no hay Categoría/Tipo/Nivel ni IA/GDD/filtros/gestión global de etiquetas. Sin DI/ViewModel/Flow; sin dependencias nuevas; `init.sh` sin cambios. Ver docs/technical-discovery.md y ARCHITECTURE.md. Reemplazada/evolucionada por `genres-catalog-persistence` y `genres-catalog-ui` (Género en vez de Etiqueta; revisión de alcance 2026-10-15)."
   },
   {
     "id": "ai-client-interface",
@@ -216,7 +216,7 @@
       "2026-10-08: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest + link framework iOS + iosSimulatorArm64Test), sin procesos de larga duración.",
       "2026-10-08: validación independiente (accept). `./init.sh` exit 0 con el gate real y `init.sh` sin cambios; `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` BUILD SUCCESSFUL con AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 en cada plataforma, 0 failures (conteos leídos de core/build/test-results/*/TEST-*.xml); `:composeApp:assembleDebug` + link framework iOS con `--rerun-tasks` BUILD SUCCESSFUL (57 tasks); `kotlinx-coroutines-core/-core-jvm:1.10.1` resuelto en `androidDebugCompileClasspath`; `Schema.version = 1` y sin `.sqm`; sin cambios en `:composeApp`/`iosApp`/`init.sh`/`Note.sq` ni hallazgos de seguridad. Control negativo propio del validador (cambiar `ConstantAiClient.embed` a `emptyList()`) hace fallar `constantSatisfiesContract` mientras los tests de `FakeAiClient` siguen en verde; restaurado y re-ejecutado. Hallazgos Low no bloqueantes: el contrato no aserta el mapeo posicional `result[i] ↔ texts[i]` y `AiClientException` aún no se lanza (seam para adaptadores reales)."
     ],
-    "notes": "Puerto `AiClient` (`com.playbook.core.ai`) + `FakeAiClient` determinista y sin red en `commonMain`; tests de contrato compartidos en `commonTest` corridos en Android/JVM e iOS contra 2 implementaciones. `kotlinx-coroutines` 1.10.1 (`-core` en commonMain, `-test` en commonTest). Sin wiring a la app (no hay consumidor de IA todavía; lo cableará `embeddings-generation`); sin cambio de esquema (v1, sin `.sqm`). Runtime real/dimensión quedan para `ai-runtime-decision`. Ver docs/technical-discovery.md y ARCHITECTURE.md."
+    "notes": "Puerto `AiClient` (`com.playbook.core.ai`) + `FakeAiClient` determinista y sin red en `commonMain`; tests de contrato compartidos en `commonTest` corridos en Android/JVM e iOS contra 2 implementaciones. `kotlinx-coroutines` 1.10.1 (`-core` en commonMain, `-test` en commonTest). Sin wiring a la app (no hay consumidor de IA todavía; lo cableará `embeddings-generation`); sin cambio de esquema (v1, sin `.sqm`). Runtime real/dimensión quedan para `ai-runtime-decision`. Ver docs/technical-discovery.md y ARCHITECTURE.md. Extendida por `ai-client-ports` (contratos para chat/embedding/transcribe/tts/image/jev; 2026-10-15)."
   },
   {
     "id": "ai-runtime-decision",
@@ -246,7 +246,7 @@
       "2026-10-09: ADR decisión = estrategia híbrida por fases, cloud-first, detrás de `AiClient`; política durable de no versionar keys; sonda manual key-gated documentada (nunca en el gate); docs `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md` actualizados.",
       "2026-10-09: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` (BUILD SUCCESSFUL, 66 tasks) con AiRuntimeSpike 2/2 + AiClient 3/3 + NotePersistence 2/2 + NoteRepository 1/1 + Greeting 1/1 en cada plataforma, 0 failures; `./init.sh` exit 0. Control negativo propio del validador (forzar `LocalSpikeAiClient.embed` a `emptyList()`) hace fallar `reportsRuntimeArchetypes` (tests=2 failures=1) y se restaura (hash idéntico) re-verificado en verde. Confirmó el ADR (MADR-lite, 3 alternativas, trade-offs, decisión, consecuencias, evidencia, preguntas abiertas) y la separación medido vs estimado; sin wiring de IA en la app, sin deps de producción de IA, sin keys/secrets, `init.sh` sin cambios, `:composeApp`/`iosApp`/`commonMain`/esquema/puerto/UI sin cambios. Findings Low no bloqueantes: citas de lo estimado sin URLs concretas y `status: propuesto` del ADR (promovido a `accepted` al persistir la aceptación)."
     ],
-    "notes": "Feature de decisión + documentación + spike test-only. Entrega ADR (`docs/adr/0001-ai-runtime-decision.md`, MADR-lite con cloud-only/on-device-only/híbrido puntuados), harness reproducible en `core/src/*Test/.../ai/spike/` y reporte `docs/spikes/ai-runtime-spike.md` (medido vs estimado). NO cablea IA real, NO agrega deps de producción de IA, NO toca `:composeApp`/`iosApp`/`init.sh`/esquema/puerto/UI. Runtime: híbrido por fases, cloud-first; primer adaptador real en `embeddings-generation`/`rag-query`; on-device como fase 2; `FakeAiClient` default. Seguridad: ninguna key versionada. Riesgo principal postergado cerrado; proveedor/modelo/dimensión/keys quedan como follow-ups."
+    "notes": "Feature de decisión + documentación + spike test-only. Entrega ADR (`docs/adr/0001-ai-runtime-decision.md`, MADR-lite con cloud-only/on-device-only/híbrido puntuados), harness reproducible en `core/src/*Test/.../ai/spike/` y reporte `docs/spikes/ai-runtime-spike.md` (medido vs estimado). NO cablea IA real, NO agrega deps de producción de IA, NO toca `:composeApp`/`iosApp`/`init.sh`/esquema/puerto/UI. Runtime: híbrido por fases, cloud-first; primer adaptador real en `embeddings-generation`/`rag-query`; on-device como fase 2; `FakeAiClient` default. Seguridad: ninguna key versionada. Riesgo principal postergado cerrado; proveedor/modelo/dimensión/keys quedan como follow-ups. El proveedor real (propio, OpenAI-compatible) quedó definido en `docs/adr/0004-ai-real-integration.md` (2026-10-15)."
   },
   {
     "id": "ai-enrichment-classify-tags-type",
@@ -344,7 +344,7 @@
       "2026-10-09 (limitación de entorno, honesta): el happy path de audio real → Nota no pudo ejecutarse en emulador porque no hay forma de inyectar audio de voz; el reconocedor sí arrancó ('Escuchando…') y el flujo de error/no-match sí quedó verificado. El emulador Android es compartido con otras sesiones paralelas: durante el smoke aparecieron ANR de una app ajena (`es.alt10.kotlin.midgt.ne.des`), un `pm clear` externo de `com.playbook.app`, y al final el APK instalado quedó reemplazado por un build de otra feature (UI de 'Etiquetas', inexistente en este código), por lo que el smoke se detuvo. Toda la evidencia de UI capturada antes de esas interferencias corresponde a este build (`package=\"com.playbook.app\"` con los strings únicos 'Tocá Grabar y dictá tu idea.' / 'Permiso de micrófono denegado…' / 'No se escuchó nada'). El path de persistencia de la Nota está cubierto por los tests de `:core`. No se fabricó evidencia.",
       "2026-10-09: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test`/`:composeApp:assembleDebug`/link del framework iOS `--rerun-tasks` → BUILD SUCCESSFUL (66 tasks, 0 failures en ambas plataformas) y `./init.sh` exit 0 con `init.sh` sin cambios; `xcodebuild` scheme iosApp → BUILD SUCCEEDED con `simctl install`/`launch` y PID vivo sin crash reports. Verificó scope: sin cambios en `core/**`, `Note.sq`, `libs.versions.toml`, `composeApp/build.gradle.kts`, `init.sh` ni `.pbxproj`; `Schema.version = 1` sin `.sqm`; sin dependencias nuevas ni DI/`ViewModel`/Flow/navegación; `RECORD_AUDIO` en el manifest empaquetado y ambas usage descriptions en el `Info.plist` del producto `xcodebuild`. Reprodujo de forma independiente Escenario 2 (permiso denegado → mensaje explícito, sin Nota ni crash) y Escenario 4 (Cancelar → lista); con `RECORD_AUDIO` concedido el reconocedor arranca ('Escuchando…'). Control negativo/entorno: el happy path de audio real → Nota no es ejecutable de forma determinista en emulador/simulador (limitación declarada honestamente, corroborada por interferencia de una sesión paralela en el emulador compartido); el path de datos está cubierto por tests de `:core`. Findings Low no bloqueantes: artefacto no citado `android-voice-10-happy-listening.xml` en el build dir ignorado (build ajeno) y `setCategory(..., error = null)` que ignora el error en iOS; sin hallazgos de seguridad."
     ],
-    "notes": "Puerto `VoiceTranscriber` + `VoiceCaptureError` en `:composeApp/commonMain` (`com.playbook.app.voice`) con adaptadores nativos por plataforma (patrón `DatabaseDriverFactory`, sin `expect`/`actual`): `AndroidVoiceTranscriber` (`SpeechRecognizer` + `RECORD_AUDIO` runtime) e `IosVoiceTranscriber` (`SFSpeechRecognizer` + `AVAudioEngine` + autorizaciones, despacho a main). `App(noteRepository, voiceTranscriber)` hoistea `voiceState` y crea la Nota con `create(NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null))` + `reload()`. `NotesListScreen` suma 'Dictar nota'; nuevo `VoiceCaptureScreen`. No guarda el audio original (eso es `voice-attachment-storage`); sin cambio de esquema (v1, sin `.sqm`) ni dependencias nuevas. Ver docs/technical-discovery.md y ARCHITECTURE.md."
+    "notes": "Puerto `VoiceTranscriber` + `VoiceCaptureError` en `:composeApp/commonMain` (`com.playbook.app.voice`) con adaptadores nativos por plataforma (patrón `DatabaseDriverFactory`, sin `expect`/`actual`): `AndroidVoiceTranscriber` (`SpeechRecognizer` + `RECORD_AUDIO` runtime) e `IosVoiceTranscriber` (`SFSpeechRecognizer` + `AVAudioEngine` + autorizaciones, despacho a main). `App(noteRepository, voiceTranscriber)` hoistea `voiceState` y crea la Nota con `create(NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null))` + `reload()`. `NotesListScreen` suma 'Dictar nota'; nuevo `VoiceCaptureScreen`. No guarda el audio original (eso es `voice-attachment-storage`); sin cambio de esquema (v1, sin `.sqm`) ni dependencias nuevas. Ver docs/technical-discovery.md y ARCHITECTURE.md. Evolucionada por `inline-dictation-30s` (dictado inline; se retira la pantalla de voz separada; 2026-10-15)."
   },
   {
     "id": "voice-attachment-storage",
@@ -415,7 +415,7 @@
       "2026-10-09: nota de entorno — el emulador `emulator-5554` estaba compartido con otro worktree (mostraba un APK con 'Dictar nota'); la evidencia limpia se tomó en `emulator-5556` tras instalar este worktree. `git status` sólo lista archivos de la feature + `docs/specs/image-capture-camera.md`.",
       "2026-10-09: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tasks), 9/9 Android/JVM y 9/9 iOS con 0 failures; `./init.sh` → exit 0 con `init.sh` sin cambios; `PlaybookDatabase.Schema.version == 2` y `1.sqm` presente. Controles negativos propios (restaurados al byte original): comentar `deleteAttachmentsByNoteId` en `SqlDelightNoteRepository.delete` hace fallar `attachmentCrudAndCascade`; romper `1.sqm` (`attachment_broken`) hace fallar `migratesV1ToV2PreservingNotes`. Verificó artefactos de evidencia de forma independiente: DB on-device `user_version=2` con `note`+`attachment`, fila con `file_path=images/<uuid>.jpg` (relativa) y post-borrado `note=0`/`attachment=0`; `NSCameraUsageDescription` en el Info.plist construido. Sin `ViewModel`/Flow/DI/navegación/`BLOB`, sin editar adjuntos existentes, sin audio/OCR/render/IA/GDD; sin dependencias nuevas ni cambios en `init.sh`/`Note.sq`/build files. Límites de tooling iOS (`idb`/`cliclick` ausentes, `osascript` bloqueado, cámara iOS en simulador) confirmados reales y declarados sin evidencia fabricada. Hallazgos Low no bloqueantes (L1–L5): comentarios obsoletos sobre `TakePicture` en `ImageCapture.android.kt`/`AndroidManifest.xml`, KDoc de `createDatabase` que dice 'v1', fallo parcial improbable en `saveNoteWithImage`, temporal de cámara en `cacheDir/images/` y artefacto de smoke de permiso denegado no guardado."
     ],
-    "notes": "Primer Adjunto del producto: `Attachment`+`AttachmentKind` (IMAGE), tabla `attachment` (esquema v2, primera migración `1.sqm`) y `AttachmentRepository`/`SqlDelightAttachmentRepository` en `:core`; cascade transaccional en `delete` de la nota. Captura nativa en `:composeApp` con `expect/actual` (`rememberImagePicker`, `rememberAttachmentFileStore`, `decodeImageBitmap`): Android `CAMERA` runtime + intent `ACTION_IMAGE_CAPTURE` con grant de URI + `FileProvider`/`PickVisualMedia`; iOS `AVCaptureDevice`+`UIImagePickerController`/`PHPickerViewController` + `NSCameraUsageDescription`; archivos en almacenamiento privado con ruta relativa. UI: `NotesDestination.CreateWithImage`, diálogo de fuente/errores, chip \"Imagen\", placeholder de body vacío, previsualización/quitar imagen y guardar con body vacío permitido. Sin DI/ViewModel/Flow/navegación; sin editar adjuntos existentes, audio/OCR/render en lista ni IA. Ver docs/technical-discovery.md, ARCHITECTURE.md y docs/risks-and-open-questions.md."
+    "notes": "Primer Adjunto del producto: `Attachment`+`AttachmentKind` (IMAGE), tabla `attachment` (esquema v2, primera migración `1.sqm`) y `AttachmentRepository`/`SqlDelightAttachmentRepository` en `:core`; cascade transaccional en `delete` de la nota. Captura nativa en `:composeApp` con `expect/actual` (`rememberImagePicker`, `rememberAttachmentFileStore`, `decodeImageBitmap`): Android `CAMERA` runtime + intent `ACTION_IMAGE_CAPTURE` con grant de URI + `FileProvider`/`PickVisualMedia`; iOS `AVCaptureDevice`+`UIImagePickerController`/`PHPickerViewController` + `NSCameraUsageDescription`; archivos en almacenamiento privado con ruta relativa. UI: `NotesDestination.CreateWithImage`, diálogo de fuente/errores, chip \"Imagen\", placeholder de body vacío, previsualización/quitar imagen y guardar con body vacío permitido. Sin DI/ViewModel/Flow/navegación; sin editar adjuntos existentes, audio/OCR/render en lista ni IA. Ver docs/technical-discovery.md, ARCHITECTURE.md y docs/risks-and-open-questions.md. Evolucionada por `sketch-thumbnails` (miniatura) e `image-generation-from-text` (2026-10-15)."
   },
   {
     "id": "image-ocr-optional",
@@ -592,7 +592,7 @@
       "2026-10-13: reconciliación de terminología en este entry — `title`/`user_visible_behavior`/`notes` pasan de \"por categoría/etiqueta\" a \"por track\"; el GDD es una vista sobre las Notas, sin tabla (docs/domain-model.md), agrupa por track y muestra Etiquetas como chips.",
       "2026-10-13: validación independiente (accept). El validador re-ejecutó `:core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (66 tareas, 3m27s), con GddProjectionAndroidTest/GddProjectionIosTest 1/1 y los tests previos verdes (11 clases, 0 failures por plataforma), `xcodebuild` scheme iosApp → BUILD SUCCEEDED y `./init.sh` exit 0 sin cambios. Confirmó los Escenarios 1–8, `Schema.version == 4` sin `.sqm` nuevos, sin dependencias nuevas, sin DI/ViewModel/Flow/navegación y la reconciliación de terminología. Control negativo propio del validador (preservación del orden intra-sección, `buildGdd.reversed()`) hace fallar `GddProjectionAndroidTest.projectionGroupsByTrack` (`mecánicas conserva el orden`) y se restaura byte-idéntico. Findings Low no bloqueantes (F1 línea en blanco al final de `docs/technical-discovery.md`; F2 comentario de `LabelChip.kt` que menciona el editor que usa su propio `TagChip`; F3 aserción tautológica de no-mutación en `GddProjectionCheck.kt`; F4 smoke iOS del GDD no automatizado, declarado honestamente)."
     ],
-    "notes": "El GDD es una vista sobre las notas, sin tabla propia (docs/domain-model.md); agrupa por track y no por etiqueta. Se implementa como proyección pura en `:core` (`buildGdd`) más una pantalla `GddScreen` en `:composeApp`; las Etiquetas se muestran como chips, sin agrupación por etiqueta."
+    "notes": "El GDD es una vista sobre las notas, sin tabla propia (docs/domain-model.md); agrupa por track y no por etiqueta. Se implementa como proyección pura en `:core` (`buildGdd`) más una pantalla `GddScreen` en `:composeApp`; las Etiquetas se muestran como chips, sin agrupación por etiqueta. Evolucionada por `gdd-document-hybrid` (el GDD pasa a ser el documento del Proyecto; 2026-10-15)."
   },
   {
     "id": "rag-query",
@@ -687,7 +687,8 @@
       "2026-10-09 (modo degradado): sin `keystore.properties` ni env `PLAYBOOK_*`, `./gradlew :composeApp:assembleRelease` → BUILD SUCCESSFUL (84 tasks) y `composeApp/build/outputs/apk/release/composeApp-release-unsigned.apk` (6.88 MB). Re-confirmado tras limpiar el keystore descartable.",
       "2026-10-09 (env signing): keystore descartable (`keytool -genkeypair`, RSA 2048) + los 4 `PLAYBOOK_*`; `./gradlew :composeApp:assembleRelease :composeApp:bundleRelease` → BUILD SUCCESSFUL; `composeApp-release.apk` y `composeApp-release.aab`. `apksigner verify --print-certs` → V2 Signer cert `CN=Playbook Verify, OU=QA, O=Playbook...` SHA-256 `e1187c9d4ef97040e75cfcdf4580f6f322796533ec81f5408b242b21defcf106`, exit 0.",
       "2026-10-09 (file signing): `keystore.properties` temporal con `storeFile=composeApp/build/verify-release/playbook-upload.jks` (relativo; resuelto contra la raíz) y env `PLAYBOOK_*` sin definir → `assembleRelease`+`bundleRelease` BUILD SUCCESSFUL. `apksigner verify --print-certs` del APK → cert SHA-256 `2a7069bd078488d03ae12ef700784f76f540278200b21f6540d41e5e9781d4cb` (coincide exactamente con el keystore descartable, distinto del build por env y del de debug); `jarsigner -verify` del AAB → `jar verified.`.",
-      "2026-10-09 (precedencia env > archivo): dos keystores descartables distintos; env → `CN=Playbook ENV, OU=QA...` (SHA-256 `53fede45b914080263c0efe43fd37e333b173aad1ceacb982e3874fcabf1b08f`) y `keystore.properties` → `CN=Playbook FILE...` (SHA-256 `71e592a0d830b4c953405ef15705da8cbc81531e8e38d6eca3d758f6721cf4bf`); `./gradlew :composeApp:assembleRelease` BUILD SUCCESSFUL y `apksigner verify --print-certs` del APK → `CN=Playbook ENV` con SHA-256 `53fede45…`, confirmando que las variables de entorno ganan sobre el archivo.",      "2026-10-09 (instalabilidad, opcional): `adb -s emulator-5554 install -r composeApp-release.apk` → `Success`; `am start -n com.playbook.app/.MainActivity` → proceso `com.playbook.app` (PID 27124) vivo en `ps -A`; sin `FATAL EXCEPTION`/`AndroidRuntime.*com.playbook` en logcat.",
+      "2026-10-09 (precedencia env > archivo): dos keystores descartables distintos; env → `CN=Playbook ENV, OU=QA...` (SHA-256 `53fede45b914080263c0efe43fd37e333b173aad1ceacb982e3874fcabf1b08f`) y `keystore.properties` → `CN=Playbook FILE...` (SHA-256 `71e592a0d830b4c953405ef15705da8cbc81531e8e38d6eca3d758f6721cf4bf`); `./gradlew :composeApp:assembleRelease` BUILD SUCCESSFUL y `apksigner verify --print-certs` del APK → `CN=Playbook ENV` con SHA-256 `53fede45…`, confirmando que las variables de entorno ganan sobre el archivo.",
+      "2026-10-09 (instalabilidad, opcional): `adb -s emulator-5554 install -r composeApp-release.apk` → `Success`; `am start -n com.playbook.app/.MainActivity` → proceso `com.playbook.app` (PID 27124) vivo en `ps -A`; sin `FATAL EXCEPTION`/`AndroidRuntime.*com.playbook` en logcat.",
       "2026-10-09 (secretos fuera de VCS): `git check-ignore -v keystore.properties` → `.gitignore:21:keystore.properties`; `playbook-upload.jks` → `.gitignore:22:*.jks`; `foo.keystore` → `.gitignore:23:*.keystore`; `git status --porcelain` sólo lista los archivos de la feature (sin keystores ni `keystore.properties`); `keystore.properties.example` no está ignorado (plantilla versionable, sin secrets).",
       "2026-10-09 (versionado): sin props, `output-metadata.json` → `versionCode=1`, `versionName=\"1.0\"`; con `-Pplaybook.versionCode=7 -Pplaybook.versionName=1.2.3` → `versionCode=7`, `versionName=\"1.2.3\"`.",
       "2026-10-09 (no regresión): `./init.sh` → exit 0 (`assembleDebug` + `testDebugUnitTest` + link framework iOS + `iosSimulatorArm64Test`), sin procesos de larga duración. Android/JVM: Greeting 1/1, NotePersistence 2/2, NoteRepository 1/1, AiClient 3/3 (7/7, 0 failures); iOS idem 7/7, 0 failures (core/build/test-results/).",
@@ -841,6 +842,327 @@
       "2026-10-15: `composeApp/src/iosMain/kotlin/com/playbook/app/ImageCapture.ios.kt` reusa el helper compartido `IosViewControllers.kt` (`internal fun topViewController()`), se eliminó su copia privada y sus imports huérfanos (`UIApplication`/`UIWindow`/`UIWindowScene`) sin tocar la lógica de captura.",
       "2026-10-15: validación independiente (accept, `docs/validations/gdd-export.md`). El validador re-ejecutó `:core:testDebugUnitTest`/`:core:iosSimulatorArm64Test --rerun-tasks` (43/0 en cada plataforma), `:composeApp:assembleDebug` + link framework iOS (57 tareas) y `CI=true ./init.sh` (exit 0); verificó el Format Contract y el documento canónico, el puerto `GddSharer` en memoria, la extracción de `topViewController()` y que los paths protegidos (`Note.sq`, `Note.kt`, `repository/**`, `App.kt`, `MainActivity.kt`, `MainViewController.kt`, `init.sh`, `iosApp/**`, build files) quedan byte-idénticos (`git diff` vacío). Confirmó `Schema.version == 5` sin `.sqm` nuevo (la spec asumía `== 6` por `offline-pending-retry`, no integrada aquí) y registró la discrepancia como honesta. Control negativo propio (total sólo en plural) hace fallar `GddMarkdownAndroidTest.buildsDeterministicMarkdown` y se restaura byte-idéntico (sha256 `e165dae1…`). Hallazgos Low no bloqueantes: cobertura del test de escapado omite `{ } +` (la implementación los cubre), sin smoke interactivo (sin emulador/input automation, declarado) y nit de checkbox de smoke en la spec."
     ],
-    "notes": "Feature derivada (no estaba en el brief original): cierra el GDD como documento compartible. Proyección pura en `:core` (`buildGddMarkdown(notes, now)` reusa `buildGdd`, omite secciones vacías, escapa el contenido de usuario con el set del contrato; `now` inyectado como `String`) + puerto de share `GddSharer` (expect/actual: `ACTION_SEND` en Android, `UIActivityViewController` en iOS) + botón \"Compartir\" (deshabilitado sin Notas) y snackbar en `GddScreen` (`Scaffold`/`SnackbarHostState` local, sin nuevos parámetros, por lo que `App.kt` NO cambia, minimizando el conflicto con `offline-pending-retry`). Sin archivos/permisos/PDF, sin esquema (v5, sin `.sqm`), sin dependencias nuevas, sin `init.sh`. `topViewController()` se extrajo a `IosViewControllers.kt` compartido. Smoke interactivo Android/iOS no ejecutado (sin `adb`/input automation), declarado honestamente. `accepted` (validación independiente `accept`, 2026-10-15; `docs/validations/gdd-export.md`)."
+    "notes": "Feature derivada (no estaba en el brief original): cierra el GDD como documento compartible. Proyección pura en `:core` (`buildGddMarkdown(notes, now)` reusa `buildGdd`, omite secciones vacías, escapa el contenido de usuario con el set del contrato; `now` inyectado como `String`) + puerto de share `GddSharer` (expect/actual: `ACTION_SEND` en Android, `UIActivityViewController` en iOS) + botón \"Compartir\" (deshabilitado sin Notas) y snackbar en `GddScreen` (`Scaffold`/`SnackbarHostState` local, sin nuevos parámetros, por lo que `App.kt` NO cambia, minimizando el conflicto con `offline-pending-retry`). Sin archivos/permisos/PDF, sin esquema (v5, sin `.sqm`), sin dependencias nuevas, sin `init.sh`. `topViewController()` se extrajo a `IosViewControllers.kt` compartido. Smoke interactivo Android/iOS no ejecutado (sin `adb`/input automation), declarado honestamente. `accepted` (validación independiente `accept`, 2026-10-15; `docs/validations/gdd-export.md`). Evolucionada por `gdd-export-hybrid` (el export incluye la ficha del Proyecto; 2026-10-15)."
+  },
+  {
+    "id": "genres-catalog-persistence",
+    "area": "persistence",
+    "title": "Persistencia de Géneros (catálogo fijo + personalizados)",
+    "user_visible_behavior": "El core puede guardar y leer los Géneros de una Nota (elegidos del catálogo fijo o escritos como personalizados); las Etiquetas libres previas se migran a Géneros.",
+    "depends_on": [
+      "note-category-and-tags"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests del core (Android/JVM) de persistencia de Géneros (catálogo + personalizados, múltiple) y migración v6→v7 conservando datos; sin Etiquetas genéricas libres."
+    ],
+    "evidence": [],
+    "notes": "Esquema v7 (`6.sqm`): renombre N—N Etiquetas→Géneros. Catálogo fijo (12) constante + personalizados por Nota (no engordan el catálogo global). Android-only."
+  },
+  {
+    "id": "genres-catalog-ui",
+    "area": "ui",
+    "title": "UI de Géneros (chips con catálogo + libre)",
+    "user_visible_behavior": "En el editor y las tarjetas, el usuario elige Géneros del catálogo o escribe uno nuevo, y los ve como chips.",
+    "depends_on": [
+      "genres-catalog-persistence",
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build Android + smoke del editor/tarjetas con chips de Género (catálogo + libre)."
+    ],
+    "evidence": [],
+    "notes": "Reemplaza los chips de Etiqueta. Incluye normalización case-insensitive y deduplicación contra el catálogo."
+  },
+  {
+    "id": "game-project-persistence",
+    "area": "persistence",
+    "title": "Persistencia del Proyecto de Juego (ficha singleton)",
+    "user_visible_behavior": "El core guarda y lee el Proyecto de Juego único (ficha: título, géneros, core loop, audiencia, concepto, inspiraciones, fantasía, 5 mecánicas clave, fuera de alcance).",
+    "depends_on": [
+      "local-persistence-sqldelight",
+      "genres-catalog-persistence"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests del core (Android/JVM) del Proyecto singleton + migración v7→v8."
+    ],
+    "evidence": [],
+    "notes": "Esquema v8 (`7.sqm`). Singleton: un único Proyecto por instalación (multi-proyecto y banco de ideas son post-MVP)."
+  },
+  {
+    "id": "brainstorming-wizard",
+    "area": "ui",
+    "title": "Wizard de Brainstorming (9 pasos)",
+    "user_visible_behavior": "El usuario completa/itera el Proyecto con un asistente de 9 pasos (todos opcionales) con progreso y navegación atrás/siguiente.",
+    "depends_on": [
+      "game-project-persistence"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build Android + smoke del wizard (pasos, progreso X/9, guardar/iterar)."
+    ],
+    "evidence": [],
+    "notes": "Pasos: Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones (≤3), Fantasía, Mecánicas clave (5 con categoría), Fuera de alcance (≤3). Reabrible para iterar."
+  },
+  {
+    "id": "brainstorming-ai-suggestions",
+    "area": "ai",
+    "title": "Sugerencias de Brainstorming (2 por paso)",
+    "user_visible_behavior": "En cada paso, un botón 'Sugerir' devuelve 2 ideas (vía AiClient) que el usuario acepta/edita o ignora.",
+    "depends_on": [
+      "brainstorming-wizard",
+      "ai-client-interface"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core con AiClient fake que devuelve 2 sugerencias; smoke Android."
+    ],
+    "evidence": [],
+    "notes": "Usa `AiClient` (chat); con el modo real lo cubre `ai-real-chat`. No bloquea: siempre se puede escribir a mano."
+  },
+  {
+    "id": "first-run-project-onboarding",
+    "area": "ui",
+    "title": "Onboarding del Proyecto en el primer arranque",
+    "user_visible_behavior": "Si no hay Proyecto, la app ofrece iniciar el Brainstorming (saltable) y crea el Proyecto singleton.",
+    "depends_on": [
+      "brainstorming-wizard"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: smoke Android del primer arranque (ofrecer/saltar) y creación del Proyecto."
+    ],
+    "evidence": [],
+    "notes": "Saltable: se puede crear el Proyecto vacío y completarlo luego."
+  },
+  {
+    "id": "main-screen-playbook-shell",
+    "area": "ui",
+    "title": "Pantalla principal Playbook (top bar, iconos, FAB)",
+    "user_visible_behavior": "La pantalla principal muestra 'Playbook', iconos de GDD/Brainstorming/Preguntar y un FAB desplegable (Nota de texto/Galería/Cámara).",
+    "depends_on": [
+      "notes-list-ui",
+      "gdd-view",
+      "rag-query",
+      "brainstorming-wizard"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build Android + smoke de la top bar, iconos y FAB desplegable."
+    ],
+    "evidence": [],
+    "notes": "Los iconos tienen `contentDescription` (accesibilidad). El FAB agrupa las capturas."
+  },
+  {
+    "id": "sketch-thumbnails",
+    "area": "ui",
+    "title": "Miniaturas de bocetos en la UI",
+    "user_visible_behavior": "Los bocetos muestran su miniatura en las tarjetas (lista y GDD) además del contenido.",
+    "depends_on": [
+      "image-capture-camera",
+      "notes-list-ui",
+      "gdd-view"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core/attachment `read()` + smoke Android con miniatura visible."
+    ],
+    "evidence": [],
+    "notes": "Extiende `AttachmentFileStore` con `read(relativePath): ByteArray?` + `decodeImageBitmap()`. Cacheo de thumbnails queda diferido."
+  },
+  {
+    "id": "inline-dictation-30s",
+    "area": "ui",
+    "title": "Dictado inline de 30s en Nueva nota",
+    "user_visible_behavior": "En Nueva nota, el dictado se integra con cap de 30s, barra de progreso y auto-stop; transcribe al body y conserva el Adjunto de audio.",
+    "depends_on": [
+      "voice-capture-stt",
+      "voice-attachment-storage",
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: smoke Android del dictado inline (progreso, auto-stop) y persistencia del texto/audio."
+    ],
+    "evidence": [],
+    "notes": "Reemplaza la pantalla de voz separada. Cap 30s con auto-stop."
+  },
+  {
+    "id": "gdd-document-hybrid",
+    "area": "gdd",
+    "title": "GDD como documento del Proyecto (híbrido)",
+    "user_visible_behavior": "El GDD muestra la ficha del Proyecto (Proyecto, Historia/Lore, Personajes) y las Notas agrupadas por Track.",
+    "depends_on": [
+      "gdd-view",
+      "game-project-persistence"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core de la proyección del documento + smoke Android del GDD."
+    ],
+    "evidence": [],
+    "notes": "Híbrido: ficha estructurada + proyección de Notas por Track (no duplica Notas en una tabla)."
+  },
+  {
+    "id": "gdd-export-hybrid",
+    "area": "gdd",
+    "title": "Export del GDD con la ficha del Proyecto",
+    "user_visible_behavior": "El export Markdown del GDD incluye la ficha del Proyecto además de las secciones de Notas.",
+    "depends_on": [
+      "gdd-export",
+      "gdd-document-hybrid"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core de `buildGddMarkdown` con la ficha + smoke del share Android."
+    ],
+    "evidence": [],
+    "notes": "Extiende `buildGddMarkdown`/`GddSharer` existentes."
+  },
+  {
+    "id": "save-answer-as-note",
+    "area": "ui",
+    "title": "Guardar respuesta como Nota",
+    "user_visible_behavior": "Desde el Q&A y el Brainstorming, 'Guardar como Nota' crea una Nota pre-clasificada por contexto.",
+    "depends_on": [
+      "rag-answer-citations",
+      "brainstorming-wizard",
+      "create-text-note"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: smoke Android de guardar respuesta como Nota (pre-clasificada por contexto)."
+    ],
+    "evidence": [],
+    "notes": "Pre-clasificación por contexto (mapeo por paso del Brainstorming; Q&A sin Track único), editable."
+  },
+  {
+    "id": "ai-client-ports",
+    "area": "ai",
+    "title": "Puertos de IA para los 6 modelos",
+    "user_visible_behavior": "El core expone contratos para chat, embedding, transcribe, tts, image y jev (además del AiClient actual).",
+    "depends_on": [
+      "ai-runtime-decision",
+      "ai-client-interface"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests del core de los contratos con adaptadores fake; sin red."
+    ],
+    "evidence": [],
+    "notes": "Extiende `AiClient`/nuevos puertos; decisión en ADR 0004. Sin implementación real todavía."
+  },
+  {
+    "id": "ai-fake-real-switch",
+    "area": "ai",
+    "title": "Selección fake/real por build flag",
+    "user_visible_behavior": "El build elige el adapter de IA (fake determinista por defecto y en tests; real con API key) sin exponer la key.",
+    "depends_on": [
+      "ai-client-ports"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: `bash init.sh` usa fake (sin red); el build real no versiona la key; `AiAvailability` acorde."
+    ],
+    "evidence": [],
+    "notes": "Flag de build (env/gradle property), nunca versionado. Tests y gate siempre fake."
+  },
+  {
+    "id": "ai-real-chat",
+    "area": "ai",
+    "title": "Chat real (Brainstorming + Q&A)",
+    "user_visible_behavior": "Las sugerencias del Brainstorming y las respuestas del Q&A se generan con el modelo chat real.",
+    "depends_on": [
+      "ai-fake-real-switch",
+      "brainstorming-wizard",
+      "rag-query"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests con fake + smoke manual Android con key real (fuera del gate)."
+    ],
+    "evidence": [],
+    "notes": "Proveedor propio OpenAI-compatible (`https://inference.devexpert.io/v1`)."
+  },
+  {
+    "id": "ai-real-embeddings",
+    "area": "ai",
+    "title": "Embeddings reales en el indexado",
+    "user_visible_behavior": "El indexado genera embeddings con el modelo real y alimenta enlaces/RAG.",
+    "depends_on": [
+      "ai-fake-real-switch",
+      "offline-pending-retry"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: tests con fake; comportamiento PENDING/retry ante fallo de red; smoke manual Android."
+    ],
+    "evidence": [],
+    "notes": "Respeta la máquina de estados (`PENDING`/reintento) de `offline-pending-retry`."
+  },
+  {
+    "id": "transcribe-audio-attachment",
+    "area": "ai",
+    "title": "Transcripción del Adjunto de audio",
+    "user_visible_behavior": "El usuario transcribe el Adjunto de audio de una Nota y el texto resultante llena el body.",
+    "depends_on": [
+      "ai-fake-real-switch",
+      "voice-attachment-storage"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core con fake; smoke Android del botón Transcribir."
+    ],
+    "evidence": [],
+    "notes": "Transcripción diferida del Adjunto AUDIO; dispara re-indexado."
+  },
+  {
+    "id": "tts-read-aloud",
+    "area": "ai",
+    "title": "Lectura en voz alta (tts)",
+    "user_visible_behavior": "El usuario puede escuchar respuestas del Q&A, Notas y la narración del GDD.",
+    "depends_on": [
+      "ai-fake-real-switch"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core con fake; smoke Android de reproducción."
+    ],
+    "evidence": [],
+    "notes": "Cubre 3 superficies (Q&A, Nota, GDD); candidata a dividirse si crece."
+  },
+  {
+    "id": "image-generation-from-text",
+    "area": "ai",
+    "title": "Generación de imagen desde texto",
+    "user_visible_behavior": "El usuario genera una imagen desde un texto y se adjunta a una Nota.",
+    "depends_on": [
+      "ai-fake-real-switch",
+      "image-capture-camera"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core con fake; smoke Android de generación/adjunto."
+    ],
+    "evidence": [],
+    "notes": "La imagen generada se persiste como Adjunto de la Nota."
+  },
+  {
+    "id": "ai-suggest-classification",
+    "area": "ai",
+    "title": "Sugerencia de clasificación (Track/Género) con jev",
+    "user_visible_behavior": "La IA sugiere Track/Género a partir del texto; el usuario confirma o edita (nunca auto-asigna).",
+    "depends_on": [
+      "ai-fake-real-switch",
+      "genres-catalog-ui"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: test del core con fake; smoke Android de sugerencia + confirmación."
+    ],
+    "evidence": [],
+    "notes": "Revisa el non-goal 'sin clasificación IA' (ahora sugiere con confirmación del usuario). No aplica visión."
   }
 ]
