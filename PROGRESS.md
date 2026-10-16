@@ -997,3 +997,26 @@
 - Files or artifacts updated: `composeApp/src/androidMain/AndroidManifest.xml`, `composeApp/src/androidMain/res/**` (nuevos), `docs/technical-discovery.md`, `DESIGN.md`, `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: el arte fuente es **provisional** (`DESIGN.md`); si el autor entrega uno nuevo hay que regenerar los PNG. `AGENTS.md` ("próxima feature en cola") revisado: sigue siendo `genres-catalog-persistence`, así que no se editó. Validación independiente pendiente (`feature-validator`).
 - Next best step: `feature-validator` valida `app-icon-configuration` contra la spec; al `accept`, seguir con `genres-catalog-persistence` según el backlog.
+
+### Session 049
+
+- Date: 2026-10-16
+- Goal: implementar (`$feature-implementer`) la feature `ai-client-ports` (spec `docs/specs/ai-client-ports.md`): contratos (puertos) de IA para los 4 modelos que `AiClient` no cubre (transcribe/tts/image/jev) + fakes deterministas, en `:core`.
+- Completed:
+  - `core/src/commonMain/.../ai/AiPorts.kt` (nuevo): interfaces `TranscribeClient` (`transcribe(audio, mimeType): String`), `TtsClient` (`synthesize(text): SynthesizedAudio`), `ImageClient` (`generateImage(prompt): GeneratedImage`) y `JevClient` (`suggest(text): ClassificationSuggestion`); tipos `SynthesizedAudio`/`GeneratedImage` (`class`, bytes+mime, porque contienen `ByteArray`) y `ClassificationSuggestion` (`data class`, `track: Track?` + `genres: List<String>`; sólo propone). Todos `suspend`; fallos vía `AiClientException`.
+  - `core/src/commonMain/.../ai/FakeAiPorts.kt` (nuevo): `FakeTranscribeClient` (texto por tamaño+mime), `FakeTtsClient` (bytes UTF-8, `audio/mpeg`), `FakeImageClient` (PNG simbólico por prompt, `image/png`) y `FakeJevClient` (`Track` por hash + género ilustrativo). Deterministas, sin red ni `Random`.
+  - `core/src/commonTest/.../ai/AiPortsContract.kt` (nuevo): `verify{Transcribe,Tts,Image,Jev}ClientContract` (Scenarios 1–4) + `verifyFakeAiPorts` (Scenario 6) + `ConstantTtsClient` test-only (Scenario 5, sustituibilidad sin tocar producción).
+  - Runners `AiPortsAndroidTest`/`AiPortsIosTest` (nuevos; `@Test` + `runTest`).
+  - Docs durables: `ARCHITECTURE.md` (sección AI: puertos por modelo + fakes), `docs/technical-discovery.md` (nueva "AI Ports Decisions (ai-client-ports)"), `AGENTS.md` (sólo la línea de cola); tasks de la spec; `feature_list.json` `in_progress` → `passing`.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 52/52, 0 failures, con `AiPortsAndroidTest` 6/6 (nuevo).
+  - `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 tasks).
+  - iOS (no bloqueante): `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; `AiPortsIosTest` 6/6, 52/52, 0 failures.
+  - `./init.sh` → exit 0, sin dev servers ni red; `git diff -- init.sh` vacío.
+  - Esquema: `Schema.version = 6`; `find core/src -name '*.sqm'` → `1.sqm`–`5.sqm` (sin nuevo); sin deps nuevas.
+  - Controles negativos reproducidos y restaurados byte-idénticos (sha256 `FakeAiPorts.kt` `c31e098e…`): (a) `FakeImageClient` con `Random.nextInt()` → `fakesAreDeterministicAndOffline` FAILED (Scenario 6); (b) `FakeImageClient` con `GeneratedImage(ByteArray(0), "")` → `fakeImageSatisfiesContract` FAILED (Scenario 3); (c) `FakeTranscribeClient` devolviendo `""` → `fakeTranscribeSatisfiesContract` FAILED (Scenario 1). Verde tras restaurar.
+  - Paths protegidos: `git diff` vacío para `AiClient.kt`, `FakeAiClient.kt`, `AiAvailability.kt`, `NoteIndexingService.kt`, `RagQueryService.kt`, `core/src/commonMain/sqldelight/**`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `composeApp/**`, `iosApp/**`, `init.sh`.
+- Evidence captured: 10 líneas en el arreglo `evidence` de `ai-client-ports` en `feature_list.json`; salida de tests/build en `core/build/test-results/`.
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/ai/AiPorts.kt` (nuevo), `core/src/commonMain/kotlin/com/playbook/core/ai/FakeAiPorts.kt` (nuevo), `core/src/commonTest/kotlin/com/playbook/core/ai/AiPortsContract.kt` (nuevo), `core/src/androidUnitTest/kotlin/com/playbook/core/ai/AiPortsAndroidTest.kt` (nuevo), `core/src/iosTest/kotlin/com/playbook/core/ai/AiPortsIosTest.kt` (nuevo), `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la canonización de Géneros contra el catálogo no la hace el fake (`FakeJevClient` devuelve un género ilustrativo): es del consumidor (`genres-catalog-persistence`); la sugerencia `jev` sólo propone y nunca auto-asigna. Sin adaptadores reales ni build flag (llegan con `ai-fake-real-switch` y los casos de uso). Sin E2E persistente (la spec lo justifica: sin consumidor ni flujo observable). Pendiente validación independiente.
+- Next best step: validación independiente de `ai-client-ports` con `$feature-validator` (spec `docs/specs/ai-client-ports.md`); tras el `accept`, continuar con `genres-catalog-persistence` (primera ready del backlog) o `ai-fake-real-switch`.

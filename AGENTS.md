@@ -28,7 +28,8 @@ el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png
 **Nunca** versionar secrets, API keys ni keystores (incluida la API key de IA).
 
 Próximas features en cola: las `not_started` de `feature_list.json` (revisión
-2026-10-15); la primera ready es `genres-catalog-persistence`. Para iOS: el upload
+2026-10-15); la primera ready es `genres-catalog-persistence` (los puertos de IA
+`ai-client-ports` quedaron implementados, pendientes de validación). Para iOS: el upload
 firmado (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
