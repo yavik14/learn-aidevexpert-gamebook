@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
  * - Una sección por `track` (`mecánicas`/`personajes`/`historia`) y, si hay
  *   notas sin `track`, "Sin track" al final; cada sección muestra su conteo.
  * - Cada nota resume el cuerpo (máx. 2 líneas) y muestra chips textuales de
- *   `status`, Etiquetas y "Imagen" (si tiene adjuntos). Toda la información se
+ *   `status`, Géneros y "Imagen" (si tiene adjuntos). Toda la información se
  *   comunica con texto, no sólo color (`DESIGN.md`).
  * - Tocar una nota emite `onOpenNote(note.id)`: `App` la abre en el editor.
  *
@@ -199,14 +199,14 @@ private fun GddNoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit)
                     LabelChip(text = "Imagen")
                 }
             }
-            if (note.tags.isNotEmpty()) {
+            if (note.genres.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    note.tags.forEach { tag ->
-                        LabelChip(text = tag)
+                    note.genres.forEach { genre ->
+                        LabelChip(text = genre)
                     }
                 }
             }

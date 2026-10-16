@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Chip textual reutilizable (sin color como única señal, según `DESIGN.md`).
- * Se usa en la lista de notas, en el editor y en el GDD para etiquetas, `track`,
+ * Se usa en la lista de notas, en el editor y en el GDD para Géneros, `track`,
  * `status` y el chip "Imagen".
  */
 @Composable

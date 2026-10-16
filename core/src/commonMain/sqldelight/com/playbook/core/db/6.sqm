@@ -1,0 +1,12 @@
+-- Migración v6 -> v7: renombra la N—N de Etiquetas a Géneros. Crea `note_genre`,
+-- copia **verbatim** las etiquetas existentes como Géneros (sin canonización:
+-- pasan a ser personalizados) y elimina `note_tag`. El DDL replica exactamente el
+-- de `Genre.sq`; la equivalencia se cubre con `DatabaseMigrationCheck`. `2.sqm`
+-- (que creó `note_tag`) no se modifica: es historia de la base.
+CREATE TABLE note_genre (
+  note_id TEXT NOT NULL,
+  genre TEXT NOT NULL,
+  PRIMARY KEY (note_id, genre)
+);
+INSERT INTO note_genre (note_id, genre) SELECT note_id, label FROM note_tag;
+DROP TABLE note_tag;

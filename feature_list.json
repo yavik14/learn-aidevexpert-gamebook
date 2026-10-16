@@ -852,12 +852,29 @@
     "depends_on": [
       "note-category-and-tags"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: tests del core (Android/JVM) de persistencia de Géneros (catálogo + personalizados, múltiple) y migración v6→v7 conservando datos; sin Etiquetas genéricas libres."
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM 47 tests, 0 failures. Nuevos/renombrados: NoteRepositoryAndroidTest 4/4 (crudRoundTrip, genresRoundTrip, migrationV1ToV7PreservesNotes, retryQueriesRoundTrip), MigrationAndroidTest 3/3 (migratesV1ToV7PreservingNotes, migratesV5ToV6AddingIndexAttempts, migratesV6ToV7RenamingTagsToGenres), DatabaseMigrationAndroidTest 1/1 (migratesV1ToV7AndMatchesCreate), GddMarkdownAndroidTest 1/1, NoteIndexingOrchestratorAndroidTest 1/1.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 tasks).",
+      "`./init.sh` → exit 0 (assembleDebug + testDebugUnitTest), sin dev servers ni red.",
+      "`PlaybookDatabase.Schema.version == 7`; `.sqm` = `1.sqm`..`6.sqm` (sólo `6.sqm` nuevo); `2.sqm` sin cambios (`git diff` vacío).",
+      "Escenarios 1–5 por `verifyGenres`; migración v1→v7 por `verifyGenreMigration` (Nota intacta, `note_tag` ausente, `note_genre` operable); Scenario 6 por `verifyMigrationV6ToV7` (copia verbatim + drop); Scenario 7 por `verifyDatabaseMigration` (columnas de `note_genre` coinciden entre migración y `Schema.create`).",
+      "Controles negativos reproducidos y restaurados byte-idénticos (hashes `6.sqm` ce548807…, `Genres.kt` 8033fe70…): (a) `6.sqm` sin `INSERT … SELECT` → falla `MigrationAndroidTest.migratesV6ToV7RenamingTagsToGenres`; (b) `GenreCatalog.canonicalize` devolviendo `raw` → falla `NoteRepositoryAndroidTest.genresRoundTrip`; (c) dedupe por igualdad exacta → falla `genresRoundTrip`.",
+      "iOS (no bloqueante): `:core:iosSimulatorArm64Test --rerun-tasks` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "E2E persistente: no aplica (sin harness E2E y `init.sh` no levanta simuladores). Sin emulador Android disponible (`adb` ausente): el smoke real v6→v7 sobre `playbook.db` no se ejecutó; la migración se cubre con los tests del core sobre el esquema real."
     ],
-    "evidence": [],
-    "notes": "Esquema v7 (`6.sqm`): renombre N—N Etiquetas→Géneros. Catálogo fijo (12) constante + personalizados por Nota (no engordan el catálogo global). Android-only."
+    "evidence": [
+      "2026-10-16: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM 47 tests, 0 failures (core/build/test-results/testDebugUnitTest/): NoteRepositoryAndroidTest 4/4 (`crudRoundTrip`, `genresRoundTrip`, `migrationV1ToV7PreservesNotes`, `retryQueriesRoundTrip`), MigrationAndroidTest 3/3 (`migratesV1ToV7PreservingNotes`, `migratesV5ToV6AddingIndexAttempts`, `migratesV6ToV7RenamingTagsToGenres`), DatabaseMigrationAndroidTest 1/1 (`migratesV1ToV7AndMatchesCreate`), GddMarkdownAndroidTest 1/1, NoteIndexingOrchestratorAndroidTest 1/1, más el resto sin cambios.",
+      "2026-10-16: `GenreCatalog.GENRES` con los 12 fijos; `normalizeGenres(listOf(\" platformer \", \"JRPG\", \"jrpg\", \"Mi género\")) == [\"JRPG\", \"Mi género\", \"Platformer\"]` (trim + canonización + dedupe case-insensitive + orden). `Note.tags`/`NoteDraft.tags`→`genres`; `NoteMappers.toDomain(genres)`.",
+      "2026-10-16: `Genre.sq` (tabla `note_genre(note_id, genre)` PK `(note_id, genre)`; queries `insertNoteGenre`/`selectGenresByNoteId`/`selectAllNoteGenres`/`deleteGenresByNoteId`, interfaz `genreQueries`); `6.sqm` v6→v7 (`CREATE TABLE note_genre` + `INSERT INTO note_genre (note_id, genre) SELECT note_id, label FROM note_tag` + `DROP TABLE note_tag`). `NoteTag.sq` eliminado.",
+      "2026-10-16: `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL in 43s (54 tasks); renombre mecánico en `App`/`NoteEditorScreen`/`NotesListScreen`/`GddScreen`/`RelatedNotesScreen` (`note.genres`, rótulos \"Géneros\"/\"Nuevo género\", `onClickLabel` \"Quitar género …\"); comportamiento de editor de texto libre sin cambios.",
+      "2026-10-16: GDD exporta `Géneros: … — Estado: …` (`GddMarkdown.metadataLine`); `GddMarkdownCheck` actualizado. `docs/specs/gdd-export.md` con nota de supersesión del prefijo.",
+      "2026-10-16: `PlaybookDatabaseImpl.Schema.version` getter = 7; `find core/src -name '*.sqm'` = `1.sqm`..`6.sqm`; `git diff 2.sqm` vacío.",
+      "2026-10-16: controles negativos (a)/(b)/(c) reproducen el fallo indicado y se restauran byte-idénticos (`6.sqm` sha256 ce5488072714d03bc3509cc81f7b71ce057cd07e36f556d41cae7f54639b9eeb; `Genres.kt` sha256 8033fe707c76063dbcd7d101449bda1eec4af23058e8b6182051eda77b14340d) y re-verificados en verde (47/47).",
+      "2026-10-16: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest), sin procesos de larga duración ni red; `init.sh`/`iosApp/**`/build files/`gradle/libs.versions.toml` sin cambios. iOS no bloqueante: `:core:iosSimulatorArm64Test --rerun-tasks` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-16: validación independiente (accept), registro en docs/validations/genres-catalog-persistence.md. El validador re-ejecutó `:core:testDebugUnitTest --rerun-tasks` (47 tests, 0 failures), `:composeApp:assembleDebug` BUILD SUCCESSFUL y `./init.sh` exit 0; confirmó `Schema.version == 7`, `.sqm` 1..6 (sólo `6.sqm` nuevo), `2.sqm`/build files/deps/`init.sh` sin cambios y el renombre consistente (sin `noteTagQueries`/`normalizeTags`/`Note.tags` en producción); controles negativos propios (quitar el `DROP TABLE note_tag` de `6.sqm`; omitir `deleteGenresByNoteId` en `delete`) reproducidos y restaurados byte-idénticos, re-verificados en verde."
+    ],
+    "notes": "Esquema v7 (`6.sqm`): renombre N—N `note_tag`→`note_genre` con copia verbatim (Etiquetas→Géneros personalizados). `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) en `:core`; personalizados por Nota (no engordan el catálogo). UI: renombre mecánico + rótulos, sin picker de catálogo (es `genres-catalog-ui`). GDD emite `Géneros:`. Android-only; sin deps nuevas. `2.sqm` sin cambios. `passing` (auto-verificado 2026-10-16); pendiente validación independiente."
   },
   {
     "id": "genres-catalog-ui",

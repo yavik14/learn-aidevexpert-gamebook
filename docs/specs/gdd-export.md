@@ -65,6 +65,12 @@ No hay "categoría/tipo/nivel" ni agrupación por etiqueta.
 
 ## Format Contract (determinista)
 
+> **Nota de supersesión (2026-10-16).** El prefijo de la línea de metadatos
+> `Etiquetas:` de esta spec fue **reemplazado por `Géneros:`** en
+> `genres-catalog-persistence` (renombre de dominio Etiquetas→Géneros; no se
+> reescribe esta spec aceptada). `GddMarkdown` y `GddMarkdownCheck` ya emiten y
+> esperan `Géneros:`. El resto del "Format Contract" sigue vigente.
+
 `buildGddMarkdown(notes: List<Note>, now: String): String` produce exactamente:
 
 - **Encabezado** (sin fecha):

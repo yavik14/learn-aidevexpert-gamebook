@@ -27,13 +27,13 @@ internal object EmptySqlSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Scenario 8 de la spec: migración v1 → v6 y bootstrap en ambos caminos.
+ * Scenario 7 de la spec: migración v1 → v7 y bootstrap en ambos caminos.
  *
  * [migratedDriver] debe ser una base **vacía** (sin esquema) sobre la que se
- * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v6 creado desde
+ * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v7 creado desde
  * cero (`Schema.create` en JVM o `inMemoryDriver(Schema)` en iOS). El esquema
- * final (columnas de `note`/`embedding`/`note_link` y foreign keys) debe coincidir
- * entre ambos caminos.
+ * final (columnas de `note`/`embedding`/`note_link`/`note_genre`, foreign keys y
+ * la ausencia de `note_tag`) debe coincidir entre ambos caminos.
  */
 fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
     // Esquema v1 aplicado a mano + una fila legacy.
@@ -49,9 +49,9 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         updated_at = 1_700_000_000_000L,
     )
 
-    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 6L)
+    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 7L)
 
-    assertEquals(6L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 6")
+    assertEquals(7L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 7")
 
     // La fila v1 sobrevive a la migración.
     val legacy = migratedDatabase.noteQueries.selectNoteById("legacy-1").executeAsOneOrNull()
@@ -94,11 +94,29 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "la tabla note_link debe existir y aceptar filas tras migrar",
     )
 
-    // Bootstrap desde cero produce el mismo esquema final (v6).
+    // La tabla `note_genre` (v7) existe y es usable.
+    migratedDatabase.genreQueries.insertNoteGenre(note_id = "legacy-1", genre = "Puzzle")
+    assertEquals(
+        listOf("Puzzle"),
+        migratedDatabase.genreQueries.selectGenresByNoteId("legacy-1").executeAsList(),
+        "la tabla note_genre debe existir y aceptar filas tras migrar",
+    )
+    assertEquals(
+        0L,
+        tableCount(migratedDriver, "note_tag"),
+        "note_tag debe eliminarse al migrar a v7",
+    )
+
+    // Bootstrap desde cero produce el mismo esquema final (v7).
     assertEquals(
         noteColumns(migratedDriver),
         noteColumns(freshDriver),
         "las columnas de note deben coincidir entre migración y Schema.create",
+    )
+    assertEquals(
+        noteGenreColumns(migratedDriver),
+        noteGenreColumns(freshDriver),
+        "las columnas de note_genre deben coincidir entre migración y Schema.create",
     )
     assertEquals(
         embeddingColumns(migratedDriver),
@@ -128,6 +146,19 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
     assertEquals("INTEGER", indexAttempts[2], "index_attempts debe ser INTEGER")
     assertEquals("1", indexAttempts[3], "index_attempts debe ser NOT NULL")
     assertEquals("0", indexAttempts[4], "index_attempts debe tener default 0")
+
+    // Esquema de `note_genre`: PK compuesta `(note_id, genre)`, ambos TEXT.
+    val genreColumns = noteGenreColumns(migratedDriver)
+    assertEquals(
+        listOf("note_id", "genre"),
+        genreColumns.map { it[1] },
+        "orden y nombres de columnas de note_genre",
+    )
+    val genreByName = genreColumns.associateBy { it[1] }
+    assertEquals("TEXT", genreByName.getValue("note_id")[2], "note_id debe ser TEXT")
+    assertEquals("TEXT", genreByName.getValue("genre")[2], "genre debe ser TEXT")
+    assertEquals("1", genreByName.getValue("note_id")[5], "note_id es parte de la PK")
+    assertEquals("2", genreByName.getValue("genre")[5], "genre es parte de la PK")
 
     val columns = embeddingColumns(migratedDriver)
     assertEquals(
@@ -171,6 +202,19 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
 
 private fun noteColumns(driver: SqlDriver): List<List<String?>> =
     pragmaRows(driver, "PRAGMA table_info(note)", columnCount = 6)
+
+private fun noteGenreColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(note_genre)", columnCount = 6)
+
+private fun tableCount(driver: SqlDriver, name: String): Long = driver.executeQuery(
+    identifier = null,
+    sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '$name'",
+    mapper = { cursor ->
+        cursor.next()
+        QueryResult.Value(cursor.getLong(0) ?: 0L)
+    },
+    parameters = 0,
+).value
 
 private fun embeddingColumns(driver: SqlDriver): List<List<String?>> =
     pragmaRows(driver, "PRAGMA table_info(embedding)", columnCount = 6)

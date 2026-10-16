@@ -31,7 +31,7 @@ private class FixedResponseAiClient(private val result: List<Embedding>) : AiCli
 }
 
 /**
- * Ejercita [NoteIndexingOrchestrator] sobre un [SqlDriver] con el esquema v4.
+ * Ejercita [NoteIndexingOrchestrator] sobre un [SqlDriver] con el esquema v7.
  * Cubre los escenarios 1–7 de la spec: transición de [NoteStatus] derivada del
  * resultado del indexado, sin bloquear la captura, sin degradar lo ya indexado y
  * sin escribir `FAILED`.
@@ -212,38 +212,38 @@ suspend fun verifyNoteIndexingOrchestrator(driver: SqlDriver) {
     )
 
     // --- Scenario 8 (note-enrichment-status-ui): re-indexar NO pisa la ---------
-    // --- clasificación manual (`track`/`tags`) ni el `body`/`owner`/timestamps --
-    val pendingWithTags = noteRepository.create(
+    // --- clasificación manual (`track`/`genres`) ni el `body`/`owner`/timestamps
+    val pendingWithGenres = noteRepository.create(
         NoteDraft(
             owner = "owner-8",
             body = "Diseñar el sistema de combate",
             track = Track.MECHANICS,
             status = NoteStatus.PENDING,
-            tags = listOf("jefe", "combate"),
+            genres = listOf("Roguelike", "Shooter"),
         ),
     )
     now += 1_000
-    val outcome8 = successOrchestrator.index(pendingWithTags)
+    val outcome8 = successOrchestrator.index(pendingWithGenres)
     assertEquals(NoteStatus.INDEXED, outcome8, "re-indexar PENDING con éxito debe dar INDEXED")
-    val after8 = noteRepository.getById(pendingWithTags.id)!!
+    val after8 = noteRepository.getById(pendingWithGenres.id)!!
     assertEquals(NoteStatus.INDEXED, after8.status, "re-indexar debe persistir INDEXED")
-    assertEquals(pendingWithTags.body, after8.body, "re-indexar no debe pisar el body")
-    assertEquals(pendingWithTags.track, after8.track, "re-indexar no debe pisar el track")
-    assertEquals(pendingWithTags.tags, after8.tags, "re-indexar no debe pisar las etiquetas")
-    assertEquals(pendingWithTags.owner, after8.owner, "re-indexar no debe pisar el owner")
+    assertEquals(pendingWithGenres.body, after8.body, "re-indexar no debe pisar el body")
+    assertEquals(pendingWithGenres.track, after8.track, "re-indexar no debe pisar el track")
+    assertEquals(pendingWithGenres.genres, after8.genres, "re-indexar no debe pisar los Géneros")
+    assertEquals(pendingWithGenres.owner, after8.owner, "re-indexar no debe pisar el owner")
     assertEquals(
-        pendingWithTags.createdAt,
+        pendingWithGenres.createdAt,
         after8.createdAt,
         "re-indexar no debe re-sellar createdAt",
     )
     assertEquals(
-        pendingWithTags.updatedAt,
+        pendingWithGenres.updatedAt,
         after8.updatedAt,
         "updateStatus no debe re-sellar updatedAt",
     )
     assertTrue(
-        after8.tags.isNotEmpty(),
-        "la Nota del escenario debe conservar sus etiquetas manuales",
+        after8.genres.isNotEmpty(),
+        "la Nota del escenario debe conservar sus Géneros manuales",
     )
 
     // --- Guardrail: `index` nunca propaga el fallo de IA -------------------

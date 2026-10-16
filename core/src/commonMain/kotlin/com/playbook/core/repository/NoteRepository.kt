@@ -10,36 +10,37 @@ import com.playbook.core.model.NoteStatus
  */
 interface NoteRepository {
     /**
-     * Crea una Nota a partir del [draft] y devuelve la entidad persistida. Las
-     * etiquetas del draft se normalizan (trim, sin vacías, dedupe
-     * case-insensitive, ordenadas) antes de persistirse.
+     * Crea una Nota a partir del [draft] y devuelve la entidad persistida. Los
+     * Géneros del draft se normalizan (trim, sin vacíos, canonización
+     * case-insensitive contra el catálogo, dedupe case-insensitive, ordenados)
+     * antes de persistirse.
      */
     fun create(draft: NoteDraft): Note
 
-    /** Devuelve todas las Notas persistidas, cada una con sus etiquetas. */
+    /** Devuelve todas las Notas persistidas, cada una con sus Géneros. */
     fun getAll(): List<Note>
 
-    /** Devuelve la Nota con [id] (con sus etiquetas) o `null` si no existe. */
+    /** Devuelve la Nota con [id] (con sus Géneros) o `null` si no existe. */
     fun getById(id: String): Note?
 
     /**
-     * Devuelve las Notas con [status] (con sus etiquetas), ordenadas
+     * Devuelve las Notas con [status] (con sus Géneros), ordenadas
      * `updated_at DESC, id DESC` como [getAll]. Sólo lectura; lo consume el
      * reintento de indexado (`PendingIndexingRetry`).
      */
     fun getByStatus(status: NoteStatus): List<Note>
 
     /**
-     * Actualiza `body`/`track`/`status`/`tags` de la Nota y re-sella `updatedAt`
-     * con el reloj actual (el `updatedAt` del argumento se ignora). Las
-     * etiquetas se normalizan y **reemplazan** el conjunto anterior. Devuelve
-     * `true` si la fila existía.
+     * Actualiza `body`/`track`/`status`/`genres` de la Nota y re-sella `updatedAt`
+     * con el reloj actual (el `updatedAt` del argumento se ignora). Los Géneros
+     * se normalizan y **reemplazan** el conjunto anterior. Devuelve `true` si la
+     * fila existía.
      */
     fun update(note: Note): Boolean
 
     /**
      * Actualiza sólo el `status` de la Nota (efecto de sistema del indexado, no
-     * una edición del usuario): **no** toca `body`/`track`/`tags`/`owner` ni
+     * una edición del usuario): **no** toca `body`/`track`/`genres`/`owner` ni
      * `created_at`/`updated_at` (así una indexación en segundo plano no reordena
      * la lista). Devuelve `true` si la fila existía.
      */
@@ -47,11 +48,11 @@ interface NoteRepository {
 
     /**
      * Actualiza sólo el contador de intentos de indexado de la Nota (efecto de
-     * sistema): **no** toca `body`/`track`/`status`/`tags`/`owner` ni
+     * sistema): **no** toca `body`/`track`/`status`/`genres`/`owner` ni
      * `created_at`/`updated_at`. Devuelve `true` si la fila existía.
      */
     fun setIndexAttempts(id: String, attempts: Int): Boolean
 
-    /** Borra la Nota con [id] y limpia sus etiquetas. Devuelve `true` si la fila existía. */
+    /** Borra la Nota con [id] y limpia sus Géneros. Devuelve `true` si la fila existía. */
     fun delete(id: String): Boolean
 }
