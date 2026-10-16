@@ -4,7 +4,7 @@ import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.NoteStatus
-import com.playbook.core.model.normalizeTags
+import com.playbook.core.model.normalizeGenres
 import com.playbook.core.model.toDomain
 
 /**
@@ -14,9 +14,10 @@ import com.playbook.core.model.toDomain
  * no acoplar el dominio a una fuente de tiempo/identidad concreta. En producción
  * se usan los defaults de plataforma (`randomNoteId()` / `currentTimeMillis()`).
  *
- * Las etiquetas (`note_tag`) se persisten en la misma transacción que la nota y
- * se normalizan con [normalizeTags]. `update` reemplaza el conjunto completo de
- * etiquetas; `delete` limpia las filas de etiquetas y de adjuntos de la nota.
+ * Los Géneros (`note_genre`) se persisten en la misma transacción que la nota y
+ * se normalizan con [normalizeGenres] (canonización contra el catálogo incluida).
+ * `update` reemplaza el conjunto completo de Géneros; `delete` limpia las filas
+ * de Géneros y de adjuntos de la nota.
  */
 class SqlDelightNoteRepository(
     private val database: PlaybookDatabase,
@@ -26,7 +27,7 @@ class SqlDelightNoteRepository(
 
     override fun create(draft: NoteDraft): Note {
         val now = clock()
-        val tags = normalizeTags(draft.tags)
+        val genres = normalizeGenres(draft.genres)
         val note = Note(
             id = idFactory(),
             owner = draft.owner,
@@ -35,44 +36,44 @@ class SqlDelightNoteRepository(
             status = draft.status,
             createdAt = now,
             updatedAt = now,
-            tags = tags,
+            genres = genres,
         )
         database.transaction {
             insertNoteRow(note)
-            replaceTags(note.id, tags)
+            replaceGenres(note.id, genres)
         }
         return note
     }
 
     override fun getAll(): List<Note> {
-        // Una sola consulta de etiquetas agrupada en memoria evita el N+1.
-        val tagsByNote = database.noteTagQueries.selectAllNoteTags()
+        // Una sola consulta de Géneros agrupada en memoria evita el N+1.
+        val genresByNote = database.genreQueries.selectAllNoteGenres()
             .executeAsList()
-            .groupBy({ it.note_id }, { it.label })
+            .groupBy({ it.note_id }, { it.genre })
         return database.noteQueries.selectAllNotes().executeAsList().map { row ->
-            row.toDomain(tagsByNote[row.id].orEmpty())
+            row.toDomain(genresByNote[row.id].orEmpty())
         }
     }
 
     override fun getById(id: String): Note? {
         val row = database.noteQueries.selectNoteById(id).executeAsOneOrNull() ?: return null
-        val tags = database.noteTagQueries.selectTagsByNoteId(id).executeAsList()
-        return row.toDomain(tags)
+        val genres = database.genreQueries.selectGenresByNoteId(id).executeAsList()
+        return row.toDomain(genres)
     }
 
     override fun getByStatus(status: NoteStatus): List<Note> {
-        // Misma estrategia que `getAll`: una sola consulta de etiquetas agrupada
+        // Misma estrategia que `getAll`: una sola consulta de Géneros agrupada
         // en memoria para evitar el N+1.
-        val tagsByNote = database.noteTagQueries.selectAllNoteTags()
+        val genresByNote = database.genreQueries.selectAllNoteGenres()
             .executeAsList()
-            .groupBy({ it.note_id }, { it.label })
+            .groupBy({ it.note_id }, { it.genre })
         return database.noteQueries.selectNotesByStatus(status.code)
             .executeAsList()
-            .map { row -> row.toDomain(tagsByNote[row.id].orEmpty()) }
+            .map { row -> row.toDomain(genresByNote[row.id].orEmpty()) }
     }
 
     override fun update(note: Note): Boolean {
-        val tags = normalizeTags(note.tags)
+        val genres = normalizeGenres(note.genres)
         return database.transactionWithResult {
             val rowsAffected = database.noteQueries.updateNote(
                 body = note.body,
@@ -82,7 +83,7 @@ class SqlDelightNoteRepository(
                 id = note.id,
             ).value
             if (rowsAffected > 0) {
-                replaceTags(note.id, tags)
+                replaceGenres(note.id, genres)
             }
             rowsAffected > 0
         }
@@ -91,7 +92,7 @@ class SqlDelightNoteRepository(
     override fun delete(id: String): Boolean = database.transactionWithResult {
         database.attachmentQueries.deleteAttachmentsByNoteId(id)
         val rowsAffected = database.noteQueries.deleteNoteById(id).value
-        database.noteTagQueries.deleteTagsByNoteId(id)
+        database.genreQueries.deleteGenresByNoteId(id)
         rowsAffected > 0
     }
 
@@ -123,10 +124,10 @@ class SqlDelightNoteRepository(
         )
     }
 
-    private fun replaceTags(noteId: String, tags: List<String>) {
-        database.noteTagQueries.deleteTagsByNoteId(noteId)
-        tags.forEach { label ->
-            database.noteTagQueries.insertNoteTag(note_id = noteId, label = label)
+    private fun replaceGenres(noteId: String, genres: List<String>) {
+        database.genreQueries.deleteGenresByNoteId(noteId)
+        genres.forEach { genre ->
+            database.genreQueries.insertNoteGenre(note_id = noteId, genre = genre)
         }
     }
 }

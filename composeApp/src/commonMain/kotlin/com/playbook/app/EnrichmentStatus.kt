@@ -25,7 +25,7 @@ internal fun statusLabel(status: NoteStatus): String = when (status) {
 /**
  * Badge de Estado reutilizable (`DESIGN.md` → "Badge de Estado"): muestra la
  * etiqueta textual de [status] con una forma propia (borde + superficie
- * distinta de los chips de track/etiqueta), de modo que el estado **nunca** se
+ * distinta de los chips de track/Género), de modo que el estado **nunca** se
  * comunica sólo con color. Lo usan la lista de Notas y el editor.
  */
 @Composable

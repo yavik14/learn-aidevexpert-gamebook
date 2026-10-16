@@ -17,23 +17,23 @@ class NoteRepositoryAndroidTest {
     }
 
     @Test
-    fun tagsRoundTrip() {
+    fun genresRoundTrip() {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
             PlaybookDatabase.Schema.create(driver)
-            verifyNoteTags(driver)
+            verifyGenres(driver)
         } finally {
             driver.close()
         }
     }
 
     @Test
-    fun migrationV1ToV6PreservesNotes() {
+    fun migrationV1ToV7PreservesNotes() {
         // Driver in-memory creado como base v1 (sólo la tabla note).
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
             NoteV1Schema.create(driver)
-            verifyNoteTagMigration(driver)
+            verifyGenreMigration(driver)
         } finally {
             driver.close()
         }

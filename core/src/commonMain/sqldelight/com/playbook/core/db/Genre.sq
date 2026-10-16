@@ -1,0 +1,23 @@
+-- Esquema v7: tabla N—N `note_genre` (Nota N—N Género) para los Géneros de la
+-- Nota (catálogo fijo + personalizados). El Género se identifica por su `genre`
+-- (sin tabla `genre` ni id sintético): suficiente para el MVP, sin gestión global
+-- de Géneros. La limpieza de los Géneros es explícita en el repositorio (sin FK ni
+-- ON DELETE CASCADE). Reemplaza a `note_tag` (ver `6.sqm`).
+CREATE TABLE note_genre (
+  note_id TEXT NOT NULL,
+  genre TEXT NOT NULL,
+  PRIMARY KEY (note_id, genre)
+);
+
+insertNoteGenre:
+INSERT OR IGNORE INTO note_genre (note_id, genre)
+VALUES (?, ?);
+
+selectGenresByNoteId:
+SELECT genre FROM note_genre WHERE note_id = ? ORDER BY genre;
+
+selectAllNoteGenres:
+SELECT note_id, genre FROM note_genre ORDER BY note_id, genre;
+
+deleteGenresByNoteId:
+DELETE FROM note_genre WHERE note_id = ?;

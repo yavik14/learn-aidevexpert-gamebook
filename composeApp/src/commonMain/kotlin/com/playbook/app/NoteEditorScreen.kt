@@ -33,7 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
-import com.playbook.core.model.normalizeTags
+import com.playbook.core.model.normalizeGenres
 
 /**
  * Editor de nota de texto. Sirve para crear (modo `isEditing = false`) y editar
@@ -43,9 +43,10 @@ import com.playbook.core.model.normalizeTags
  *   no hay imagen: una nota sólo-imagen es válida.
  * - El `track` es opcional ("Sin track" por defecto); la selección se comunica
  *   con más que color (borde + marca textual), según `DESIGN.md`.
- * - Las Etiquetas son libres, múltiples y se normalizan ([normalizeTags]) al
- *   agregarlas; cada una se muestra como chip con control de quitar "×". No hay
- *   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
+ * - Los Géneros son múltiples y se normalizan ([normalizeGenres]) al agregarlos;
+ *   cada uno se muestra como chip con control de quitar "×". El editor todavía es
+ *   de **texto libre** (el picker del catálogo llega con `genres-catalog-ui`). No
+ *   hay Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
  * - Si hay una [initialImage] se muestra una previsualización y "Quitar imagen".
  * - En modo edición se ofrece "Borrar", con `AlertDialog` de confirmación. La
  *   acción no destructiva es explícita: "Cancelar". Si [onOpenRelated] no es null
@@ -54,7 +55,7 @@ import com.playbook.core.model.normalizeTags
  *   (sólo lectura, nunca sólo color) y —cuando [onReindex] no es null— el botón
  *   "Re-indexar", habilitado sólo si el estado no es `INDEXED` y el `body` del
  *   borrador no está en blanco (sin texto no hay nada que embeber). Re-indexar
- *   **no** reescribe `track`/`tags`/`body`: sólo dispara el enriquecimiento.
+ *   **no** reescribe `track`/`genres`/`body`: sólo dispara el enriquecimiento.
  *
  * La pantalla es "tonta": mantiene el borrador local y emite `onSave`/`onDelete`/
  * `onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`; la persistencia, el
@@ -64,10 +65,10 @@ import com.playbook.core.model.normalizeTags
 fun NoteEditorScreen(
     initialBody: String,
     initialTrack: Track?,
-    initialTags: List<String>,
+    initialGenres: List<String>,
     initialImage: PickedImage?,
     isEditing: Boolean,
-    onSave: (body: String, track: Track?, tags: List<String>) -> Unit,
+    onSave: (body: String, track: Track?, genres: List<String>) -> Unit,
     onDelete: (() -> Unit)?,
     onCancel: () -> Unit,
     onRemoveImage: (() -> Unit)?,
@@ -78,8 +79,8 @@ fun NoteEditorScreen(
 ) {
     var body by remember { mutableStateOf(initialBody) }
     var selectedTrack by remember { mutableStateOf(initialTrack) }
-    var tags by remember { mutableStateOf(normalizeTags(initialTags)) }
-    var newTag by remember { mutableStateOf("") }
+    var genres by remember { mutableStateOf(normalizeGenres(initialGenres)) }
+    var newGenre by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val canSave = body.isNotBlank() || initialImage != null
@@ -166,7 +167,7 @@ fun NoteEditorScreen(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Etiquetas", style = MaterialTheme.typography.titleSmall)
+        Text(text = "Géneros", style = MaterialTheme.typography.titleSmall)
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -174,30 +175,30 @@ fun NoteEditorScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
-                value = newTag,
-                onValueChange = { newTag = it },
-                label = { Text(text = "Nueva etiqueta") },
+                value = newGenre,
+                onValueChange = { newGenre = it },
+                label = { Text(text = "Nuevo género") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             Button(
                 onClick = {
-                    tags = normalizeTags(tags + newTag)
-                    newTag = ""
+                    genres = normalizeGenres(genres + newGenre)
+                    newGenre = ""
                 },
-                enabled = newTag.isNotBlank(),
+                enabled = newGenre.isNotBlank(),
             ) {
                 Text(text = "Agregar")
             }
         }
-        if (tags.isNotEmpty()) {
+        if (genres.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                tags.forEach { tag ->
-                    TagChip(label = tag, onRemove = { tags = tags - tag })
+                genres.forEach { genre ->
+                    GenreChip(label = genre, onRemove = { genres = genres - genre })
                 }
             }
         }
@@ -226,7 +227,7 @@ fun NoteEditorScreen(
                 Text(text = "Cancelar")
             }
             Button(
-                onClick = { onSave(body, selectedTrack, tags) },
+                onClick = { onSave(body, selectedTrack, genres) },
                 enabled = canSave,
             ) {
                 Text(text = "Guardar")
@@ -299,12 +300,12 @@ private fun TrackOption(
 }
 
 /**
- * Chip de Etiqueta con control de quitar "×". Todo el chip es clickeable para
+ * Chip de Género con control de quitar "×". Todo el chip es clickeable para
  * quitarlo, con `onClickLabel` semántico y `role = Role.Button`. Se comunica con
  * texto, no sólo color (`DESIGN.md`).
  */
 @Composable
-private fun TagChip(
+private fun GenreChip(
     label: String,
     onRemove: () -> Unit,
 ) {
@@ -313,7 +314,7 @@ private fun TagChip(
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = Modifier.clickable(
-            onClickLabel = "Quitar etiqueta $label",
+            onClickLabel = "Quitar género $label",
             role = Role.Button,
             onClick = onRemove,
         ),

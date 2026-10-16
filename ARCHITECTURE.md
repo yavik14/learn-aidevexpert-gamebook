@@ -13,7 +13,8 @@ de release/signing de Android (keystore externo) y el runbook de publicación,
 `EmbeddingRepository` y `NoteIndexingService` como primer consumidor real de
 `AiClient`, `voice-capture-stt` la captura por voz nativa (puerto
 `VoiceTranscriber` + adaptadores Android/iOS), `note-category-and-tags` las
-Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`),
+Etiquetas libres (esquema v3 con `note_tag` y la migración `2.sqm`; reemplazadas
+luego por Géneros),
 `image-capture-camera` el primer Adjunto: tabla `attachment` (esquema v4 con
 `3.sqm`), su repositorio y la captura nativa de imagen (cámara/galería),
 `image-ocr-optional` la decisión de viabilidad del OCR del boceto (descartado del
@@ -39,6 +40,10 @@ disponibilidad de la IA es un puerto inyectable (`AiAvailability`).
 `gdd-export` cierra el GDD como documento compartible: proyección pura a Markdown
 (`buildGddMarkdown`) + el puerto de share `GddSharer` (expect/actual, texto en
 memoria).
+`genres-catalog-persistence` reemplaza las Etiquetas por **Géneros** (esquema v7
+con `6.sqm`, tabla `note_genre`): catálogo fijo `GenreCatalog` (12) +
+personalizados por Nota, `normalizeGenres` con canonización case-insensitive; la
+columna/relación `note_tag`→`note_genre` se migra **verbatim**.
 
 ## Modules
 
@@ -68,37 +73,41 @@ composeApp (Android app / commonMain) ──▶ core
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde los `.sq` de
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
-- **Esquema v6:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+- **Esquema v7:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`, `index_attempts` INTEGER NOT NULL DEFAULT 0; queries
   `insertNote`, `selectAllNotes`, `selectNoteById`, `selectNotesByStatus`,
   `updateNote`, `updateNoteStatus`, `updateNoteIndexAttempts`, `deleteNoteById`),
   tabla
   `embedding` (`note_id`
   PK y FK → `note(id)` `ON DELETE CASCADE`, `dimension`, `vector` BLOB,
-  `indexed_at`), tabla `note_tag` (`note_id`, `label`, PK `(note_id, label)`; N—N
+  `indexed_at`), tabla `note_genre` (`note_id`, `genre`, PK `(note_id, genre)`; N—N
   sin FK, limpieza explícita en el repositorio), tabla `attachment` (`id`,
   `note_id`, `kind`, `mime_type`, `file_path`, `byte_size`, `created_at` + índice
   `attachment_note_id`) y tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id)`
   `ON DELETE CASCADE`, `score`, `updated_at`, PK `(note_a_id, note_b_id)`,
   `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`). La columna
-  `index_attempts` la agrega `offline-pending-retry`; los bytes de la imagen **no**
-  se guardan en la base (sólo metadatos + ruta relativa).
-- **Migraciones (v1 → v2 → v3 → v4 → v5 → v6):** `embeddings-generation` introdujo
-  `1.sqm` (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 → v3,
-  `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`),
-  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice) y
-  `offline-pending-retry` `5.sqm` (v5 → v6, `note.index_attempts`). Los `.sq`
+  `index_attempts` la agrega `offline-pending-retry`; la tabla N—N `note_tag`
+  (Etiquetas) es reemplazada por `note_genre` (Géneros) en v7; los bytes de la
+  imagen **no** se guardan en la base (sólo metadatos + ruta relativa).
+- **Migraciones (v1 → v2 → v3 → v4 → v5 → v6 → v7):** `embeddings-generation`
+  introdujo `1.sqm` (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 →
+  v3, `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`),
+  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice),
+  `offline-pending-retry` `5.sqm` (v5 → v6, `note.index_attempts`) y
+  `genres-catalog-persistence` `6.sqm` (v6 → v7, `note_tag` → `note_genre` con
+  copia verbatim + `DROP TABLE note_tag`). Los `.sq`
   describen el esquema más reciente y los `.sqm` hacen upgrade; los drivers
   (`AndroidSqliteDriver`/`NativeSqliteDriver` con `PlaybookDatabase.Schema`)
   detectan `user_version` y ejecutan `Schema.migrate`.
-  `PlaybookDatabase.Schema.version = 6`. `INSERT OR REPLACE` en lugar de
+  `PlaybookDatabase.Schema.version = 7`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
   `minSdk = 24`.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
   `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
   de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`,
-  `NoteTagCheck.verifyNoteTagMigration`, `verifyMigrationV1ToV6` y
-  `verifyMigrationV5ToV6`) que corren en Android/JVM e iOS.
+  `GenreCheck.verifyGenreMigration`, `verifyMigrationV1ToV7`,
+  `verifyMigrationV5ToV6` y `verifyMigrationV6ToV7`) que corren en Android/JVM e
+  iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
 - **Entry point:** `createDatabase(factory)` en `:core` construye la base y fuerza
@@ -121,18 +130,25 @@ composeApp (Android app / commonMain) ──▶ core
 ## Domain
 
 - **Modelo** (`com.playbook.core.model`): `Note` (id, owner, body, `track`
-  nullable, `status` no nulo, `createdAt`, `updatedAt`, `tags`), `NoteDraft`
-  (entrada de `create`, `status` default `CAPTURED`, `tags` default vacío) y los
+  nullable, `status` no nulo, `createdAt`, `updatedAt`, `genres`), `NoteDraft`
+  (entrada de `create`, `status` default `CAPTURED`, `genres` default vacío) y los
   enums `Track` (`MECHANICS`/`CHARACTERS`/`STORY`) y `NoteStatus`
   (`CAPTURED`/`PENDING`/`INDEXED`/`FAILED`) con `code`/`fromCode`. Los
   identificadores Kotlin están en inglés; el `code` persistido usa el valor de
   dominio canónico en español (`"mecánicas"`, `"personajes"`, `"historia"`,
   `"capturada"`, `"pendiente"`, `"indexada"`, `"fallida"`).
-- **Etiquetas** (`Tags.kt`): `normalizeTags(raw: List<String>)` aplica `trim`,
-  descarta vacías, deduplica sin distinguir mayúsculas/minúsculas conservando la
-  **primera** grafía y ordena case-insensitive. `tags` se agrega al final con
-  `emptyList()` por defecto (no rompe el código/tests previos). `Track` (fijo y
-  único) y `Etiqueta` (libre y múltiple) **no** son sinónimos (`CONTEXT.md`).
+- **Géneros** (`Genres.kt`, `genres-catalog-persistence`): `GenreCatalog.GENRES`
+  es el catálogo **fijo** de 12 (`Platformer`, `Metroidvania`, `JRPG`, `ActionRPG`,
+  `Roguelike`, `Shooter`, `Puzzle`, `Adventure`, `Towerdefense`, `Novel`,
+  `Farming`, `Arcade`) y `GenreCatalog.canonicalize(raw)` devuelve la grafía
+  canónica del catálogo si `raw` coincide case-insensitive (si no, `raw`).
+  `normalizeGenres(raw: List<String>)` aplica `trim`, descarta vacíos, **canoniza**
+  contra el catálogo, deduplica sin distinguir mayúsculas/minúsculas conservando la
+  **primera** grafía resultante y ordena case-insensitive. Los Géneros
+  **personalizados** (no del catálogo) viven por Nota y no engrosan el catálogo
+  global. `genres` se agrega con `emptyList()` por defecto; `Track` (fijo y
+  único, por sección) y `Género` (descriptivo y múltiple) **no** son sinónimos
+  (`CONTEXT.md`).
 - `Track.fromCode(null | desconocido)` → `null` (edge case "Nota sin `track`").
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.
@@ -145,12 +161,13 @@ composeApp (Android app / commonMain) ──▶ core
     pipeline de indexado: escribe sólo `status` y **no** re-sella `updated_at`
     (efecto de sistema, no edición del usuario; así una indexación en segundo
     plano no reordena la lista `updated_at DESC`), ni toca
-    `body`/`track`/`tags`/`owner`/`created_at`. Devuelve `rowsAffected > 0`.
-  - Etiquetas: `create` normaliza y persiste `insertNote` + `insertNoteTag` en
-    una transacción; `getById` lee `selectTagsByNoteId`; `getAll` usa
-    `selectAllNoteTags` agrupado en memoria (evita N+1); `update` reemplaza el
+    `body`/`track`/`genres`/`owner`/`created_at`. Devuelve `rowsAffected > 0`.
+  - Géneros: `create` normaliza (con canonización de catálogo) y persiste
+    `insertNote` + `insertNoteGenre` en una transacción; `getById` lee
+    `selectGenresByNoteId`; `getAll` usa
+    `selectAllNoteGenres` agrupado en memoria (evita N+1); `update` reemplaza el
     conjunto completo (delete + insert) en la misma transacción que la nota y
-    sólo si la fila existía; `delete` limpia `note_tag` y las filas `attachment`
+    sólo si la fila existía; `delete` limpia `note_genre` y las filas `attachment`
     de la nota en la misma transacción (`transactionWithResult`), sin huérfanos.
 - **Adjunto** (`com.playbook.core.model`): `Attachment` (id, noteId, kind,
   mimeType, filePath, byteSize, createdAt) + enum `AttachmentKind` (`IMAGE` →
@@ -163,7 +180,7 @@ composeApp (Android app / commonMain) ──▶ core
   el `kind` se persiste como texto y agregar `AUDIO` no cambió el esquema.
 - **Mapper** (`NoteMappers.kt`): importa `com.playbook.core.db.Note as NoteRow`
   para evitar la colisión con el modelo de dominio;
-  `NoteRow.toDomain(tags = emptyList())` recibe las etiquetas ya resueltas.
+  `NoteRow.toDomain(genres = emptyList())` recibe los Géneros ya resueltos.
 - **Embedding** (`com.playbook.core.model`): `NoteEmbedding(noteId, values,
   indexedAt)` es la entidad persistida (relación 1:0..1 con `Note`).
   `NoteEmbeddingMappers.kt` importa `com.playbook.core.db.Embedding as
@@ -483,14 +500,14 @@ composeApp (Android app / commonMain) ──▶ core
   `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
   "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
   (o "Sin track") y un `StatusBadge` con la etiqueta legible del `status`, y —si
-  `note.tags` no está vacía— una fila de
-  chips de etiqueta (misma `LabelChip`, en `Row` con `horizontalScroll`). Todo se
+  `note.genres` no está vacía— una fila de
+  chips de Género (misma `LabelChip`, en `Row` con `horizontalScroll`). Todo se
   comunica con texto, no sólo color (`DESIGN.md`).
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
   (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de
   `track` ("Sin track" + `Track.entries`) que comunica la selección con marca
-  textual "✓", borde y color; campo "Nueva etiqueta" + botón "Agregar" (aplica
-  `normalizeTags`) y chips de etiqueta con control de quitar "×" (`clickable` con
+  textual "✓", borde y color; campo "Nuevo género" + botón "Agregar" (aplica
+  `normalizeGenres`) y chips de Género con control de quitar "×" (`clickable` con
   `onClickLabel`/`role = Role.Button`); `Guardar` deshabilitado si `body.isBlank()`
   **y** no hay `initialImage` (una nota sólo-imagen es válida); `Cancelar`; y en
   edición `Borrar` con `AlertDialog`. Cuando llega `initialImage` muestra la
@@ -501,10 +518,10 @@ composeApp (Android app / commonMain) ──▶ core
   En edición, si llega `initialStatus` (no null) muestra un `StatusBadge` de sólo
   lectura y —si `onReindex` no es null— el botón "Re-indexar", habilitado sólo si
   el estado no es `INDEXED` y el `body` del borrador no está en blanco; re-indexar
-  **no** reescribe `track`/`tags`/`body` (sólo dispara el enriquecimiento).
+  **no** reescribe `track`/`genres`/`body` (sólo dispara el enriquecimiento).
   Mantiene el borrador local
-  (`body`/`track`/`tags`) y emite
-  `onSave(body, track, tags)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`;
+  (`body`/`track`/`genres`) y emite
+  `onSave(body, track, genres)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`;
   la persistencia, el refresco y la navegación los maneja `App`. No hay control de
   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
 - **`EnrichmentStatus`** (`commonMain`, `note-enrichment-status-ui`):
@@ -539,16 +556,16 @@ composeApp (Android app / commonMain) ──▶ core
   destino un `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el
   micrófono y descarta el audio parcial).
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
-  track, tags = tags))` (status default `CAPTURED`); **crear con imagen** →
+  track, genres = genres))` (status default `CAPTURED`); **crear con imagen** →
   `fileStore.saveImage(bytes, mime)` → `create(NoteDraft(...))` →
   `attachmentRepository.create(note.id, IMAGE, mime, relativePath, byteSize)` →
   `reload()`; si algo falla después de guardar el archivo, se borra (sin
   huérfanos). **Dictar** → `create(NoteDraft(...))` → `attachmentRepository.create(
   note.id, AUDIO, audio.mimeType, audio.relativePath, audio.byteSize)` →
   `reload()` (misma limpieza ante fallo). Editar → `update(note.copy(body =
-  body.trim(), track = ..., tags = tags))` (re-sella `updatedAt`, reemplaza el
-  conjunto de etiquetas y preserva `owner`/`createdAt`/`status`); borrar → se leen
-  los adjuntos de la nota, `delete(id)` (limpia `note_tag` y las filas `attachment`
+  body.trim(), track = ..., genres = genres))` (re-sella `updatedAt`, reemplaza el
+  conjunto de Géneros y preserva `owner`/`createdAt`/`status`); borrar → se leen
+  los adjuntos de la nota, `delete(id)` (limpia `note_genre` y las filas `attachment`
   en la misma transacción) y se borran los archivos con el `AttachmentFileStore`
   (cubre imágenes y audio por la ruta relativa); siempre `reload()` y vuelta a la
   lista. El `status` no se edita desde la UI. Si el `id` en `Edit(noteId)` ya no
@@ -564,7 +581,8 @@ composeApp (Android app / commonMain) ──▶ core
   respuesta y sus **citas** (tocar una cita abre la Nota fuente con `Edit`).
 - **Deuda resuelta:** `notes-list-ui` leía la lista en el hilo de composición y no
   refrescaba tras mutaciones; `create-text-note` lo resolvió con `LaunchedEffect` +
-  `refreshKey`. `note-category-and-tags` agregó la edición de etiquetas,
+  `refreshKey`. `note-category-and-tags` agregó la edición de Etiquetas (hoy
+  Géneros, `genres-catalog-persistence`),
   `image-capture-camera` la captura/adjunto de imagen y `voice-attachment-storage`
   el audio del dictado como Adjunto `AUDIO` (chips por tipo en la lista), sólo al
   **crear** (sin edición de adjuntos existentes ni render/reproducción).
@@ -589,7 +607,7 @@ composeApp (Android app / commonMain) ──▶ core
   una sección por `track` (o "Sin track") con su conteo ("N notas") y el texto
   "Sin notas en este track" cuando está vacía; y las notas en un `LazyColumn`
   (`key = { it.id }`). Cada nota resume el `body` (máx. 2 líneas, ellipsis) y
-  muestra chips textuales de `status`, Etiquetas (si tiene) y "Imagen" (si tiene
+  muestra chips textuales de `status`, Géneros (si tiene) y "Imagen" (si tiene
   adjuntos). Todo se comunica con texto, no sólo color (`DESIGN.md`).
 - **Estado vacío:** si `notes.isEmpty()`, mensaje explícito "Todavía no hay notas"
   (con "0 notas" en el encabezado) sin secciones ni errores.
@@ -608,8 +626,8 @@ composeApp (Android app / commonMain) ──▶ core
   `Total: 1 nota`), secciones `## <track.code>`/`## Sin track` en orden fijo, por
   Nota `### <título>` (primera línea del `body` trim, escapada; fallback
   `Nota <now>` con `body` vacío), el **resto** del `body` (escapado, sin repetir
-  la primera línea) y `Etiquetas: a, b — Estado: <status.code>` (Etiquetas
-  escapadas, `status.code` no; sin Etiquetas, sólo `Estado: ...`). Bloques
+  la primera línea) y `Géneros: a, b — Estado: <status.code>` (Géneros
+  escapados, `status.code` no; sin Géneros, sólo `Estado: ...`). Bloques
   separados por una línea en blanco y documento terminado en `\n`. El escapado es
   un backslash-escape del set `` \ ` * _ { } [ ] ( ) # + - . ! | > ``. `now` es un
   `String` inyectado (lo formatea la plataforma) para que `:core` no dependa de
@@ -643,7 +661,7 @@ composeApp (Android app / commonMain) ──▶ core
   relacionadas" + línea de apoyo); con resultados, un `LazyColumn` de tarjetas
   (`key = { it.note.id }`) con el `body` de la relacionada (máx. 2 líneas), el
   `score` como **texto** ("Similitud 0.92", formateado sin depender del locale) y
-  chips de `track`/`status`/Etiquetas; cada tarjeta es `clickable(onClickLabel =
+  chips de `track`/`status`/Géneros; cada tarjeta es `clickable(onClickLabel =
   "Abrir nota", role = Role.Button)`. Todo se comunica con texto, no sólo color.
 - **Navegación:** en `NoteEditorScreen` (modo edición) "Ver relacionadas" →
   `NotesDestination.Related(noteId)`; tocar una tarjeta → `NotesDestination.Edit(noteId)`;
@@ -704,7 +722,7 @@ composeApp (Android app / commonMain) ──▶ core
 
 ## Runtime surfaces
 
-- **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v6 con
+- **Android:** `MainActivity` (`com.playbook.app`) aplica el esquema local v7 con
   `createDatabase(AndroidDatabaseDriverFactory(...))`, construye
   `SqlDelightNoteRepository` + `SqlDelightAttachmentRepository` +
   `SqlDelightEmbeddingRepository` + `SqlDelightNoteLinkRepository`, un

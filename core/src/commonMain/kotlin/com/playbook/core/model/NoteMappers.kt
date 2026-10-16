@@ -5,7 +5,7 @@ package com.playbook.core.model
 import com.playbook.core.db.Note as NoteRow
 
 /** Mapea una fila SQLDelight (`NoteRow`) al modelo de dominio [Note]. */
-fun NoteRow.toDomain(tags: List<String> = emptyList()): Note = Note(
+fun NoteRow.toDomain(genres: List<String> = emptyList()): Note = Note(
     id = id,
     owner = owner,
     body = body,
@@ -13,7 +13,7 @@ fun NoteRow.toDomain(tags: List<String> = emptyList()): Note = Note(
     status = NoteStatus.fromCode(status),
     createdAt = created_at,
     updatedAt = updated_at,
-    tags = tags,
+    genres = genres,
     // SQLDelight mapea INTEGER a Long; el dominio usa Int (default 0).
     indexAttempts = index_attempts.toInt(),
 )
