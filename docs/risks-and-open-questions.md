@@ -41,9 +41,12 @@
   `AttachmentFileStore` con `read(relativePath): ByteArray?` y decodificar con
   `decodeImageBitmap()` existente (sin deps nuevas). El cacheo de miniaturas
   redimensionadas queda diferido.
-- **Migración de Etiquetas → Géneros:** **decidido** el 2026-10-15: las etiquetas
-  libres existentes se conservan como **Géneros personalizados** de cada Nota; se
-  reutiliza la tabla N—N.
+- **Migración de Etiquetas → Géneros:** **resuelto** en
+  `genres-catalog-persistence` (2026-10-16): las etiquetas libres existentes se
+  copian **verbatim** como **Géneros personalizados** de cada Nota mediante el
+  **renombre** de la tabla N—N `note_tag`→`note_genre` (esquema **v7**, `6.sqm`,
+  `INSERT … SELECT` + `DROP TABLE note_tag`); no se reutiliza la tabla vieja ni se
+  materializa el catálogo en la base.
 
 ## Implementation-Time Questions
 - **IA real (proveedor propio):** modelos y dimensión concretos de embedding;
@@ -57,11 +60,14 @@
   respuestas del Q&A. A refinar en la spec.
 - **UI fina del wizard** de Brainstorming (progreso X/9, navegación, disposición de
   las 2 sugerencias) y comportamiento al reabrir para iterar.
-- **Normalización de Géneros** (case-insensitive, trim) y deduplicación contra el
-  catálogo (un personalizado que coincide con el catálogo se trata como de
-  catálogo).
-- **Esquema v7:** forma de la tabla del Proyecto/ficha y de las 5 mecánicas
-  (categoría + descripción); `6.sqm` v6→v7.
+- **Normalización de Géneros:** **resuelto** en `genres-catalog-persistence`
+  (2026-10-16): `normalizeGenres` aplica trim, descarta vacíos, **canoniza**
+  case-insensitive contra `GenreCatalog` (un personalizado que coincide con el
+  catálogo se trata como de catálogo), deduplica case-insensitive conservando la
+  primera grafía y ordena. Ver `docs/specs/genres-catalog-persistence.md`; la UI
+  del picker es `genres-catalog-ui`.
+- **Esquema v8:** forma de la tabla del Proyecto/ficha y de las 5 mecánicas
+  (categoría + descripción); `7.sqm` v7→v8.
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
 - El **STT**, la **cámara** y el **audio del dictado como Adjunto** ya se

@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * Ejercita [buildGddMarkdown] contra el "Format Contract" de
  * `docs/specs/gdd-export.md` (escenarios 1–8): encabezado y total (plural y
  * singular), orden fijo y omisión de secciones vacías, título = primera línea /
- * cuerpo = resto, fallback `Nota <now>`, escapado de Markdown, nota sin Etiquetas
+ * cuerpo = resto, fallback `Nota <now>`, escapado de Markdown, nota sin Géneros
  * y determinismo. Vive en `commonTest` para correr en Android/JVM e iOS.
  */
 fun verifyGddMarkdown() {
@@ -24,7 +24,7 @@ fun verifyGddMarkdown() {
         body = "Jefe final\naparece en el nivel 3",
         track = Track.MECHANICS,
         status = NoteStatus.CAPTURED,
-        tags = listOf("combate", "jefe"),
+        genres = listOf("combate", "jefe"),
     )
     val mechanics2 = gddNote(
         id = "m2",
@@ -43,7 +43,7 @@ fun verifyGddMarkdown() {
         body = "Protagonista sin nombre",
         track = null,
         status = NoteStatus.INDEXED,
-        tags = listOf("lore"),
+        genres = listOf("lore"),
     )
     val canonical = listOf(mechanics1, mechanics2, characters, orphan)
 
@@ -56,7 +56,7 @@ fun verifyGddMarkdown() {
 
         ### Jefe final
         aparece en el nivel 3
-        Etiquetas: combate, jefe — Estado: capturada
+        Géneros: combate, jefe — Estado: capturada
 
         ### Nota 2026-10-15 14:30
         Estado: pendiente
@@ -69,7 +69,7 @@ fun verifyGddMarkdown() {
         ## Sin track
 
         ### Protagonista sin nombre
-        Etiquetas: lore — Estado: indexada
+        Géneros: lore — Estado: indexada
     """.trimIndent() + "\n"
 
     assertEquals(
@@ -162,7 +162,7 @@ fun verifyGddMarkdown() {
         body = "# Título *x* _y_\nresto [a] (b) - . ! | > `code` \\",
         track = Track.MECHANICS,
         status = NoteStatus.CAPTURED,
-        tags = listOf("a_b", "#c"),
+        genres = listOf("a_b", "#c"),
     )
     val trickyDoc = buildGddMarkdown(listOf(tricky), now)
     assertTrue(
@@ -174,20 +174,20 @@ fun verifyGddMarkdown() {
         "el cuerpo (resto) escapa los caracteres del set, incluido el backslash",
     )
     assertTrue(
-        trickyDoc.contains("Etiquetas: a\\_b, \\#c — Estado: capturada"),
-        "las Etiquetas se escapan; 'status.code' no",
+        trickyDoc.contains("Géneros: a\\_b, \\#c — Estado: capturada"),
+        "los Géneros se escapan; 'status.code' no",
     )
     assertTrue(trickyDoc.contains("## mecánicas"), "el label de sección (generado) no se escapa")
 
-    // --- Scenario 7: nota sin Etiquetas ---------------------------------------
-    val noTags = gddNote("nt", "Sin etiquetas", Track.STORY, NoteStatus.FAILED)
-    val noTagsDoc = buildGddMarkdown(listOf(noTags), now)
+    // --- Scenario 7: nota sin Géneros -----------------------------------------
+    val noGenres = gddNote("nt", "Sin géneros", Track.STORY, NoteStatus.FAILED)
+    val noGenresDoc = buildGddMarkdown(listOf(noGenres), now)
     assertTrue(
-        noTagsDoc.contains("### Sin etiquetas\nEstado: fallida"),
-        "sin Etiquetas la línea de metadatos es sólo 'Estado: <status.code>'",
+        noGenresDoc.contains("### Sin géneros\nEstado: fallida"),
+        "sin Géneros la línea de metadatos es sólo 'Estado: <status.code>'",
     )
-    assertFalse(noTagsDoc.contains("Etiquetas:"), "sin Etiquetas no aparece el prefijo 'Etiquetas:'")
-    assertFalse(noTagsDoc.contains("Estado: fallida —"), "sin Etiquetas no hay separador")
+    assertFalse(noGenresDoc.contains("Géneros:"), "sin Géneros no aparece el prefijo 'Géneros:'")
+    assertFalse(noGenresDoc.contains("Estado: fallida —"), "sin Géneros no hay separador")
 
     // --- Scenario 8: determinismo ---------------------------------------------
     assertEquals(
@@ -212,7 +212,7 @@ private fun gddNote(
     body: String,
     track: Track?,
     status: NoteStatus,
-    tags: List<String> = emptyList(),
+    genres: List<String> = emptyList(),
 ): Note = Note(
     id = id,
     owner = "owner-1",
@@ -221,5 +221,5 @@ private fun gddNote(
     status = status,
     createdAt = 1L,
     updatedAt = 1L,
-    tags = tags,
+    genres = genres,
 )

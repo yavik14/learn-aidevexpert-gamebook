@@ -28,8 +28,9 @@ el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png
 **Nunca** versionar secrets, API keys ni keystores (incluida la API key de IA).
 
 Próximas features en cola: las `not_started` de `feature_list.json` (revisión
-2026-10-15); la primera ready es `genres-catalog-persistence`. Para iOS: el upload
-firmado (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
+2026-10-15); tras `genres-catalog-persistence` (Géneros: dominio + persistencia
+v7), la siguiente ready es `genres-catalog-ui` (picker de chips). Para iOS: el
+upload firmado (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

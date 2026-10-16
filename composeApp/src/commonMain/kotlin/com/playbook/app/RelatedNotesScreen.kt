@@ -39,7 +39,7 @@ import kotlin.math.round
  * - Estado vacío explícito ("No hay notas relacionadas") con una línea de apoyo.
  * - Con resultados, un `LazyColumn` de tarjetas: el cuerpo de la relacionada
  *   (máx. 2 líneas), el `score` como **texto** ("Similitud 0.92", nunca sólo
- *   color) y chips textuales de `track`/`status`/Etiquetas, según `DESIGN.md`.
+ *   color) y chips textuales de `track`/`status`/Géneros, según `DESIGN.md`.
  * - Tocar una tarjeta emite `onOpenNote(note.id)`; "Volver" vuelve a la lista.
  */
 @Composable
@@ -129,14 +129,14 @@ private fun RelatedNoteCard(relatedNote: RelatedNote, onClick: () -> Unit) {
                 LabelChip(text = relatedNote.note.track?.code ?: "Sin track")
                 LabelChip(text = relatedNote.note.status.code)
             }
-            if (relatedNote.note.tags.isNotEmpty()) {
+            if (relatedNote.note.genres.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    relatedNote.note.tags.forEach { tag ->
-                        LabelChip(text = tag)
+                    relatedNote.note.genres.forEach { genre ->
+                        LabelChip(text = genre)
                     }
                 }
             }

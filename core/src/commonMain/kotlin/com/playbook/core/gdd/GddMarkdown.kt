@@ -13,8 +13,8 @@ import com.playbook.core.model.Note
  * - Por Nota: `### <título>` (primera línea del `body`, trim, escapada; fallback
  *   `Nota <now>` si el `body` está vacío, tampoco escapado), debajo sólo el
  *   **resto** del `body` (escapado) y la línea de metadatos
- *   `Etiquetas: a, b — Estado: <status.code>` (Etiquetas escapadas, `status.code`
- *   no; sin Etiquetas, sólo `Estado: <status.code>`).
+ *   `Géneros: a, b — Estado: <status.code>` (Géneros escapados, `status.code`
+ *   no; sin Géneros, sólo `Estado: <status.code>`).
  * - Bloques separados por una línea en blanco y documento terminado en `\n`.
  *
  * Es una función pura sobre el modelo: sin fecha, SQLDelight ni
@@ -71,17 +71,17 @@ private fun bodyRest(body: String): String? {
     return escapeMarkdown(lines.joinToString("\n"))
 }
 
-/** Etiquetas (escapadas) + `status.code` (generado, no escapado). */
+/** Géneros (escapados) + `status.code` (generado, no escapado). */
 private fun metadataLine(note: Note): String {
     val status = "Estado: ${note.status.code}"
-    if (note.tags.isEmpty()) return status
-    val tags = note.tags.joinToString(", ") { escapeMarkdown(it) }
-    return "Etiquetas: $tags — $status"
+    if (note.genres.isEmpty()) return status
+    val genres = note.genres.joinToString(", ") { escapeMarkdown(it) }
+    return "Géneros: $genres — $status"
 }
 
 /**
  * Set de caracteres que se backslash-escan en **contenido de usuario** (título,
- * cuerpo y Etiquetas). Los valores generados (labels de sección, `status.code` y
+ * cuerpo y Géneros). Los valores generados (labels de sección, `status.code` y
  * el fallback `Nota <now>`) no se escapan.
  */
 private val MARKDOWN_SPECIAL_CHARS = setOf(
