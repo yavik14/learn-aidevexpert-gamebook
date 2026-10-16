@@ -1173,11 +1173,30 @@
     "depends_on": [
       "kmp-project-bootstrap"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: build Android + verificación visual del launcher (icono de Playbook)."
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL; recursos resueltos (sin deps/esquema/Kotlin).",
+      "`aapt dump badging composeApp-debug.apk` → `application: label='Playbook' icon='res/mipmap-anydpi-v26/ic_launcher.xml'` (icono declarado y resuelto).",
+      "`aapt list` → `mipmap-anydpi-v26/ic_launcher.xml`, `drawable-nodpi-v4/ic_launcher_foreground.png` y `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}-v4/ic_launcher.png`; `aapt dump --values resources` → `color/ic_launcher_background #fff7efe2`.",
+      "Smoke visual Android (emulador Pixel_3A_API_35/emulator-5556, API 35 ⇒ adaptive): instalado y visible en el cajón de apps; el mask circular muestra el gamepad + lápiz centrado sobre crema, sin costura ni recorte.",
+      "Control negativo (a): quitar `android:icon`/`android:roundIcon` del manifest → badging `icon=''` y el launcher muestra el icono por defecto (robot de Android); restaurado y re-verificado.",
+      "Control negativo (b): referenciar `@drawable/ic_launcher_foreground_missing` en `ic_launcher.xml` → `:composeApp:assembleDebug` FAILED (exit 1) con `AAPT: error: resource drawable/ic_launcher_foreground_missing ... not found`; restaurado y re-verificado en verde.",
+      "`./init.sh` → exit 0; gate Android-only, sin dev servers ni red.",
+      "`git status` sólo recursos/manifest + docs/harness; `:core`, `iosApp/**`, `init.sh`, build files y código Kotlin sin cambios.",
+      "E2E persistente: no aplica (configuración de recursos + verificación visual; no hay harness E2E y `init.sh` no levanta simuladores). Justificado en la spec."
     ],
-    "evidence": [],
-    "notes": "Fuente: `docs/design/icon.png` (gamepad + lápiz, acentos celeste/ámbar). Android: adaptive icon (foreground/background + mipmap). iOS congelado: AppIcon opcional. Sin dependencias nuevas."
+    "evidence": [
+      "2026-10-16: `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 actionable tasks); APK `composeApp/build/outputs/apk/debug/composeApp-debug.apk` (10.8 MB).",
+      "2026-10-16: `aapt dump badging` (build-tools 36.0.0) → `application: label='Playbook' icon='res/mipmap-anydpi-v26/ic_launcher.xml'`; `application-icon-*` (120..65535) apuntando al mismo `mipmap-anydpi-v26/ic_launcher.xml`.",
+      "2026-10-16: `aapt list` → `res/mipmap-anydpi-v26/ic_launcher.xml`, `res/drawable-nodpi-v4/ic_launcher_foreground.png` y `res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}-v4/ic_launcher.png`; `aapt dump --values resources` → `com.playbook.app:color/ic_launcher_background: t=0x1d d=0xfff7efe2 (color) #fff7efe2`.",
+      "2026-10-16: PNGs generados con `sips` (sin deps): legacy 48/72/96/144/192 (mdpi..xxxhdpi) desde `docs/design/icon.png` (`-z`); foreground `-c 800 800` → `-z 264 264` → `-p 432 432 --padColor F7EFE2` = 432×432 sin alfa (padding == `#F7EFE2`).",
+      "2026-10-16 (smoke visual, emulador Pixel_3A_API_35/emulator-5556, API 35): `adb install -r` Success; cajón de apps muestra el icono de Playbook (gamepad + lápiz en mask circular sobre crema) en lugar del icono por defecto; recorte ampliado sin costura entre `background` y padding del `foreground` y sin recorte del arte. Capturas en `composeApp/build/smoke-evidence/icon-*.png` (ignorado por git).",
+      "2026-10-16: control negativo (a): manifest sin `android:icon`/`android:roundIcon` → `aapt dump badging` `application: label='Playbook' icon=''` y el cajón muestra el icono por defecto (robot de Android) para Playbook; restaurado (`icon='res/mipmap-anydpi-v26/ic_launcher.xml'`, `install -r` Success, icono de Playbook de nuevo).",
+      "2026-10-16: control negativo (b): `<foreground android:drawable=\"@drawable/ic_launcher_foreground_missing\" />` → `:composeApp:assembleDebug` exit 1, `Task :composeApp:processDebugResources FAILED`, `AAPT: error: resource drawable/ic_launcher_foreground_missing (aka com.playbook.app:drawable/ic_launcher_foreground_missing) not found`; restaurado y `assembleDebug` → BUILD SUCCESSFUL con badging correcto.",
+      "2026-10-16: `./init.sh` → exit 0 (Android-only, sin dev servers ni red). `git status --short` sólo `composeApp/src/androidMain/AndroidManifest.xml` (M) + recursos nuevos + docs/harness; `git diff` de `core`, `iosApp`, `init.sh`, build files y `*.kt` vacío. Sin deps nuevas; sin `monochrome`/splash/store assets.",
+      "2026-10-16: validación independiente pendiente (`feature-validator`).",
+      "2026-10-16: validación independiente (accept), registro en docs/validations/app-icon-configuration.md. El validador re-ejecutó `:composeApp:assembleDebug` BUILD SUCCESSFUL, `aapt dump badging` (`icon='res/mipmap-anydpi-v26/ic_launcher.xml'`), `aapt list`/`xmltree` (colors `#F7EFE2`, adaptive bg/fg) y `./init.sh` exit 0; verificó PNG legacy 48/72/96/144/192 + foreground 432² y smoke visual en emulator-5556 (API 35, mask circular, sin costuras); controles negativos propios (quitar `android:icon`; foreground inexistente → falla resource linking) restaurados byte-idénticos."
+    ],
+    "notes": "Fuente: `docs/design/icon.png` (gamepad + lápiz, acentos celeste/ámbar); fondo medido `#F7EFE2`. Android: adaptive icon (`mipmap-anydpi-v26` background color + foreground bitmap) + PNG legacy por densidad; `roundIcon` = mismo `@mipmap/ic_launcher`; foreground en `drawable-nodpi`. iOS congelado: `AppIcon` intacto. Sin dependencias nuevas ni cambios de código/esquema. Ver `docs/technical-discovery.md`."
   }
 ]

@@ -29,8 +29,9 @@
 - `gdd-export` `accepted` (2026-10-15; Session 045; validación independiente `accept` en `docs/validations/gdd-export.md`): export del GDD a Markdown (`buildGddMarkdown(notes, now)` en `:core`, proyección pura con el "Format Contract") + puerto `GddSharer` (expect/actual; `ACTION_SEND` en Android, `UIActivityViewController` en iOS; share **en memoria**, sin archivos/permisos) + botón "Compartir" (deshabilitado sin Notas) y snackbar en `GddScreen` (`Scaffold`/`SnackbarHostState` local, sin nuevos parámetros, por lo que **`App.kt` no cambió**); `topViewController()` extraído a `IosViewControllers.kt` compartido con `ImageCapture.ios.kt`. No agrega `.sqm` ni dependencias nuevas (el esquema global queda en **v6** por `offline-pending-retry`).
 - **Revisión de alcance 2026-10-15 (Android-first):** iOS **congelado** (ADR 0003); Etiquetas→**Géneros** (catálogo fijo + personalizados); **Proyecto de Juego** (ficha singleton) + **Brainstorming**; GDD **documento híbrido** (ficha + secciones por Track); principal rediseñada (top bar "Playbook" + iconos + FAB desplegable), bocetos con miniatura, dictado inline 30s, Q&A "guardar como Nota"; e **IA real** con proveedor propio OpenAI-compatible (`https://inference.devexpert.io/v1`; modelos chat/embedding/transcribe/tts/image/jev; alternancia fake/real por build flag; la IA **sugiere** y el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png`). Esquema previsto **v7** (Géneros) y **v8** (Proyecto). Backlog re-derivado: **21 features `not_started`** (incluye `app-icon-configuration`).
 - Current next ready features: `genres-catalog-persistence` (primera de las 20 nuevas; ver `feature_list.json`).
+- `app-icon-configuration` `passing` (2026-10-16; validación independiente pendiente): icono de launcher Android desde `docs/design/icon.png` (**RGB sin alfa**, fondo `#F7EFE2`) — adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` = `@color/ic_launcher_background` + `@drawable/ic_launcher_foreground`) + PNG legacy por densidad (48/72/96/144/192) y `android:icon`/`android:roundIcon` en el manifest. Generado con `sips` (sin deps); foreground en `drawable-nodpi` (432 px, safe zone ~66 %), sin costura. Sin cambios en `:core`/`iosApp`/`init.sh`/build files/Kotlin/esquema. Ver `docs/technical-discovery.md`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
-- Last verified at: 2026-10-15.
+- Last verified at: 2026-10-16.
 
 ## Session Log
 
@@ -976,3 +977,23 @@
 - Files or artifacts updated: `init.sh`, `feature_list.json`, `AGENTS.md`, `PROGRESS.md`, `CONSTRAINTS.md`, `CONTEXT.md`, `docs/build-brief.md`, `docs/domain-model.md`, `docs/risks-and-open-questions.md`, `docs/technical-discovery.md`, `docs/adr/0004-ai-real-integration.md` (nuevo), `DESIGN.md`, `docs/design/paleta.png` (nuevo), `docs/design/icon.png` (nuevo).
 - Known risk or unresolved issue: iOS congelado (se conserva y debe seguir compilando; los nuevos `expect` necesitan `actual` iOS mínimo, ya no forzado por el gate); IA real con clave por build flag (nunca versionada) y costos/offline abiertos (ver `docs/risks-and-open-questions.md`); esquema v7/v8 previstos.
 - Next best step: al mergear el PR #32 a `develop`, derivar la spec de `genres-catalog-persistence` con `$feature-spec` y avanzar por el backlog con `$feature-flow` (una feature a la vez, WIP=1).
+
+### Session 048
+
+- Date: 2026-10-16
+- Goal: implementar `app-icon-configuration` (spec `docs/specs/app-icon-configuration.md`): icono de launcher Android desde `docs/design/icon.png` (adaptive + legacy) y declararlo en el manifest.
+- Completed:
+  - Generados con `sips` (macOS, sin deps): `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png` (48/72/96/144/192) y `drawable-nodpi/ic_launcher_foreground.png` (center-crop `-c 800 800` → `-z 264 264` → `-p 432 432 --padColor F7EFE2`).
+  - `values/colors.xml` (`ic_launcher_background = #F7EFE2`) y `mipmap-anydpi-v26/ic_launcher.xml` (`background` color + `foreground` bitmap).
+  - `AndroidManifest.xml`: `android:icon` + `android:roundIcon` = `@mipmap/ic_launcher` (sin otros cambios).
+  - Docs durables: `docs/technical-discovery.md` ("App Icon Decisions (app-icon-configuration)") y `DESIGN.md` (icono marcado como configurado en el build Android).
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 actionable tasks).
+  - `aapt dump badging` (build-tools 36.0.0) → `application: label='Playbook' icon='res/mipmap-anydpi-v26/ic_launcher.xml'`; `aapt list` → 5 densidades + anydpi-v26 + `drawable-nodpi-v4/ic_launcher_foreground.png`; `aapt dump --values resources` → `color/ic_launcher_background #fff7efe2`.
+  - Smoke visual (emulador Pixel_3A_API_35/emulator-5556, API 35 ⇒ adaptive): icono de Playbook visible en el cajón; sin costura ni recorte del arte (capturas `composeApp/build/smoke-evidence/icon-*.png`, ignorado por git).
+  - Controles negativos: (a) manifest sin icono → badging `icon=''` y robot por defecto en el launcher; (b) `@drawable/ic_launcher_foreground_missing` → `assembleDebug` exit 1 (`AAPT: resource ... not found`). Ambos restaurados y re-verificados en verde.
+  - `./init.sh` (baseline y final) → exit 0; `git diff` de `core`/`iosApp`/`init.sh`/build files/`*.kt` vacío; sin deps nuevas.
+- Evidence captured: entradas en `feature_list.json` (status `passing`, 9 líneas de evidencia) y esta sesión; salidas de `assembleDebug`/`aapt`/`init.sh` y capturas en `composeApp/build/smoke-evidence/`.
+- Files or artifacts updated: `composeApp/src/androidMain/AndroidManifest.xml`, `composeApp/src/androidMain/res/**` (nuevos), `docs/technical-discovery.md`, `DESIGN.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: el arte fuente es **provisional** (`DESIGN.md`); si el autor entrega uno nuevo hay que regenerar los PNG. `AGENTS.md` ("próxima feature en cola") revisado: sigue siendo `genres-catalog-persistence`, así que no se editó. Validación independiente pendiente (`feature-validator`).
+- Next best step: `feature-validator` valida `app-icon-configuration` contra la spec; al `accept`, seguir con `genres-catalog-persistence` según el backlog.
