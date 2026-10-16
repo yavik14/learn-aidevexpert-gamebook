@@ -7,6 +7,7 @@ status: provisional
 designAssets:
   sourceOfTruth:
     - docs/design/paleta.png
+    - docs/design/icon.png
   generatedConcepts: []
 colors:
   primary: "#98E4FF"
@@ -89,6 +90,9 @@ diseño de juegos para un único autor. Se organiza en tres `Track`
 
 ## Existing Design Assets
 
+- `docs/design/icon.png` — icono de la app (gamepad + lápiz, estilo boceto, acentos
+  celeste/ámbar). **Autoridad: fuente de verdad del icono** (provisional). Su
+  configuración en el build es la feature `app-icon-configuration`.
 - `docs/design/paleta.png` — paleta del autor (Primary `#98E4FF`, Secondary
   `#2C2926`, Tertiary `#FFE17D`, Neutral `#F9F6F8`; tipografías Bricolage
   Grotesque + JetBrains Mono; componentes de referencia: botones, search field,

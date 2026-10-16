@@ -1164,5 +1164,20 @@
     ],
     "evidence": [],
     "notes": "Revisa el non-goal 'sin clasificación IA' (ahora sugiere con confirmación del usuario). No aplica visión."
+  },
+  {
+    "id": "app-icon-configuration",
+    "area": "ui",
+    "title": "Configurar el icono de la aplicación",
+    "user_visible_behavior": "La app muestra el icono de Playbook (launcher Android) en lugar del icono por defecto.",
+    "depends_on": [
+      "kmp-project-bootstrap"
+    ],
+    "status": "not_started",
+    "verification": [
+      "Provisional: build Android + verificación visual del launcher (icono de Playbook)."
+    ],
+    "evidence": [],
+    "notes": "Fuente: `docs/design/icon.png` (gamepad + lápiz, acentos celeste/ámbar). Android: adaptive icon (foreground/background + mipmap). iOS congelado: AppIcon opcional. Sin dependencias nuevas."
   }
 ]
