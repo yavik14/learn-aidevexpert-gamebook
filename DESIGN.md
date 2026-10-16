@@ -91,8 +91,11 @@ diseño de juegos para un único autor. Se organiza en tres `Track`
 ## Existing Design Assets
 
 - `docs/design/icon.png` — icono de la app (gamepad + lápiz, estilo boceto, acentos
-  celeste/ámbar). **Autoridad: fuente de verdad del icono** (provisional). Su
-  configuración en el build es la feature `app-icon-configuration`.
+  celeste/ámbar). **Autoridad: fuente de verdad del icono** (provisional).
+  **Configurado en el build Android** por `app-icon-configuration`: adaptive icon
+  (`mipmap-anydpi-v26/ic_launcher.xml`, fondo crema `#F7EFE2` + foreground) y PNG
+  legacy por densidad (`mipmap-*/ic_launcher.png`). iOS congelado (su `AppIcon`
+  queda como está).
 - `docs/design/paleta.png` — paleta del autor (Primary `#98E4FF`, Secondary
   `#2C2926`, Tertiary `#FFE17D`, Neutral `#F9F6F8`; tipografías Bricolage
   Grotesque + JetBrains Mono; componentes de referencia: botones, search field,

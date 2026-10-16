@@ -1050,3 +1050,26 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0004-ai-real-integration
 - **Sugerencia de clasificación (non-goal revisado):** la IA **sugiere** `Track`/
   `Género`; el usuario **confirma o edita**; **nunca** auto-asigna. El indexado
   sigue sin clasificar (`CONSTRAINTS.md`).
+
+## App Icon Decisions (app-icon-configuration)
+
+Feature de configuración de recursos (2026-10-16), sin código, deps ni esquema.
+
+- **Fuente de verdad:** `docs/design/icon.png` (1024×1024, **RGB sin alfa**, fondo
+  crema medido `#F7EFE2`); no se crea arte nuevo.
+- **Adaptive icon (API 26+):** `mipmap-anydpi-v26/ic_launcher.xml` con
+  `background = @color/ic_launcher_background` (`#F7EFE2`) y
+  `foreground = @drawable/ic_launcher_foreground`; `android:roundIcon` apunta al
+  **mismo** `@mipmap/ic_launcher`.
+- **PNG legacy (API < 26):** `mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png`
+  (48/72/96/144/192 px).
+- **Generación con `sips`** (macOS, **sin deps**): legacy `-z`; foreground
+  center-crop `-c 800 800` (quita el marco redondeado del arte) → `-z 264 264`
+  (safe zone ~66 % de 108 dp) → `-p 432 432 --padColor F7EFE2`. El padding del
+  foreground == color de `background` ⇒ **sin costura** dentro del mask. Los PNG
+  derivados se **commitean**; el repo no regenera arte en build.
+- **Foreground en `drawable-nodpi`** (un único bitmap 432 px; el sistema escala).
+- **Manifest:** `<application>` declara `android:icon` y `android:roundIcon`
+  (sin tocar `label`, permisos ni `FileProvider`).
+- **iOS intacto:** iOS congelado (`docs/adr/0003-ios-congelado-mvp.md`); `AppIcon`/
+  assets sin cambios. Sin `monochrome`/themed icon, splash ni store assets.
