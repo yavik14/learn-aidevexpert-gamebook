@@ -16,21 +16,21 @@ class NoteRepositoryIosTest {
     }
 
     @Test
-    fun tagsRoundTrip() {
+    fun genresRoundTrip() {
         val driver = inMemoryDriver(PlaybookDatabase.Schema)
         try {
-            verifyNoteTags(driver)
+            verifyGenres(driver)
         } finally {
             driver.close()
         }
     }
 
     @Test
-    fun migrationV1ToV6PreservesNotes() {
+    fun migrationV1ToV7PreservesNotes() {
         // Driver in-memory creado como base v1 (sólo la tabla note).
         val driver = inMemoryDriver(NoteV1Schema)
         try {
-            verifyNoteTagMigration(driver)
+            verifyGenreMigration(driver)
         } finally {
             driver.close()
         }

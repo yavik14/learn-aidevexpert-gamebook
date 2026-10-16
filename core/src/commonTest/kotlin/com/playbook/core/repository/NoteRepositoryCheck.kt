@@ -181,7 +181,7 @@ fun verifyNoteCrud(driver: SqlDriver) {
             owner = "owner-status",
             body = "nota con estado",
             track = Track.STORY,
-            tags = listOf("tag-uno", "tag-dos"),
+            genres = listOf("genre-uno", "genre-dos"),
         ),
     )
     val frozenUpdatedAtStatus = withStatus.updatedAt
@@ -194,7 +194,7 @@ fun verifyNoteCrud(driver: SqlDriver) {
     assertEquals(NoteStatus.INDEXED, rereadStatus.status, "updateStatus cambia el status")
     assertEquals(withStatus.body, rereadStatus.body, "updateStatus no toca body")
     assertEquals(withStatus.track, rereadStatus.track, "updateStatus no toca track")
-    assertEquals(withStatus.tags, rereadStatus.tags, "updateStatus no toca tags")
+    assertEquals(withStatus.genres, rereadStatus.genres, "updateStatus no toca genres")
     assertEquals(withStatus.owner, rereadStatus.owner, "updateStatus no toca owner")
     assertEquals(withStatus.createdAt, rereadStatus.createdAt, "updateStatus no toca createdAt")
     assertEquals(frozenUpdatedAtStatus, rereadStatus.updatedAt, "updateStatus no re-sella updatedAt")
@@ -206,8 +206,8 @@ fun verifyNoteCrud(driver: SqlDriver) {
 
 /**
  * Ejercita las queries del reintento de indexado (`offline-pending-retry`) sobre
- * un [SqlDriver] con el esquema v6: `getByStatus` (sólo lectura, filtrada y
- * ordenada, con etiquetas agrupadas) y `setIndexAttempts` (efecto de sistema que
+ * un [SqlDriver] con el esquema v7: `getByStatus` (sólo lectura, filtrada y
+ * ordenada, con Géneros agrupados) y `setIndexAttempts` (efecto de sistema que
  * sólo toca `index_attempts`). Vive en `commonTest` para correr en Android/JVM e
  * iOS.
  */
@@ -228,7 +228,7 @@ fun verifyNoteRetryQueries(driver: SqlDriver) {
             body = "pendiente vieja",
             track = Track.MECHANICS,
             status = NoteStatus.PENDING,
-            tags = listOf("jefe"),
+            genres = listOf("Roguelike"),
         ),
     )
     assertEquals(0, pendingOlder.indexAttempts, "create arranca con index_attempts = 0")
@@ -254,9 +254,9 @@ fun verifyNoteRetryQueries(driver: SqlDriver) {
         "getByStatus filtra por status y ordena updated_at DESC, id DESC",
     )
     assertEquals(
-        listOf("jefe"),
-        pending.first { it.id == pendingOlder.id }.tags,
-        "getByStatus agrupa las etiquetas de cada Nota",
+        listOf("Roguelike"),
+        pending.first { it.id == pendingOlder.id }.genres,
+        "getByStatus agrupa los Géneros de cada Nota",
     )
     assertEquals(
         listOf(NoteStatus.CAPTURED),
@@ -279,7 +279,7 @@ fun verifyNoteRetryQueries(driver: SqlDriver) {
     assertEquals(frozen.status, after.status, "setIndexAttempts no toca status")
     assertEquals(frozen.body, after.body, "setIndexAttempts no toca body")
     assertEquals(frozen.track, after.track, "setIndexAttempts no toca track")
-    assertEquals(frozen.tags, after.tags, "setIndexAttempts no toca tags")
+    assertEquals(frozen.genres, after.genres, "setIndexAttempts no toca genres")
     assertEquals(frozen.owner, after.owner, "setIndexAttempts no toca owner")
     assertEquals(frozen.createdAt, after.createdAt, "setIndexAttempts no toca createdAt")
     assertEquals(frozen.updatedAt, after.updatedAt, "setIndexAttempts no re-sella updatedAt")

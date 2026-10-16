@@ -181,14 +181,14 @@ private fun NoteCard(
                 LabelChip(text = note.track?.code ?: "Sin track")
                 StatusBadge(status = note.status)
             }
-            if (note.tags.isNotEmpty()) {
+            if (note.genres.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    note.tags.forEach { tag ->
-                        LabelChip(text = tag)
+                    note.genres.forEach { genre ->
+                        LabelChip(text = genre)
                     }
                 }
             }

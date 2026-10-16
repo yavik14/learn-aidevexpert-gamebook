@@ -248,7 +248,7 @@ fun App(
         }
 
         /** Guarda el archivo, luego la nota y el adjunto; limpia si algo falla. */
-        fun saveNoteWithImage(image: PickedImage, body: String, track: Track?, tags: List<String>) {
+        fun saveNoteWithImage(image: PickedImage, body: String, track: Track?, genres: List<String>) {
             val stored = fileStore.saveImage(image.bytes, image.mimeType)
             try {
                 val note = noteRepository.create(
@@ -256,7 +256,7 @@ fun App(
                         owner = LOCAL_OWNER_ID,
                         body = body.trim(),
                         track = track,
-                        tags = tags,
+                        genres = genres,
                     ),
                 )
                 attachmentRepository.create(
@@ -335,16 +335,16 @@ fun App(
             NotesDestination.Create -> NoteEditorScreen(
                 initialBody = "",
                 initialTrack = null,
-                initialTags = emptyList(),
+                initialGenres = emptyList(),
                 initialImage = null,
                 isEditing = false,
-                onSave = { body, track, tags ->
+                onSave = { body, track, genres ->
                     val note = noteRepository.create(
                         NoteDraft(
                             owner = LOCAL_OWNER_ID,
                             body = body.trim(),
                             track = track,
-                            tags = tags,
+                            genres = genres,
                         ),
                     )
                     indexBestEffort(note)
@@ -360,11 +360,11 @@ fun App(
             is NotesDestination.CreateWithImage -> NoteEditorScreen(
                 initialBody = "",
                 initialTrack = null,
-                initialTags = emptyList(),
+                initialGenres = emptyList(),
                 initialImage = current.image,
                 isEditing = false,
-                onSave = { body, track, tags ->
-                    saveNoteWithImage(current.image, body, track, tags)
+                onSave = { body, track, genres ->
+                    saveNoteWithImage(current.image, body, track, genres)
                 },
                 onDelete = null,
                 onCancel = ::goToList,
@@ -381,14 +381,14 @@ fun App(
                     NoteEditorScreen(
                         initialBody = note.body,
                         initialTrack = note.track,
-                        initialTags = note.tags,
+                        initialGenres = note.genres,
                         initialImage = null,
                         isEditing = true,
-                        onSave = { body, track, tags ->
+                        onSave = { body, track, genres ->
                             val edited = note.copy(
                                 body = body.trim(),
                                 track = track,
-                                tags = tags,
+                                genres = genres,
                             )
                             noteRepository.update(edited)
                             indexBestEffort(edited)

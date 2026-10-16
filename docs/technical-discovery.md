@@ -28,10 +28,12 @@ core Kotlin Multiplatform (KMP). iOS queda **congelado** desde 2026-10-15 (ver
 - SQLDelight en ambas plataformas como única fuente de verdad local.
 - Vectores de embeddings como BLOB en SQLDelight; similitud coseno en memoria
   (suficiente para una biblioteca personal).
-- **Esquema v7 (previsto, 2026-10-15):** nueva entidad **Proyecto** (ficha
-  estructurada + 5 mecánicas clave con categoría) y renombre de la N—N de
-  Etiquetas a **Géneros** (catálogo fijo + personalizados); migración `6.sqm`
-  v6→v7 conservando los datos (etiquetas libres → Géneros personalizados).
+- **Esquema v7 (Géneros, 2026-10-16):** renombre de la N—N de Etiquetas a
+  **Géneros** (catálogo fijo + personalizados) con `6.sqm` v6→v7 conservando los
+  datos (etiquetas libres → Géneros personalizados, copiadas **verbatim**);
+  `note_tag`→`note_genre`; la canonización case-insensitive ocurre al **escribir**.
+- **Esquema v8 (Proyecto, previsto):** nueva entidad **Proyecto** (ficha
+  estructurada + 5 mecánicas clave con categoría) con `7.sqm` v7→v8.
 - `Owner` presente en el modelo aunque el MVP sea single-user.
 
 ## Integrations
@@ -1023,9 +1025,11 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0003-ios-congelado-mvp.m
 - **Miniaturas de imagen:** se extiende `AttachmentFileStore` con
   `read(relativePath): ByteArray?` y se decodifica con `decodeImageBitmap()`
   existente (sin deps nuevas).
-- **Esquema v7 (previsto):** entidad **Proyecto** (ficha + 5 mecánicas) y renombre
-  N—N a **Géneros** (catálogo fijo + personalizados), con `6.sqm` v6→v7 y migración
-  de etiquetas libres a Géneros personalizados.
+- **Esquema v7 (Géneros):** renombre N—N a **Géneros** (catálogo fijo +
+  personalizados) con `6.sqm` v6→v7, copiando las etiquetas libres a Géneros
+  personalizados (verbatim).
+- **Esquema v8 (Proyecto, previsto):** entidad **Proyecto** (ficha + 5 mecánicas)
+  con `7.sqm` v7→v8.
 - **Catálogo de Géneros:** constante de la app (Platformer, Metroidvania, JRPG,
   ActionRPG, Roguelike, Shooter, Puzzle, Adventure, Towerdefense, Novel, Farming,
   Arcade); los personalizados se guardan por Nota y no engordan el catálogo global.

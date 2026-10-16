@@ -5,7 +5,7 @@ import kotlin.test.Test
 
 class DatabaseMigrationAndroidTest {
     @Test
-    fun migratesV1ToV6AndMatchesCreate() {
+    fun migratesV1ToV7AndMatchesCreate() {
         val migrated = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         val fresh = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
