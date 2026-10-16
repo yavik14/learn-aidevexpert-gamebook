@@ -1047,12 +1047,29 @@
       "ai-runtime-decision",
       "ai-client-interface"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: tests del core de los contratos con adaptadores fake; sin red."
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; `AiPortsAndroidTest` 6/6 (fakeTranscribeSatisfiesContract, fakeTtsSatisfiesContract, fakeImageSatisfiesContract, fakeJevSatisfiesContract, constantTtsSatisfiesContract, fakesAreDeterministicAndOffline) + resto del core; 52/52, 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (el `:core` con los nuevos puertos compila en Android); `./init.sh` → exit 0 (gate Android-only, sin dev servers ni red).",
+      "iOS (no bloqueante): `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; `AiPortsIosTest` 6/6, 52/52 en total, 0 failures (iOS se conserva y compila).",
+      "`AiClient.kt`/`FakeAiClient.kt`/`AiAvailability.kt`/servicios, esquema (`Schema.version = 6`, sin `.sqm` nuevo), deps (`libs.versions.toml`/`core/build.gradle.kts`), `init.sh`, `:composeApp`/`iosApp` sin cambios (`git diff` vacío).",
+      "Controles negativos (restaurados byte-idénticos): fake de imagen no determinista → falla Scenario 6 (`fakesAreDeterministicAndOffline`); `FakeImageClient` con bytes/mime vacíos → falla Scenario 3 (`fakeImageSatisfiesContract`); `FakeTranscribeClient` devolviendo `\"\"` → falla Scenario 1 (`fakeTranscribeSatisfiesContract`).",
+      "E2E persistente: no aplica (sin consumidor ni flujo de usuario/API observable; no hay harness E2E y `init.sh` no levanta simuladores); cobertura = tests del core en Android/JVM e iOS + compilación de la app."
     ],
-    "evidence": [],
-    "notes": "Extiende `AiClient`/nuevos puertos; decisión en ADR 0004. Sin implementación real todavía."
+    "evidence": [
+      "2026-10-16: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL (16 tasks); Android/JVM 52 tests, 0 failures, con `AiPortsAndroidTest` 6/6 (nuevo) + AiClient 3/3 + NoteIndexing 1/1 + NoteIndexingOrchestrator 1/1 + PendingIndexingRetry 1/1 + RagQuery 6/6 + NoteRepository 4/4 + NotePersistence 2/2 + migraciones 3/3 + GDD 2/2 + RAG/linking 22/22 + diagnostics 2/2 + Greeting 1/1 (core/build/test-results/testDebugUnitTest/).",
+      "2026-10-16: `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 tasks); el `:core` con `AiPorts`/`FakeAiPorts` compila en Android.",
+      "2026-10-16: iOS (no bloqueante): `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; `AiPortsIosTest` 6/6, 52/52, 0 failures (core/build/test-results/iosSimulatorArm64Test/).",
+      "2026-10-16: `./init.sh` → exit 0 (assembleDebug + testDebugUnitTest), sin dev servers ni red; `git diff -- init.sh` vacío.",
+      "2026-10-16: alcance: `git diff` vacío para `AiClient.kt`, `FakeAiClient.kt`, `AiAvailability.kt`, `NoteIndexingService.kt`, `RagQueryService.kt`, `core/src/commonMain/sqldelight/**`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `composeApp/**`, `iosApp/**`, `init.sh`; `Schema.version = 6`; `find core/src -name '*.sqm'` → `1.sqm`–`5.sqm` (sin nuevo); sin deps nuevas.",
+      "2026-10-16: contrato `verifyTranscribeClientContract` (texto no vacío, determinista, tolera audio vacío), `verifyTtsClientContract`/`verifyImageClientContract` (bytes/mime no vacíos, determinismo; imágenes distintas por prompt) y `verifyJevClientContract` (track ∈ Track.entries ∪ {null}, genres no vacíos, determinista) + `verifyFakeAiPorts` (Scenario 6) corren contra los fakes y contra `ConstantTtsClient` (test-only) en Android/JVM e iOS; sustituibilidad sin tocar producción (Scenario 5).",
+      "2026-10-16: control negativo (a) `FakeImageClient.generateImage` con `Random.nextInt()` → `:core:testDebugUnitTest --tests ...AiPortsAndroidTest.fakesAreDeterministicAndOffline` FAILED (`AssertionError: FakeImageClient debe ser determinista`); restaurado (sha256 c31e098e…) y re-verificado en verde.",
+      "2026-10-16: control negativo (b) `FakeImageClient` devolviendo `GeneratedImage(ByteArray(0), \"\")` → `fakeImageSatisfiesContract` FAILED (`los bytes de la imagen no deben ser vacíos`); restaurado byte-idéntico y verde.",
+      "2026-10-16: control negativo (c) `FakeTranscribeClient` devolviendo `\"\"` → `fakeTranscribeSatisfiesContract` FAILED (`la transcripción no debe ser vacía`); restaurado byte-idéntico (sha256 c31e098e…) y `:core:testDebugUnitTest --rerun-tasks` verde 52/52.",
+      "2026-10-16: fakes en `commonMain` (sin `Random`, sin red, sin key); sin adaptadores reales, build flag, wiring/UI, cambios de esquema, deps ni `init.sh`. Docs durables actualizados: `ARCHITECTURE.md` (sección AI: puertos por modelo + fakes), `docs/technical-discovery.md` (nueva \"AI Ports Decisions (ai-client-ports)\"), `AGENTS.md` (sólo la línea de cola).",
+      "2026-10-16: validación independiente (accept), registro en docs/validations/ai-client-ports.md. El validador re-ejecutó `:core:testDebugUnitTest --rerun-tasks` (52 tests, 0 failures; AiPortsAndroidTest 6/6) e `:core:iosSimulatorArm64Test` (52, 0 failures), `:composeApp:assembleDebug` BUILD SUCCESSFUL y `./init.sh` exit 0; confirmó `AiClient.kt`/`FakeAiClient.kt`/`AiAvailability.kt`/servicios/esquema (v6)/deps/`init.sh` sin cambios (git diff vacío) y corrió controles negativos propios (FakeImageClient no determinista; FakeJevClient con genres vacío) reproducidos y restaurados byte-idénticos (hash c31e098e…4111f), re-verificados en verde."
+    ],
+    "notes": "Extiende `AiClient`/nuevos puertos; decisión en ADR 0004. `AiPorts.kt` (4 interfaces + `SynthesizedAudio`/`GeneratedImage`/`ClassificationSuggestion`), `FakeAiPorts.kt` (4 fakes deterministas y sin red) y tests de contrato (`AiPortsContract.kt` + runners Android/iOS) implementados (2026-10-16). Sin adaptadores reales ni build flag todavía (`ai-fake-real-switch` y las features de cada caso de uso)."
   },
   {
     "id": "ai-fake-real-switch",

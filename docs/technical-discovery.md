@@ -1050,3 +1050,36 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0004-ai-real-integration
 - **Sugerencia de clasificación (non-goal revisado):** la IA **sugiere** `Track`/
   `Género`; el usuario **confirma o edita**; **nunca** auto-asigna. El indexado
   sigue sin clasificar (`CONSTRAINTS.md`).
+
+## AI Ports Decisions (ai-client-ports)
+
+Implementado 2026-10-16. Contratos en `AiPorts.kt`; fakes en `FakeAiPorts.kt`.
+
+- **Mapeo modelo → puerto (ADR 0004):** `chat` → `AiClient.generate`; `embedding`
+  → `AiClient.embed` (ambos ya existentes, no se duplican); `transcribe` →
+  `TranscribeClient.transcribe(audio, mimeType): String`; `tts` →
+  `TtsClient.synthesize(text): SynthesizedAudio`; `image` →
+  `ImageClient.generateImage(prompt): GeneratedImage`; `jev` →
+  `JevClient.suggest(text): ClassificationSuggestion`.
+- **Puertos independientes, sin bundle:** los 4 puertos nuevos son `interface`
+  sueltas (sin agregado `AiRuntime`); la inyección conjunta y el build flag
+  fake/real son de `ai-fake-real-switch`.
+- **Tipos:** `SynthesizedAudio`/`GeneratedImage` son `class` (no `data class`)
+  porque contienen `ByteArray` (su `equals` sería por identidad); los tests
+  comparan `bytes`/`mimeType`. `ClassificationSuggestion` es `data class`
+  (`track: Track?`, `genres: List<String>`) y **sólo propone** —el usuario
+  confirma—; la canonización de Géneros contra el catálogo es del consumidor
+  (`genres-catalog-persistence`), el fake sólo devuelve un género ilustrativo.
+- **Fakes deterministas y sin red** (`commonMain`, inyectables): texto derivado
+  de tamaño+mime (`FakeTranscribeClient`, tolera `audio` vacío), audio = bytes
+  UTF-8 del texto (`FakeTtsClient`, `audio/mpeg`), PNG simbólico derivado del
+  prompt (`FakeImageClient`, `image/png`), `Track` por hash sobre `Track.entries`
+  + género ilustrativo (`FakeJevClient`). Sin `Random`, sin red ni key.
+- **Tests:** contratos `verify{Transcribe,Tts,Image,Jev}ClientContract` +
+  comportamiento de fakes (`verifyFakeAiPorts`, Scenario 6) y una implementación
+  test-only `ConstantTtsClient` que demuestra sustituibilidad sin tocar archivos
+  de producción; corren en Android/JVM (`AiPortsAndroidTest`, 6) e iOS
+  (`AiPortsIosTest`, 6).
+- **Sin cambios** en `AiClient`/`FakeAiClient`/`AiAvailability`/servicios,
+  esquema SQLDelight (v6, sin `.sqm` nuevo), dependencias ni `init.sh`. Los
+  adaptadores reales, el build flag y los casos de uso son features posteriores.
