@@ -282,6 +282,21 @@ composeApp (Android app / commonMain) ──▶ core
   puerto cuando se elija el runtime nativo; (3) `FakeAiClient` como default
   offline/determinista. `:core` no gana dependencias de IA: los adaptadores
   reales se inyectan desde afuera.
+- **Puertos por modelo (ADR 0004, `ai-client-ports`, 2026-10-16):** el core
+  expone un contrato por modelo de IA. `chat` y `embedding` siguen en `AiClient`
+  (`generate`/`embed`); los demás viven como interfaces independientes en
+  `AiPorts.kt`: `TranscribeClient.transcribe(audio, mimeType): String`,
+  `TtsClient.synthesize(text): SynthesizedAudio`,
+  `ImageClient.generateImage(prompt): GeneratedImage` y
+  `JevClient.suggest(text): ClassificationSuggestion` (`track: Track?`,
+  `genres: List<String>`; **sólo propone**, nunca auto-asigna). Tipos de salida
+  `SynthesizedAudio`/`GeneratedImage` (`bytes`+`mimeType`; `class`, no
+  `data class`, porque contienen `ByteArray`). Todos `suspend` y con fallos vía
+  `AiClientException`. Los fakes deterministas y sin red por defecto viven en
+  `FakeAiPorts.kt` (`FakeTranscribeClient`/`FakeTtsClient`/`FakeImageClient`/
+  `FakeJevClient`). Sin agregado/bundle `AiRuntime`: la inyección conjunta, los
+  adaptadores reales y el build flag son de `ai-fake-real-switch` y de las
+  features de cada caso de uso.
 - **Política de secrets (durable):** ninguna API key/token/secret se versiona ni
   se commitea; el adaptador cloud lee su credencial de configuración fuera del
   repo (p. ej. `local.properties` ignorado o variable de entorno de build). El

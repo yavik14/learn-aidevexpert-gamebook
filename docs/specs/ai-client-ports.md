@@ -267,15 +267,15 @@ No se esperan cambios en `AiClient.kt`, `FakeAiClient.kt`, `AiAvailability.kt`,
 
 ## Implementation Tasks
 
-- [ ] `AiPorts.kt`: `TranscribeClient`/`TtsClient`/`ImageClient`/
+- [x] `AiPorts.kt`: `TranscribeClient`/`TtsClient`/`ImageClient`/
       `JevClient` + `SynthesizedAudio`/`GeneratedImage`/
       `ClassificationSuggestion`.
-- [ ] `FakeAiPorts.kt`: los 4 fakes deterministas.
-- [ ] `AiPortsContract.kt`: contratos 1–4/6 + impl test-only (5).
-- [ ] Runners `AiPortsAndroidTest`/`AiPortsIosTest`.
-- [ ] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`; `AGENTS.md` (cola).
-- [ ] Correr verificación + controles negativos y registrar evidencia.
-- [ ] Actualizar `feature_list.json` y `PROGRESS.md`.
+- [x] `FakeAiPorts.kt`: los 4 fakes deterministas.
+- [x] `AiPortsContract.kt`: contratos 1–4/6 + impl test-only (5).
+- [x] Runners `AiPortsAndroidTest`/`AiPortsIosTest`.
+- [x] Actualizar `ARCHITECTURE.md` y `docs/technical-discovery.md`; `AGENTS.md` (cola).
+- [x] Correr verificación + controles negativos y registrar evidencia.
+- [x] Actualizar `feature_list.json` y `PROGRESS.md`.
 
 ## Verification Plan
 
