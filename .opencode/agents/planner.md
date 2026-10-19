@@ -10,6 +10,8 @@ permission:
     "*": deny
     "docs/specs/*": allow
     feature_list.json: allow
+    "worktree/*/docs/specs/*": allow
+    "worktree/*/feature_list.json": allow
   bash: deny
   skill:
     "*": deny

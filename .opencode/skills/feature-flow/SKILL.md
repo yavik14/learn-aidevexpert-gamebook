@@ -77,6 +77,8 @@ Send only dynamic handoff context:
 - validator repair brief when applicable,
 - expected output summary.
 
+If the repository path is a worktree under `worktree/<id>`, pass artifact paths relative to the project root (for example `worktree/<id>/docs/specs/<feature-id>.md`); the planner permission allows that pattern, while an absolute path may be rejected by the sandbox.
+
 Do not duplicate the subagent role prompts in this skill. The stable role instructions live in the configured subagent files.
 
 ## Orchestration Loop
