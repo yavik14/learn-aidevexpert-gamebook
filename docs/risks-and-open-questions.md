@@ -37,10 +37,19 @@
   (2026-10-13). Retrieval por similitud coseno real + `GenerateRequest(prompt,
   context)`; sin Notas indexadas devuelve `NoIndexedNotes` y **no** llama al
   runtime. Queda abierto el **runtime real** (hoy `FakeAiClient`) y la **calidad**.
-- **Miniaturas de imagen:** **decidido** el 2026-10-15: extender el puerto
-  `AttachmentFileStore` con `read(relativePath): ByteArray?` y decodificar con
-  `decodeImageBitmap()` existente (sin deps nuevas). El cacheo de miniaturas
-  redimensionadas queda diferido.
+- **Miniaturas de imagen:** **implementadas** en `sketch-thumbnails`
+  (2026-10-19). El puerto `AttachmentFileStore` se **reubicó en `:core`**
+  (`com.playbook.core.storage`) y se extendió con
+  `read(relativePath): ByteArray?`; la UI decodifica con `decodeImageBitmap()`
+  existente (sin deps nuevas). El render es perezoso (`produceState`) y degrada
+  sin imagen si el archivo falta/no decodifica. **Sigue abierto** el
+  cacheo/redimensionado de miniaturas (memoria o disco): hoy se decodifica a
+  tamaño completo y se escala en pantalla, con picos de memoria posibles en
+  bocetos grandes.
+  - **Riesgo residual aceptado (iOS):** el guard de path traversal es léxico
+    (normaliza `.`/`..` y separadores) y no resuelve symlinks. Se acepta porque
+    las rutas las genera la propia app (UUID), el usuario es único y no hay
+    entrada externa de paths; no se cambia el contrato de `read`/`delete`.
 - **Migración de Etiquetas → Géneros:** **resuelto** en
   `genres-catalog-persistence` (2026-10-16): las etiquetas libres existentes se
   copian **verbatim** como **Géneros personalizados** de cada Nota mediante el

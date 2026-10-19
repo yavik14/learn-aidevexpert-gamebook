@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,9 @@ import kotlinx.coroutines.launch
  * - Cada nota resume el cuerpo (máx. 2 líneas) y muestra chips textuales de
  *   `status`, Géneros y "Imagen" (si tiene adjuntos). Toda la información se
  *   comunica con texto, no sólo color (`DESIGN.md`).
+ * - Si la Nota tiene un Adjunto `IMAGE`, la tarjeta suma su **miniatura**
+ *   ([imagePaths] + [loadThumbnail]); si el archivo falta o no decodifica, no
+ *   emite imagen y el resto de la tarjeta no cambia.
  * - Tocar una nota emite `onOpenNote(note.id)`: `App` la abre en el editor.
  *
  * "Compartir" construye el Markdown con [buildGddMarkdown] (timestamp de
@@ -62,6 +66,8 @@ import kotlinx.coroutines.launch
 fun GddScreen(
     notes: List<Note>,
     attachmentCounts: Map<String, Int>,
+    imagePaths: Map<String, String>,
+    loadThumbnail: suspend (String) -> ImageBitmap?,
     onOpenNote: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -134,6 +140,8 @@ fun GddScreen(
                                 GddNoteCard(
                                     note = note,
                                     hasAttachment = (attachmentCounts[note.id] ?: 0) > 0,
+                                    imagePath = imagePaths[note.id],
+                                    loadThumbnail = loadThumbnail,
                                     onClick = { onOpenNote(note.id) },
                                 )
                             }
@@ -179,13 +187,22 @@ private fun SectionHeader(section: GddSection) {
 }
 
 @Composable
-private fun GddNoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit) {
+private fun GddNoteCard(
+    note: Note,
+    hasAttachment: Boolean,
+    imagePath: String?,
+    loadThumbnail: suspend (String) -> ImageBitmap?,
+    onClick: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClickLabel = "Abrir nota", role = Role.Button, onClick = onClick),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            if (imagePath != null) {
+                NoteThumbnail(path = imagePath, loadThumbnail = loadThumbnail)
+            }
             Text(
                 text = note.body.ifBlank { "Imagen adjunta" },
                 style = MaterialTheme.typography.bodyLarge,

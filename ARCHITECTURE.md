@@ -260,13 +260,21 @@ composeApp (Android app / commonMain) ──▶ core
 
 ## Attachments y captura nativa
 
-- **Contrato común** (`composeApp/src/commonMain/.../ImageCapture.kt`):
+- **Contrato de captura** (`composeApp/src/commonMain/.../ImageCapture.kt`):
   `ImageSource` (`CAMERA`/`GALLERY`), `PickedImage` (bytes + mimeType, en
   memoria), `ImageCaptureError` (`PERMISSION_DENIED`, `CAMERA_UNAVAILABLE`,
-  `READ_FAILED`, `UNKNOWN`), `ImagePicker` + `rememberImagePicker(...)`,
-  `StoredImage`/`AttachmentFileStore` + `rememberAttachmentFileStore()`, y
-  `decodeImageBitmap(bytes)`. Son `expect`; las implementaciones viven en
-  `androidMain`/`iosMain`.
+  `READ_FAILED`, `UNKNOWN`), `ImagePicker` + `rememberImagePicker(...)` y
+  `decodeImageBitmap(bytes)` (`expect`; actuals Android/iOS).
+  `rememberAttachmentFileStore()` sigue siendo `expect` en `:composeApp`, pero
+  sólo calcula el `baseDir` de la plataforma y delega en el store de `:core`.
+- **Store de Adjuntos en `:core`** (`com.playbook.core.storage`):
+  `StoredImage(relativePath, byteSize)`, `AttachmentFileStore`
+  (`saveImage`/`read`/`delete`) + `expect fun attachmentFileStore(baseDir)`.
+  `read(relativePath)` devuelve los bytes **exactos** o `null` si el archivo no
+  existe/no se puede leer; `read`/`delete` normalizan/canonicalizan la ruta y
+  devuelven `null`/`false` si escapa de `baseDir` (guard de path traversal).
+  Vive en `:core` para poder testear el IO cross-platform (precedente:
+  `DiagnosticStorage`), sin que la UI dependa de APIs de plataforma.
 - **Regla durable:** los bytes de imagen **nunca** se guardan en la base; se
   escribe el archivo en almacenamiento privado y la fila `attachment` guarda la
   **ruta relativa** (`images/<uuid>.jpg`). En iOS la ruta absoluta del sandbox
@@ -277,8 +285,9 @@ composeApp (Android app / commonMain) ──▶ core
   `ActivityResultContracts.TakePicture` porque no agrega los flags de grant de
   URI y la app de cámara falla al escribir el output; el intent se arma con
   `FLAG_GRANT_READ/WRITE_URI_PERMISSION` + `clipData`. Galería con
-  `PickVisualMedia` (sin permiso). `AndroidAttachmentFileStore` usa
-  `filesDir/images/`; `decodeImageBitmap` usa `BitmapFactory`.
+  `PickVisualMedia` (sin permiso). El `actual` Android del store de `:core`
+  (`java.io.File`) usa `filesDir/images/`; `decodeImageBitmap` usa
+  `BitmapFactory`.
   `AndroidManifest.xml` declara `CAMERA`, `uses-feature camera required=false` y
   el `<provider>` `FileProvider` (`${applicationId}.fileprovider` +
   `res/xml/file_paths.xml`).
@@ -286,9 +295,10 @@ composeApp (Android app / commonMain) ──▶ core
   `UIImagePickerController` presentado desde el controller superior; si el
   simulador no expone cámara → `CAMERA_UNAVAILABLE`. Galería con
   `PHPickerViewController` (sin permiso). La imagen se re-encodea a JPEG
-  (`UIImageJPEGRepresentation`, calidad 0.9). `IosAttachmentFileStore` usa
-  `Application Support/images/`; `decodeImageBitmap` usa
-  `org.jetbrains.skia.Image`. `Info.plist` incluye `NSCameraUsageDescription`.
+  (`UIImageJPEGRepresentation`, calidad 0.9). El `actual` iOS del store de
+  `:core` (`NSFileManager`/`NSData`) usa `Application Support/images/`;
+  `decodeImageBitmap` usa `org.jetbrains.skia.Image`. `Info.plist` incluye
+  `NSCameraUsageDescription`.
   Los delegates de UIKit son weak: se retienen en un holder para no liberarlos
   mientras el picker está presentado.
 - **Ciclo de vida del archivo:** al guardar se escribe el archivo **antes** de
@@ -608,8 +618,24 @@ composeApp (Android app / commonMain) ──▶ core
   "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
   (o "Sin track") y un `StatusBadge` con la etiqueta legible del `status`, y —si
   `note.genres` no está vacía— una fila de
-  chips de Género (`GenreLabelChip`, en `Row` con `horizontalScroll`). Todo se
+  chips de Género (`GenreLabelChip`, en `Row` con `horizontalScroll`). Si la
+  Nota tiene un Adjunto `IMAGE`, la tarjeta suma su **miniatura**
+  (`NoteThumbnail`) arriba del cuerpo; el resto de la tarjeta no cambia. Todo se
   comunica con texto, no sólo color (`DESIGN.md`).
+- **Miniaturas de bocetos (`sketch-thumbnails`):** `App` deriva
+  `imagePaths: Map<noteId, relativePath>` sólo de Adjuntos `IMAGE` (el primero
+  por Nota en el orden determinista `created_at ASC, id ASC` de
+  `AttachmentRepository.getAll()`) y `loadThumbnail: suspend (String) ->
+  ImageBitmap? = { path -> fileStore.read(path)?.let(::decodeImageBitmap) }`.
+  Ambos se pasan **además** de `attachmentKinds`/`attachmentCounts`;
+  `NotesListScreen` y `GddScreen` los reenvían a sus tarjetas. `NoteThumbnail`
+  carga con `produceState` (sólo al componerse, es decir, al ser visible) y
+  decodifica en `Dispatchers.Default`; muestra `Image` de 72 dp con recorte
+  `rounded` de 16 dp (`rounded.md` de `DESIGN.md`) y `ContentScale.Crop`. El
+  espaciado inferior vive dentro de `NoteThumbnail`; si el archivo falta o no
+  decodifica, no emite `Image` ni espaciado (sin hueco ni placeholder) y se
+  conservan cuerpo/chips. Sin
+  `ViewModel`/Flow/DI/ImageLoader, sin cacheo ni redimensionado (diferidos).
 - **`BrainstormingWizardScreen`** (`brainstorming-wizard`): wizard de 9 pasos
   (Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones, Fantasía,
   Mecánicas clave, Fuera de alcance) para crear/iterar la ficha del Proyecto.
@@ -755,7 +781,9 @@ composeApp (Android app / commonMain) ──▶ core
   "Sin notas en este track" cuando está vacía; y las notas en un `LazyColumn`
   (`key = { it.id }`). Cada nota resume el `body` (máx. 2 líneas, ellipsis) y
   muestra chips textuales de `status`, Géneros (si tiene) y "Imagen" (si tiene
-  adjuntos). Todo se comunica con texto, no sólo color (`DESIGN.md`).
+  adjuntos); si tiene un Adjunto `IMAGE`, suma la **miniatura** (`NoteThumbnail`,
+  misma degradación tolerante que la lista) sin alterar los chips. Todo se
+  comunica con texto, no sólo color (`DESIGN.md`).
 - **Estado vacío:** si `notes.isEmpty()`, mensaje explícito "Todavía no hay notas"
   (con "0 notas" en el encabezado) sin secciones ni errores.
 - **Navegación (sin librería):** `NotesListScreen` "Ver GDD" →
@@ -763,9 +791,10 @@ composeApp (Android app / commonMain) ──▶ core
   editor que desde la lista); "Volver" desde el GDD → `List`. **Limitación
   aceptada:** al guardar/cancelar en el editor se vuelve a la lista, no al GDD (un
   `previousDestination` llegará con una feature de navegación/detalle).
-- **Refresco:** `GddScreen` recibe `notes`/`attachmentCounts` ya hoisteados por
-  `App` (recargados por `refreshKey`); no lee la base dentro del cuerpo de
-  composición. No hay DI/`ViewModel`/Flow ni esquema/dependencias nuevos.
+- **Refresco:** `GddScreen` recibe `notes`/`attachmentCounts`/`imagePaths` y
+  `loadThumbnail` ya hoisteados por `App` (recargados por `refreshKey`); no lee la
+  base dentro del cuerpo de composición. No hay DI/`ViewModel`/Flow ni
+  esquema/dependencias nuevos.
 - **Export a Markdown (`gdd-export`, proyección pura en `:core`):**
   `com.playbook.core.gdd.buildGddMarkdown(notes, now): String` reusa `buildGdd`
   para agrupar/ordenar y **omite** las secciones vacías. Documento determinista:

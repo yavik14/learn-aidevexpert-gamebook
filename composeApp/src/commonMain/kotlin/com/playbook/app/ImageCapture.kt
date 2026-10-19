@@ -2,6 +2,7 @@ package com.playbook.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
+import com.playbook.core.storage.AttachmentFileStore
 
 /** Fuente de la imagen a capturar. */
 enum class ImageSource { CAMERA, GALLERY }
@@ -35,20 +36,11 @@ expect fun rememberImagePicker(
     onError: (ImageCaptureError) -> Unit,
 ): ImagePicker
 
-/** Imagen persistida en almacenamiento privado: ruta relativa + tamaño. */
-data class StoredImage(val relativePath: String, val byteSize: Long)
-
 /**
- * Guarda/borra los archivos de adjuntos en el almacenamiento privado de la app.
- * La ruta devuelta es relativa al contenedor para sobrevivir reinstalaciones en
- * iOS (donde el path absoluto cambia).
+ * Crea el [AttachmentFileStore] de `:core` anclado al contenedor privado de la
+ * app (calcula el `baseDir` de la plataforma). El store vive en `:core` para
+ * poder leer archivos (`read`) de forma testeable cross-platform.
  */
-interface AttachmentFileStore {
-    fun saveImage(bytes: ByteArray, mimeType: String): StoredImage
-    fun delete(relativePath: String): Boolean
-}
-
-/** Crea un [AttachmentFileStore] para el contenedor de la app. */
 @Composable
 expect fun rememberAttachmentFileStore(): AttachmentFileStore
 

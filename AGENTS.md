@@ -37,11 +37,12 @@ OpenAI-compatible) quedaron implementadas y aceptadas (validación independiente
 `docs/specs/brainstorming-wizard.md`; validación independiente `accept` en
 `docs/validations/brainstorming-wizard.md`). `inline-dictation-30s` también quedó
 `accepted` (spec `docs/specs/inline-dictation-30s.md`; validación independiente
-`accept` en `docs/validations/inline-dictation-30s.md`) y `ai-real-embeddings`
-quedó `accepted`. La creación de Notas por paso sigue en
-`brainstorming-note-per-step` (`not_started`, sin spec). La siguiente ready con
-spec es `sketch-thumbnails` (worktree ya en curso por otra sesión); luego las
-demás `not_started` de la Ola 2. Para iOS: el upload firmado
+`accept` en `docs/validations/inline-dictation-30s.md`), `ai-real-embeddings`
+quedó `accepted` y `sketch-thumbnails` quedó `accepted` (spec
+`docs/specs/sketch-thumbnails.md`; validación independiente `accept`). La creación
+de Notas por paso sigue en `brainstorming-note-per-step` (`not_started`, sin spec).
+La siguiente ready con spec es `gdd-document-hybrid`; luego las demás
+`not_started` de la Ola 3. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero

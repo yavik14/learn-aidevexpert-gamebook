@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,11 +42,17 @@ import com.playbook.core.model.Note
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
  * regla de accesibilidad de `DESIGN.md`; las notas con adjuntos muestran chips
  * textuales por tipo ("Imagen" y/o "Audio").
+ *
+ * [imagePaths] mapea `noteId` → ruta relativa del primer Adjunto `IMAGE` y
+ * [loadThumbnail] decodifica la miniatura; la tarjeta la muestra sólo cuando hay
+ * ruta y la carga degrada a nada si el archivo falta o no decodifica.
  */
 @Composable
 fun NotesListScreen(
     notes: List<Note>,
     attachmentKinds: Map<String, Set<AttachmentKind>>,
+    imagePaths: Map<String, String>,
+    loadThumbnail: suspend (String) -> ImageBitmap?,
     onCreate: () -> Unit,
     onCaptureImage: () -> Unit,
     onEdit: (String) -> Unit,
@@ -122,6 +129,8 @@ fun NotesListScreen(
                         NoteCard(
                             note = note,
                             attachmentKinds = attachmentKinds[note.id].orEmpty(),
+                            imagePath = imagePaths[note.id],
+                            loadThumbnail = loadThumbnail,
                             onClick = { onEdit(note.id) },
                         )
                     }
@@ -167,6 +176,8 @@ private fun EmptyNotes(
 private fun NoteCard(
     note: Note,
     attachmentKinds: Set<AttachmentKind>,
+    imagePath: String?,
+    loadThumbnail: suspend (String) -> ImageBitmap?,
     onClick: () -> Unit,
 ) {
     Card(
@@ -175,6 +186,9 @@ private fun NoteCard(
             .clickable(onClickLabel = "Editar nota", role = Role.Button, onClick = onClick),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            if (imagePath != null) {
+                NoteThumbnail(path = imagePath, loadThumbnail = loadThumbnail)
+            }
             Text(
                 text = note.body.ifBlank { placeholderFor(attachmentKinds) },
                 style = MaterialTheme.typography.bodyLarge,
