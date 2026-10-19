@@ -27,13 +27,14 @@ internal object EmptySqlSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Scenario 7 de la spec: migración v1 → v7 y bootstrap en ambos caminos.
+ * Scenario 11 de la spec: migración v1 → v8 y bootstrap en ambos caminos.
  *
  * [migratedDriver] debe ser una base **vacía** (sin esquema) sobre la que se
- * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v7 creado desde
+ * aplica el v1 a mano; [freshDriver] debe tener ya el esquema v8 creado desde
  * cero (`Schema.create` en JVM o `inMemoryDriver(Schema)` en iOS). El esquema
- * final (columnas de `note`/`embedding`/`note_link`/`note_genre`, foreign keys y
- * la ausencia de `note_tag`) debe coincidir entre ambos caminos.
+ * final (columnas de `note`/`embedding`/`note_link`/`note_genre` y de las tablas
+ * del Proyecto, foreign keys y ausencia de `note_tag`) debe coincidir entre ambos
+ * caminos.
  */
 fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
     // Esquema v1 aplicado a mano + una fila legacy.
@@ -49,9 +50,9 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         updated_at = 1_700_000_000_000L,
     )
 
-    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 7L)
+    PlaybookDatabase.Schema.migrate(migratedDriver, oldVersion = 1L, newVersion = 8L)
 
-    assertEquals(7L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 7")
+    assertEquals(8L, PlaybookDatabase.Schema.version, "PlaybookDatabase.Schema.version debe ser 8")
 
     // La fila v1 sobrevive a la migración.
     val legacy = migratedDatabase.noteQueries.selectNoteById("legacy-1").executeAsOneOrNull()
@@ -72,7 +73,7 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "la tabla embedding debe existir y aceptar filas tras migrar",
     )
 
-    // La tabla `note_link` (nueva en v5) existe y es usable (FK exige 2 notas).
+    // La tabla `note_link` (v5) existe y es usable (FK exige 2 notas).
     migratedDatabase.noteQueries.insertNote(
         id = "legacy-2",
         owner = "owner-1",
@@ -107,7 +108,19 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         "note_tag debe eliminarse al migrar a v7",
     )
 
-    // Bootstrap desde cero produce el mismo esquema final (v7).
+    // Las tablas del Proyecto (v8) existen y arrancan vacías.
+    assertEquals(
+        0L,
+        migratedDatabase.gameProjectQueries.countGameProjects().executeAsOne(),
+        "la migración no crea un Proyecto",
+    )
+    assertEquals(1L, tableCount(migratedDriver, "game_project"))
+    assertEquals(1L, tableCount(migratedDriver, "game_project_genre"))
+    assertEquals(1L, tableCount(migratedDriver, "game_project_inspiration"))
+    assertEquals(1L, tableCount(migratedDriver, "game_project_key_mechanic"))
+    assertEquals(1L, tableCount(migratedDriver, "game_project_out_of_scope"))
+
+    // Bootstrap desde cero produce el mismo esquema final (v8).
     assertEquals(
         noteColumns(migratedDriver),
         noteColumns(freshDriver),
@@ -137,6 +150,51 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         noteLinkForeignKeys(migratedDriver),
         noteLinkForeignKeys(freshDriver),
         "las foreign keys de note_link deben coincidir entre migración y Schema.create",
+    )
+    assertEquals(
+        gameProjectColumns(migratedDriver),
+        gameProjectColumns(freshDriver),
+        "las columnas de game_project deben coincidir entre migración y Schema.create",
+    )
+    assertEquals(
+        gameProjectGenreColumns(migratedDriver),
+        gameProjectGenreColumns(freshDriver),
+        "las columnas de game_project_genre deben coincidir",
+    )
+    assertEquals(
+        gameProjectInspirationColumns(migratedDriver),
+        gameProjectInspirationColumns(freshDriver),
+        "las columnas de game_project_inspiration deben coincidir",
+    )
+    assertEquals(
+        gameProjectKeyMechanicColumns(migratedDriver),
+        gameProjectKeyMechanicColumns(freshDriver),
+        "las columnas de game_project_key_mechanic deben coincidir",
+    )
+    assertEquals(
+        gameProjectOutOfScopeColumns(migratedDriver),
+        gameProjectOutOfScopeColumns(freshDriver),
+        "las columnas de game_project_out_of_scope deben coincidir",
+    )
+    assertEquals(
+        gameProjectGenreForeignKeys(migratedDriver),
+        gameProjectGenreForeignKeys(freshDriver),
+        "las FKs de game_project_genre deben coincidir",
+    )
+    assertEquals(
+        gameProjectInspirationForeignKeys(migratedDriver),
+        gameProjectInspirationForeignKeys(freshDriver),
+        "las FKs de game_project_inspiration deben coincidir",
+    )
+    assertEquals(
+        gameProjectKeyMechanicForeignKeys(migratedDriver),
+        gameProjectKeyMechanicForeignKeys(freshDriver),
+        "las FKs de game_project_key_mechanic deben coincidir",
+    )
+    assertEquals(
+        gameProjectOutOfScopeForeignKeys(migratedDriver),
+        gameProjectOutOfScopeForeignKeys(freshDriver),
+        "las FKs de game_project_out_of_scope deben coincidir",
     )
 
     // Esquema de `note`: la columna v6 `index_attempts` está presente con default 0.
@@ -198,6 +256,84 @@ fun verifyDatabaseMigration(migratedDriver: SqlDriver, freshDriver: SqlDriver) {
         noteLinkForeignKeys(migratedDriver).map { listOf(it[3], it[2], it[4], it[6]) }.toSet(),
         "note_link debe referenciar note(id) ON DELETE CASCADE por ambos lados",
     )
+
+    // Esquema de `game_project`: singleton con id fijo y campos opcionales.
+    val projectColumns = gameProjectColumns(migratedDriver)
+    assertEquals(
+        listOf(
+            "id", "owner", "title", "core_loop", "audience", "concept", "fantasy",
+            "created_at", "updated_at",
+        ),
+        projectColumns.map { it[1] },
+        "orden y nombres de columnas de game_project",
+    )
+    val projectByName = projectColumns.associateBy { it[1] }
+    assertEquals("TEXT", projectByName.getValue("id")[2], "id debe ser TEXT")
+    assertEquals("1", projectByName.getValue("id")[5], "id es PRIMARY KEY")
+    assertEquals("TEXT", projectByName.getValue("owner")[2], "owner debe ser TEXT")
+    assertEquals("1", projectByName.getValue("owner")[3], "owner debe ser NOT NULL")
+    assertEquals("0", projectByName.getValue("title")[3], "title debe ser nullable")
+    assertEquals("INTEGER", projectByName.getValue("created_at")[2], "created_at INTEGER")
+    assertEquals("1", projectByName.getValue("created_at")[3], "created_at NOT NULL")
+    assertEquals("INTEGER", projectByName.getValue("updated_at")[2], "updated_at INTEGER")
+    assertEquals("1", projectByName.getValue("updated_at")[3], "updated_at NOT NULL")
+
+    // Esquema de las hijas: PKs compuestas y FK cascade a game_project(id).
+    assertEquals(
+        listOf("project_id", "genre"),
+        gameProjectGenreColumns(migratedDriver).map { it[1] },
+        "orden y nombres de columnas de game_project_genre",
+    )
+    assertEquals(
+        listOf("project_id", "position", "value"),
+        gameProjectInspirationColumns(migratedDriver).map { it[1] },
+        "orden y nombres de columnas de game_project_inspiration",
+    )
+    assertEquals(
+        listOf("project_id", "position", "category", "description"),
+        gameProjectKeyMechanicColumns(migratedDriver).map { it[1] },
+        "orden y nombres de columnas de game_project_key_mechanic",
+    )
+    assertEquals(
+        listOf("project_id", "position", "value"),
+        gameProjectOutOfScopeColumns(migratedDriver).map { it[1] },
+        "orden y nombres de columnas de game_project_out_of_scope",
+    )
+
+    val genreProjectColumns = gameProjectGenreColumns(migratedDriver).associateBy { it[1] }
+    assertEquals("1", genreProjectColumns.getValue("project_id")[5])
+    assertEquals("2", genreProjectColumns.getValue("genre")[5])
+    val inspirationProjectColumns = gameProjectInspirationColumns(migratedDriver).associateBy { it[1] }
+    assertEquals("1", inspirationProjectColumns.getValue("project_id")[5])
+    assertEquals("2", inspirationProjectColumns.getValue("position")[5])
+    val mechanicProjectColumns = gameProjectKeyMechanicColumns(migratedDriver).associateBy { it[1] }
+    assertEquals("1", mechanicProjectColumns.getValue("project_id")[5])
+    assertEquals("2", mechanicProjectColumns.getValue("position")[5])
+    val outOfScopeProjectColumns = gameProjectOutOfScopeColumns(migratedDriver).associateBy { it[1] }
+    assertEquals("1", outOfScopeProjectColumns.getValue("project_id")[5])
+    assertEquals("2", outOfScopeProjectColumns.getValue("position")[5])
+
+    val expectedProjectFk = setOf(listOf("project_id", "game_project", "id", "CASCADE"))
+    assertEquals(
+        expectedProjectFk,
+        gameProjectGenreForeignKeys(migratedDriver).map { listOf(it[3], it[2], it[4], it[6]) }.toSet(),
+        "game_project_genre debe referenciar game_project(id) ON DELETE CASCADE",
+    )
+    assertEquals(
+        expectedProjectFk,
+        gameProjectInspirationForeignKeys(migratedDriver).map { listOf(it[3], it[2], it[4], it[6]) }.toSet(),
+        "game_project_inspiration debe referenciar game_project(id) ON DELETE CASCADE",
+    )
+    assertEquals(
+        expectedProjectFk,
+        gameProjectKeyMechanicForeignKeys(migratedDriver).map { listOf(it[3], it[2], it[4], it[6]) }.toSet(),
+        "game_project_key_mechanic debe referenciar game_project(id) ON DELETE CASCADE",
+    )
+    assertEquals(
+        expectedProjectFk,
+        gameProjectOutOfScopeForeignKeys(migratedDriver).map { listOf(it[3], it[2], it[4], it[6]) }.toSet(),
+        "game_project_out_of_scope debe referenciar game_project(id) ON DELETE CASCADE",
+    )
 }
 
 private fun noteColumns(driver: SqlDriver): List<List<String?>> =
@@ -227,6 +363,33 @@ private fun noteLinkColumns(driver: SqlDriver): List<List<String?>> =
 
 private fun noteLinkForeignKeys(driver: SqlDriver): List<List<String?>> =
     pragmaRows(driver, "PRAGMA foreign_key_list(note_link)", columnCount = 8)
+
+private fun gameProjectColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(game_project)", columnCount = 6)
+
+private fun gameProjectGenreColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(game_project_genre)", columnCount = 6)
+
+private fun gameProjectInspirationColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(game_project_inspiration)", columnCount = 6)
+
+private fun gameProjectKeyMechanicColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(game_project_key_mechanic)", columnCount = 6)
+
+private fun gameProjectOutOfScopeColumns(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA table_info(game_project_out_of_scope)", columnCount = 6)
+
+private fun gameProjectGenreForeignKeys(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA foreign_key_list(game_project_genre)", columnCount = 8)
+
+private fun gameProjectInspirationForeignKeys(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA foreign_key_list(game_project_inspiration)", columnCount = 8)
+
+private fun gameProjectKeyMechanicForeignKeys(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA foreign_key_list(game_project_key_mechanic)", columnCount = 8)
+
+private fun gameProjectOutOfScopeForeignKeys(driver: SqlDriver): List<List<String?>> =
+    pragmaRows(driver, "PRAGMA foreign_key_list(game_project_out_of_scope)", columnCount = 8)
 
 private fun pragmaRows(driver: SqlDriver, sql: String, columnCount: Int): List<List<String?>> =
     driver.executeQuery(

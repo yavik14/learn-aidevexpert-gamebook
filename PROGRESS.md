@@ -31,10 +31,11 @@
 - `app-icon-configuration` `accepted` (2026-10-16; validación independiente `accept` en `docs/validations/app-icon-configuration.md`): icono de launcher Android desde `docs/design/icon.png` (**RGB sin alfa**, fondo `#F7EFE2`) — adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` = `@color/ic_launcher_background` + `@drawable/ic_launcher_foreground`) + PNG legacy por densidad (48/72/96/144/192) y `android:icon`/`android:roundIcon` en el manifest. Generado con `sips` (sin deps); foreground en `drawable-nodpi` (432 px, safe zone ~66 %), sin costura. Sin cambios en `:core`/`iosApp`/`init.sh`/build files/Kotlin/esquema. Ver `docs/technical-discovery.md`.
 - `ai-client-ports` `accepted` (2026-10-16; Session 049; validación independiente `accept` en `docs/validations/ai-client-ports.md`): puertos de IA `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + fakes deterministas en `:core`; chat/embedding siguen en `AiClient`; sin adaptadores reales ni build flag (feature posterior). Ver `docs/technical-discovery.md`.
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
+- `game-project-persistence` `passing` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, pendiente persistir `accepted` por la sesión integradora): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
-- Current next ready features: `genres-catalog-ui` (picker de chips), `game-project-persistence` (v8) y `ai-fake-real-switch`. Ver `feature_list.json`.
+- Current next ready features: `genres-catalog-ui` (picker de chips) y `ai-fake-real-switch`; `game-project-persistence` queda `passing` con validación independiente `accept` (la sesión integradora persiste `accepted`). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
-- Last verified at: 2026-10-16.
+- Last verified at: 2026-10-19.
 
 ## Session Log
 
@@ -1065,3 +1066,46 @@
 - Files or artifacts updated: `docs/mvp-execution-plan.md` (nuevo), `feature_list.json`, `AGENTS.md`, `PROGRESS.md`.
 - Known risk or unresolved issue: la ejecución paralela introduce conflictos esperables en `feature_list.json`/`PROGRESS.md` y en los hotspots de UI; se mitiga con el orden de merge y la cola única.
 - Next best step: crear los worktrees de la Ola 1 y abrir una sesión por feature para correr sólo el rol `planner`: `game-project-persistence`, `genres-catalog-ui` y `ai-fake-real-switch`.
+
+### Session 052
+
+- Date: 2026-10-19
+- Goal: implementar `game-project-persistence` (spec `docs/specs/game-project-persistence.md`): dominio + persistencia del Proyecto de Juego singleton (esquema v8).
+- Completed:
+  - Dominio (`:core`): `GameProject.kt` con `GAME_PROJECT_SINGLETON_ID`, `GameProject`, `GameProjectDraft`, `KeyMechanic`, `MechanicCategory` (`movimiento`/`interacción`/`conflicto`, `fromCode` fail-fast) y helpers `normalizeProjectText`/`normalizeProjectList`/`normalizeKeyMechanics` (trim, descarte de vacíos, límites 3/3/5 después de normalizar); `GameProjectMappers.kt` (`Game_project` → dominio).
+  - Persistencia: `GameProject.sq` (tabla `game_project` con `CHECK (id = 'singleton')` + 4 tablas hijas con FK cascade y PKs compuestas/CHECK de posición) y `7.sqm` (v7→v8 aditivo, DDL espejado); `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, un owner distinto falla, reemplaza las hijas en la transacción).
+  - Tests: `GameProjectCheck.verifyGameProject` (escenarios 1–9) + runners `GameProjectAndroidTest`/`GameProjectIosTest`; `MigrationCheck` a v1→v8 + `verifyMigrationV7ToV8`; `DatabaseMigrationCheck` a v8 con columnas/PKs/FKs de las tablas del Proyecto; `GenreCheck` y runners renombrados/actualizados.
+  - Docs durables: `ARCHITECTURE.md` (v8, tablas del Proyecto, dominio/repositorio), `docs/technical-discovery.md` (v8 implementado, dos menciones), `docs/risks-and-open-questions.md` (pregunta v8 cerrada), `AGENTS.md` (sólo la línea de cola), `feature_list.json` `in_progress` → `passing`.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM **55 tests, 0 failures** (GameProjectAndroidTest 1/1, MigrationAndroidTest 4/4, DatabaseMigrationAndroidTest 1/1, NoteRepositoryAndroidTest 4/4, etc.).
+  - `CI=true ./init.sh` → exit 0 (Android-only, sin dev servers ni red); `:composeApp:assembleDebug` BUILD SUCCESSFUL.
+  - `PlaybookDatabase.Schema.version` = 8; `find core/src -name '*.sqm'` = `1.sqm`..`7.sqm` (sólo `7.sqm` nuevo); `1.sqm`..`6.sqm` sin cambios.
+  - iOS (no bloqueante): `:core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; 55/55, 0 failures (GameProjectIosTest 1/1, MigrationIosTest 4/4); `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.
+  - Controles negativos reproducidos y restaurados byte-idénticos (hashes `7.sqm` `006d68bc…`, `SqlDelightGameProjectRepository.kt` `06ab3322…`, `GameProject.kt` `efb29c94…`): (a) `7.sqm` sin `game_project_inspiration` → falla `migratesV7ToV8AddingProjectTables`; (b) `save` sin borrar inspiraciones previas → `projectRoundTrip` falla con `SQLiteException` (PK); (c) sin `require(size <= max)` → `projectRoundTrip` falla (el CHECK de SQLite atrapa la posición fuera del límite).
+  - Paths protegidos: `git diff` vacío para `composeApp/**`, `iosApp/**`, `init.sh`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `Note.sq`, `Genre.sq`, `1.sqm`..`6.sqm`.
+- Evidence captured: arreglo `evidence` de `game-project-persistence` en `feature_list.json` (9 líneas); salida de tests/build en `core/build/test-results/`.
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/model/{GameProject.kt (nuevo), GameProjectMappers.kt (nuevo)}`, `core/src/commonMain/kotlin/com/playbook/core/repository/{GameProjectRepository.kt (nuevo), SqlDelightGameProjectRepository.kt (nuevo)}`, `core/src/commonMain/sqldelight/com/playbook/core/db/{GameProject.sq (nuevo), 7.sqm (nuevo)}`, `core/src/{commonTest,androidUnitTest,iosTest}/**`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la lectura fail-fast de una categoría desconocida sólo se cubre insertando directo en la base (camino de corrupción, no de escritura normal). El estado `vacío`/`esbozado` no se persiste (se deriva aguas abajo) y no hay FK Nota→Proyecto. Sin emulador Android disponible (`adb` ausente), no se ejecutó smoke real de la migración v7→v8 sobre `playbook.db`; se cubre con tests del core sobre el esquema real. La feature queda `passing` hasta la validación independiente.
+- Next best step: validación independiente de `game-project-persistence` con `$feature-validator`; tras el `accept`, continuar con `genres-catalog-ui` (picker de chips) o `ai-fake-real-switch`.
+
+### Session 053
+
+- Date: 2026-10-19
+- Goal: validación independiente de `game-project-persistence` y repair de los hallazgos (sin cambiar el estado a `accepted`).
+- Completed:
+  - Auditoría independiente contra `docs/specs/game-project-persistence.md`: escenarios 1–12, migración v7→v8, bootstrap vs migración, scope/non-goals, seguridad y docs.
+  - Hallazgo **Medium**: el orden de Géneros no round-tripeaba para personalizados con mayúsculas mezcladas (`normalizeGenres` ordena case-insensitive; `get()` leía con `ORDER BY genre` BINARY). Repair: `.sortedBy { it.lowercase() }` en `get()` + regresión `["apple", "Banana"]` en `GameProjectCheck`.
+  - Hallazgo **Low**: `docs/specs/audio.mp3` untracked y ajeno a la feature. Repair: eliminado.
+  - Hallazgo **Low**: Scenario 10 sólo cubría Nota + Género. Repair: `verifyMigrationV7ToV8` ahora siembra Adjunto, Enlace y Embedding antes de migrar y verifica su supervivencia.
+  - Decisión: `updatedAt` se mantiene con `clock()` directo (patrón del repo), sin forzar monotonía estricta.
+  - `docs/validations/game-project-persistence.md` creado con veredicto `accept`, checks, hallazgos, repair y controles negativos.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM **55 tests, 0 failures, 0 errors** (`GameProjectAndroidTest` 1/1, `MigrationAndroidTest` 4/4, `DatabaseMigrationAndroidTest` 1/1, `NoteRepositoryAndroidTest` 4/4).
+  - `CI=true ./init.sh` → **exit 0**; `:composeApp:assembleDebug` OK; gate Android-only.
+  - `PlaybookDatabase.Schema.version` getter = 8; `.sqm` = `1.sqm`..`7.sqm`; DDL `.sq`/`7.sqm` espejado 5/5; paths protegidos sin cambios.
+  - iOS (no bloqueante): `:core:iosSimulatorArm64Test --rerun-tasks` 55/0 y `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.
+  - Controles negativos propios (a/b/c) con hashes post-fix y restauración byte-idéntica: (a) `7.sqm` mutado `8fc76855…` → falla `migratesV7ToV8AddingProjectTables`; (b) repositorio mutado `a6c1c6ab…` → falla `projectRoundTrip` (PK); (c) `GameProject.kt` mutado `a577384c…` → falla `projectRoundTrip` (CHECK). Restaurados a `006d68bc…`, `fe7265a7…` y `efb29c94…`; suite completa verde después.
+- Evidence captured: `feature_list.json` (evidencia de validación/repair) y `docs/validations/game-project-persistence.md`.
+- Files or artifacts updated: `SqlDelightGameProjectRepository.kt`, `GameProjectCheck.kt`, `MigrationCheck.kt`, `docs/validations/game-project-persistence.md` (nuevo), `feature_list.json`, `PROGRESS.md`; eliminado `docs/specs/audio.mp3`.
+- Known risk or unresolved issue: sin emulador Android (`adb` ausente) no se ejecutó smoke real de la migración sobre `playbook.db`; cobertura por tests del core sobre el esquema real. La lectura fail-fast de categoría desconocida sólo se cubre por inserción directa (camino de corrupción).
+- Next best step: la sesión integradora persiste `accepted` para `game-project-persistence`; luego continuar con `genres-catalog-ui` (picker de chips) o `ai-fake-real-switch`.

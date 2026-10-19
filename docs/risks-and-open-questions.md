@@ -47,6 +47,12 @@
   **renombre** de la tabla N—N `note_tag`→`note_genre` (esquema **v7**, `6.sqm`,
   `INSERT … SELECT` + `DROP TABLE note_tag`); no se reutiliza la tabla vieja ni se
   materializa el catálogo en la base.
+- **Proyecto de Juego (esquema v8):** **resuelto** en `game-project-persistence`
+  (2026-10-19): ficha singleton en `game_project` + tablas hijas (`7.sqm` v7→v8,
+  aditivo), `GameProjectRepository` (`get`/`save` upsert) en `:core`. Los campos
+  son opcionales (`0..3`/`0..5`), el estado `vacío`/`esbozado` se **deriva** (no
+  se persiste), no hay FK Nota→Proyecto y la feature no cablea UI ni crea fila de
+  Proyecto al migrar. Ver `docs/specs/game-project-persistence.md`.
 
 ## Implementation-Time Questions
 - **IA real (proveedor propio):** modelos y dimensión concretos de embedding;
@@ -66,8 +72,6 @@
   catálogo se trata como de catálogo), deduplica case-insensitive conservando la
   primera grafía y ordena. Ver `docs/specs/genres-catalog-persistence.md`; la UI
   del picker es `genres-catalog-ui`.
-- **Esquema v8:** forma de la tabla del Proyecto/ficha y de las 5 mecánicas
-  (categoría + descripción); `7.sqm` v7→v8.
 - Tokens visuales definitivos (paleta, tipografía, logo) — pendientes del equipo
   de UI/UX; `DESIGN.md` tiene una dirección provisional.
 - El **STT**, la **cámara** y el **audio del dictado como Adjunto** ya se

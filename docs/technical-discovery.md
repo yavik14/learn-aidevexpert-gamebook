@@ -32,8 +32,12 @@ core Kotlin Multiplatform (KMP). iOS queda **congelado** desde 2026-10-15 (ver
   **Géneros** (catálogo fijo + personalizados) con `6.sqm` v6→v7 conservando los
   datos (etiquetas libres → Géneros personalizados, copiadas **verbatim**);
   `note_tag`→`note_genre`; la canonización case-insensitive ocurre al **escribir**.
-- **Esquema v8 (Proyecto, previsto):** nueva entidad **Proyecto** (ficha
-  estructurada + 5 mecánicas clave con categoría) con `7.sqm` v7→v8.
+- **Esquema v8 (Proyecto, 2026-10-19):** tabla `game_project` (singleton
+  `id = "singleton"`, `owner` y ficha estructurada) + `game_project_genre`,
+  `game_project_inspiration`, `game_project_key_mechanic` y
+  `game_project_out_of_scope` con `7.sqm` v7→v8 **aditivo** (sin copiar datos).
+  `GameProjectRepository` (`get`/`save` upsert) en `:core`, sin UI ni wiring;
+  los campos son opcionales y las listas respetan `0..3`/`0..5`.
 - `Owner` presente en el modelo aunque el MVP sea single-user.
 
 ## Integrations
@@ -1028,8 +1032,9 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0003-ios-congelado-mvp.m
 - **Esquema v7 (Géneros):** renombre N—N a **Géneros** (catálogo fijo +
   personalizados) con `6.sqm` v6→v7, copiando las etiquetas libres a Géneros
   personalizados (verbatim).
-- **Esquema v8 (Proyecto, previsto):** entidad **Proyecto** (ficha + 5 mecánicas)
-  con `7.sqm` v7→v8.
+- **Esquema v8 (Proyecto, 2026-10-19):** entidad **Proyecto** (ficha + hasta 5
+  mecánicas) con `7.sqm` v7→v8 aditivo; `GameProjectRepository` en `:core`, sin
+  UI ni wiring.
 - **Catálogo de Géneros:** constante de la app (Platformer, Metroidvania, JRPG,
   ActionRPG, Roguelike, Shooter, Puzzle, Adventure, Towerdefense, Novel, Farming,
   Arcade); los personalizados se guardan por Nota y no engordan el catálogo global.

@@ -44,6 +44,9 @@ memoria).
 con `6.sqm`, tabla `note_genre`): catálogo fijo `GenreCatalog` (12) +
 personalizados por Nota, `normalizeGenres` con canonización case-insensitive; la
 columna/relación `note_tag`→`note_genre` se migra **verbatim**.
+`game-project-persistence` agrega el **Proyecto de Juego** singleton (esquema v8
+con `7.sqm`): ficha estructurada en `game_project` + tablas hijas y
+`GameProjectRepository` (`get`/`save` upsert); sólo `:core`, sin UI ni wiring.
 
 ## Modules
 
@@ -73,7 +76,7 @@ composeApp (Android app / commonMain) ──▶ core
 - **SQLDelight 2.1.0** en `:core`; base `PlaybookDatabase` (paquete
   `com.playbook.core.db`) generada desde los `.sq` de
   `core/src/commonMain/sqldelight/com/playbook/core/db/`.
-- **Esquema v7:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
+- **Esquema v8:** tabla `note` (`id`, `owner`, `body`, `track` nullable, `status`,
   `created_at`, `updated_at`, `index_attempts` INTEGER NOT NULL DEFAULT 0; queries
   `insertNote`, `selectAllNotes`, `selectNoteById`, `selectNotesByStatus`,
   `updateNote`, `updateNoteStatus`, `updateNoteIndexAttempts`, `deleteNoteById`),
@@ -83,30 +86,39 @@ composeApp (Android app / commonMain) ──▶ core
   `indexed_at`), tabla `note_genre` (`note_id`, `genre`, PK `(note_id, genre)`; N—N
   sin FK, limpieza explícita en el repositorio), tabla `attachment` (`id`,
   `note_id`, `kind`, `mime_type`, `file_path`, `byte_size`, `created_at` + índice
-  `attachment_note_id`) y tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id)`
+  `attachment_note_id`), tabla `note_link` (`note_a_id`/`note_b_id` FK → `note(id)`
   `ON DELETE CASCADE`, `score`, `updated_at`, PK `(note_a_id, note_b_id)`,
-  `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`). La columna
-  `index_attempts` la agrega `offline-pending-retry`; la tabla N—N `note_tag`
-  (Etiquetas) es reemplazada por `note_genre` (Géneros) en v7; los bytes de la
-  imagen **no** se guardan en la base (sólo metadatos + ruta relativa).
-- **Migraciones (v1 → v2 → v3 → v4 → v5 → v6 → v7):** `embeddings-generation`
-  introdujo `1.sqm` (v1 → v2, `embedding`), `note-category-and-tags` `2.sqm` (v2 →
-  v3, `note_tag`), `image-capture-camera` `3.sqm` (v3 → v4, `attachment`),
-  `semantic-linking` `4.sqm` (v4 → v5, `note_link` + índice),
-  `offline-pending-retry` `5.sqm` (v5 → v6, `note.index_attempts`) y
-  `genres-catalog-persistence` `6.sqm` (v6 → v7, `note_tag` → `note_genre` con
-  copia verbatim + `DROP TABLE note_tag`). Los `.sq`
+  `CHECK (note_a_id < note_b_id)` + índice `note_link_note_b_id`) y las tablas del
+  **Proyecto**: `game_project` (`id` fijo `"singleton"` con
+  `CHECK (id = 'singleton')`, `owner`, `title`, `core_loop`, `audience`, `concept`,
+  `fantasy`, `created_at`, `updated_at`) +
+  `game_project_genre`/`game_project_inspiration`/`game_project_key_mechanic`/
+  `game_project_out_of_scope` (FK → `game_project(id)` `ON DELETE CASCADE`; PKs
+  `(project_id, genre)` o `(project_id, position)`). La columna `index_attempts`
+  la agrega `offline-pending-retry`; la tabla N—N `note_tag` (Etiquetas) es
+  reemplazada por `note_genre` (Géneros) en v7; los bytes de la imagen **no** se
+  guardan en la base (sólo metadatos + ruta relativa).
+- **Migraciones (v1 → v2 → v3 → v4 → v5 → v6 → v7 → v8):**
+  `embeddings-generation` introdujo `1.sqm` (v1 → v2, `embedding`),
+  `note-category-and-tags` `2.sqm` (v2 → v3, `note_tag`), `image-capture-camera`
+  `3.sqm` (v3 → v4, `attachment`), `semantic-linking` `4.sqm` (v4 → v5,
+  `note_link` + índice), `offline-pending-retry` `5.sqm` (v5 → v6,
+  `note.index_attempts`), `genres-catalog-persistence` `6.sqm` (v6 → v7,
+  `note_tag` → `note_genre` con copia verbatim + `DROP TABLE note_tag`) y
+  `game-project-persistence` `7.sqm` (v7 → v8, tablas del Proyecto, aditivo sin
+  datos). Los `.sq`
   describen el esquema más reciente y los `.sqm` hacen upgrade; los drivers
   (`AndroidSqliteDriver`/`NativeSqliteDriver` con `PlaybookDatabase.Schema`)
   detectan `user_version` y ejecutan `Schema.migrate`.
-  `PlaybookDatabase.Schema.version = 7`. `INSERT OR REPLACE` en lugar de
+  `PlaybookDatabase.Schema.version = 8`. `INSERT OR REPLACE` en lugar de
   `ON CONFLICT DO UPDATE` porque el UPSERT de SQLite exige 3.24 (Android 11+) y
   `minSdk = 24`.
 - **Migraciones sin binario:** el repo no usa `schemaOutputDirectory` ni
   `verifySqlDelightMigration`; la equivalencia entre los `.sqm` y los `CREATE TABLE`
   de los `.sq` se cubre con tests portables (`DatabaseMigrationCheck`,
-  `GenreCheck.verifyGenreMigration`, `verifyMigrationV1ToV7`,
-  `verifyMigrationV5ToV6` y `verifyMigrationV6ToV7`) que corren en Android/JVM e
+  `GenreCheck.verifyGenreMigration`, `verifyMigrationV1ToV8`,
+  `verifyMigrationV5ToV6`, `verifyMigrationV6ToV7` y `verifyMigrationV7ToV8`) que
+  corren en Android/JVM e
   iOS.
 - **Drivers:** `DatabaseDriverFactory` (commonMain) + `AndroidDatabaseDriverFactory`
   (`AndroidSqliteDriver`) e `IosDatabaseDriverFactory` (`NativeSqliteDriver`).
@@ -149,6 +161,21 @@ composeApp (Android app / commonMain) ──▶ core
   global. `genres` se agrega con `emptyList()` por defecto; `Track` (fijo y
   único, por sección) y `Género` (descriptivo y múltiple) **no** son sinónimos
   (`CONTEXT.md`).
+- **Proyecto de Juego** (`GameProject.kt`, `game-project-persistence`):
+  `GameProject` (id fijo `"singleton"`, owner, title, genres, coreLoop, audience,
+  concept, inspirations, fantasy, `keyMechanics`, outOfScope, createdAt,
+  updatedAt) es la ficha estructurada del único Proyecto por instalación.
+  `GameProjectDraft` es la entrada de escritura; `KeyMechanic(category,
+  description)` y `MechanicCategory` (`MOVEMENT`/`INTERACTION`/`CONFLICT` con
+  `code` en español) modelan las mecánicas. Todos los campos de contenido son
+  opcionales; escalares con `trim`/vacío→`null` y listas con `trim`, descarte de
+  vacíos y límites `0..3` (inspiraciones/fuera de alcance) y `0..5` (mecánicas).
+  `GameProjectRepository { get(); save(draft) }` +
+  `SqlDelightGameProjectRepository(database, clock)`: `save` es un upsert del
+  singleton que preserva `owner`/`createdAt` (un owner distinto falla), avanza
+  `updatedAt` y reemplaza las hijas en la transacción. Sin estado
+  `vacío`/`esbozado` persistido (se deriva) y sin FK Nota→Proyecto (pertenencia
+  implícita). No está cableado a la UI todavía.
 - `Track.fromCode(null | desconocido)` → `null` (edge case "Nota sin `track`").
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.

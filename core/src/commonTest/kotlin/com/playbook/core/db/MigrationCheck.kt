@@ -47,7 +47,7 @@ CREATE TABLE note_tag (
 
 /**
  * Esquema "vacío" (sin tablas) con versión 1. Permite obtener un driver en estado
- * base sin que el esquema actual (v7) se aplique automáticamente, para que el test
+ * base sin que el esquema actual (v8) se aplique automáticamente, para que el test
  * de migración construya la v1 con SQL explícito. Android/JVM usa directamente
  * `JdbcSqliteDriver.IN_MEMORY`; iOS usa `inMemoryDriver(BlankTestSchema)`.
  */
@@ -65,38 +65,28 @@ object BlankTestSchema : SqlSchema<QueryResult.Value<Unit>> {
 }
 
 /**
- * Prueba la migración v1 → v7 (todas las del repo: `1.sqm`..`6.sqm`). Asume un
+ * Prueba la migración v1 → v8 (todas las del repo: `1.sqm`..`7.sqm`). Asume un
  * driver vacío: construye el esquema v1 (`note` + una fila + `user_version = 1`),
- * aplica `PlaybookDatabase.Schema.migrate(1, 7)` y verifica que las notas v1 se
- * conservan intactas, que la columna `index_attempts` (v6) queda con default `0`,
- * que la tabla `note_link` (v5) queda disponible y que `note_tag` (v2) fue
- * reemplazada por `note_genre` (v7).
+ * aplica `PlaybookDatabase.Schema.migrate(1, 8)` y verifica que las notas v1 se
+ * conservan intactas, que `note_link` (v5) y `note_genre` (v7) quedan
+ * disponibles y que las tablas del Proyecto (v8) se crean vacías.
  *
  * No se usa `PlaybookDatabase.Schema.create` para la v1 porque eso aplicaría el
- * esquema v7; el DDL v1 se replica aquí a propósito.
+ * esquema v8; el DDL v1 se replica aquí a propósito.
  */
-fun verifyMigrationV1ToV7(driver: SqlDriver) {
+fun verifyMigrationV1ToV8(driver: SqlDriver) {
     // Given: base v1 existente con una fila.
     driver.execute(null, CREATE_NOTE_V1, 0)
     driver.execute(null, "PRAGMA user_version = 1", 0)
     driver.execute(null, INSERT_NOTE_V1, 0)
 
-    assertEquals(7L, PlaybookDatabase.Schema.version, "con 1.sqm..6.sqm el esquema debe ser v7")
+    assertEquals(8L, PlaybookDatabase.Schema.version, "con 1.sqm..7.sqm el esquema debe ser v8")
 
     // La tabla `note_link` todavía no existe en v1.
-    val noteLinkTables = driver.executeQuery(
-        identifier = null,
-        sql = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'note_link'",
-        mapper = { cursor ->
-            cursor.next()
-            QueryResult.Value(cursor.getLong(0) ?: 0L)
-        },
-        parameters = 0,
-    ).value
-    assertEquals(0L, noteLinkTables, "la tabla note_link no debe existir en v1")
+    assertEquals(0L, tableCount(driver, "note_link"), "la tabla note_link no debe existir en v1")
 
-    // When: se aplica la migración v1 → v7.
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 7).value
+    // When: se aplica la migración v1 → v8.
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 8).value
 
     // Then: las notas previas se conservan intactas.
     val database = PlaybookDatabase(driver)
@@ -143,6 +133,18 @@ fun verifyMigrationV1ToV7(driver: SqlDriver) {
         database.genreQueries.selectGenresByNoteId("note-v1").executeAsList(),
         "note_genre debe quedar operativa tras migrar",
     )
+
+    // Then: las tablas del Proyecto (v8) existen y arrancan vacías.
+    assertEquals(1L, tableCount(driver, "game_project"), "game_project debe existir en v8")
+    assertEquals(1L, tableCount(driver, "game_project_genre"))
+    assertEquals(1L, tableCount(driver, "game_project_inspiration"))
+    assertEquals(1L, tableCount(driver, "game_project_key_mechanic"))
+    assertEquals(1L, tableCount(driver, "game_project_out_of_scope"))
+    assertEquals(
+        0L,
+        database.gameProjectQueries.countGameProjects().executeAsOne(),
+        "la migración no crea un Proyecto",
+    )
 }
 
 /**
@@ -181,11 +183,13 @@ fun verifyMigrationV5ToV6(driver: SqlDriver) {
 }
 
 /**
- * Scenario 6: migración aislada v6 → v7 (`6.sqm`). Construye una base **v6** con
- * `note` (con `index_attempts`) y `note_tag` con filas, corre `migrate(6, 7)` y
- * comprueba que `note_genre` contiene **exactamente** esos valores (copia
- * verbatim, sin canonización), que `note_tag` ya no existe y que la Nota no se
- * pierde.
+ * Scenario 6 de la spec de Géneros: migración aislada v6 → v7 (`6.sqm`).
+ * Construye una base **v6** con `note` (con `index_attempts`) y `note_tag` con
+ * filas, corre `migrate(6, 7)` y comprueba que `note_genre` contiene
+ * **exactamente** esos valores (copia verbatim, sin canonización), que
+ * `note_tag` ya no existe y que la Nota no se pierde.
+ *
+ * El esquema global ya es v8, pero esta migración aislada se detiene en v7.
  */
 fun verifyMigrationV6ToV7(driver: SqlDriver) {
     // Given: base v6 con `note` + `note_tag` y filas.
@@ -202,7 +206,7 @@ fun verifyMigrationV6ToV7(driver: SqlDriver) {
     driver.execute(null, "INSERT INTO note_tag (note_id, label) VALUES ('note-v6', ' JRPG ')", 0)
     driver.execute(null, "INSERT INTO note_tag (note_id, label) VALUES ('note-v6', 'JRPG')", 0)
 
-    assertEquals(7L, PlaybookDatabase.Schema.version, "el esquema debe ser v7")
+    assertEquals(8L, PlaybookDatabase.Schema.version, "el esquema global debe ser v8")
 
     // When: se aplica sólo la migración v6 → v7.
     PlaybookDatabase.Schema.migrate(driver, oldVersion = 6, newVersion = 7).value
@@ -222,6 +226,94 @@ fun verifyMigrationV6ToV7(driver: SqlDriver) {
     assertEquals("nota con etiquetas", migrated?.body)
     assertEquals("historia", migrated?.track)
     assertEquals(0L, migrated?.index_attempts)
+}
+
+/**
+ * Scenario 10: migración aislada v7 → v8 (`7.sqm`). Construye una base v1,
+ * corre la migración real hasta v7, siembra una Nota enlazada, un Género, un
+ * Adjunto, un Enlace y un Embedding, y migra a v8. Verifica que todos esos datos
+ * sobreviven, que las tablas del Proyecto se crean vacías y que `game_project`
+ * no existía en v7.
+ */
+fun verifyMigrationV7ToV8(driver: SqlDriver) {
+    // Given: una base v1 con una Nota, migrada hasta v7.
+    driver.execute(null, CREATE_NOTE_V1, 0)
+    driver.execute(null, "PRAGMA user_version = 1", 0)
+    driver.execute(null, INSERT_NOTE_V1, 0)
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 7).value
+
+    val v7Database = PlaybookDatabase(driver)
+    assertEquals(0L, tableCount(driver, "game_project"), "game_project no existe en v7")
+    v7Database.noteQueries.insertNote(
+        id = "note-v7b",
+        owner = "local",
+        body = "nota enlazada antes de v8",
+        track = null,
+        status = "capturada",
+        created_at = 2_000L,
+        updated_at = 2_000L,
+    )
+    v7Database.genreQueries.insertNoteGenre(note_id = "note-v1", genre = "Puzzle")
+    v7Database.attachmentQueries.insertAttachment(
+        id = "attachment-v7",
+        note_id = "note-v1",
+        kind = "imagen",
+        mime_type = "image/png",
+        file_path = "files/v7.png",
+        byte_size = 12L,
+        created_at = 2_000L,
+    )
+    v7Database.noteLinkQueries.upsertNoteLink(
+        note_a_id = "note-v1",
+        note_b_id = "note-v7b",
+        score = 0.5,
+        updated_at = 2_000L,
+    )
+    v7Database.embeddingQueries.upsertEmbedding(
+        note_id = "note-v1",
+        dimension = 1L,
+        vector = byteArrayOf(0x3F, 0x80.toByte(), 0x00, 0x00),
+        indexed_at = 2_000L,
+    )
+
+    // When: se aplica sólo la migración v7 → v8.
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 7, newVersion = 8).value
+
+    // Then: la Nota y su Género sobreviven intactos.
+    val database = PlaybookDatabase(driver)
+    val note = database.noteQueries.selectNoteById("note-v1").executeAsOneOrNull()
+    assertEquals("note-v1", note?.id)
+    assertEquals("nota antes de migrar", note?.body)
+    assertEquals(
+        listOf("Puzzle"),
+        database.genreQueries.selectGenresByNoteId("note-v1").executeAsList(),
+        "los Géneros de la Nota sobreviven a v8",
+    )
+
+    // Then: Adjuntos, Enlaces y Embeddings sobreviven intactos.
+    assertEquals(
+        1,
+        database.attachmentQueries.selectAttachmentsByNoteId("note-v1").executeAsList().size,
+        "el Adjunto sobrevive a v8",
+    )
+    assertEquals(
+        1,
+        database.noteLinkQueries.selectAllLinks().executeAsList().size,
+        "el Enlace sobrevive a v8",
+    )
+    assertEquals(
+        1,
+        database.embeddingQueries.selectAllEmbeddings().executeAsList().size,
+        "el Embedding sobrevive a v8",
+    )
+
+    // Then: las tablas del Proyecto existen y están vacías.
+    assertEquals(1L, tableCount(driver, "game_project"))
+    assertEquals(1L, tableCount(driver, "game_project_genre"))
+    assertEquals(1L, tableCount(driver, "game_project_inspiration"))
+    assertEquals(1L, tableCount(driver, "game_project_key_mechanic"))
+    assertEquals(1L, tableCount(driver, "game_project_out_of_scope"))
+    assertEquals(0L, database.gameProjectQueries.countGameProjects().executeAsOne())
 }
 
 /** Cuenta cuántas tablas con [name] existen (0 = no existe). */

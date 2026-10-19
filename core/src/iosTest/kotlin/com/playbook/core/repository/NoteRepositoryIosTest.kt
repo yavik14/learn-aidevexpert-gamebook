@@ -26,7 +26,7 @@ class NoteRepositoryIosTest {
     }
 
     @Test
-    fun migrationV1ToV7PreservesNotes() {
+    fun migrationV1ToV8PreservesNotes() {
         // Driver in-memory creado como base v1 (sólo la tabla note).
         val driver = inMemoryDriver(NoteV1Schema)
         try {

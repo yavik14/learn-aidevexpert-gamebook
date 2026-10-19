@@ -179,16 +179,16 @@ fun verifyGenres(driver: SqlDriver) {
 }
 
 /**
- * Verifica la migración real v1 -> v7 (aplica todos los `.sqm` del repo). El
+ * Verifica la migración real v1 -> v8 (aplica todos los `.sqm` del repo). El
  * [driver] debe representar una base **v1** ya existente (tabla `note` sin
  * `note_tag`); los tests de plataforma la crean con [NoteV1Schema]:
  *
  * - Android/JVM: `JdbcSqliteDriver.IN_MEMORY` + `NoteV1Schema.create(driver)`.
  * - iOS: `inMemoryDriver(NoteV1Schema)`.
  *
- * Siembra una fila v1, corre `Schema.migrate(driver, 1, 7)` y comprueba que la
- * Nota sobrevive, que la tabla nueva `note_genre` queda operable y que `note_tag`
- * ya no existe.
+ * Siembra una fila v1, corre `Schema.migrate(driver, 1, 8)` y comprueba que la
+ * Nota sobrevive, que la tabla `note_genre` queda operable y que `note_tag` ya no
+ * existe. La v8 (Proyecto) es aditiva y no afecta a esta verificación.
  */
 fun verifyGenreMigration(driver: SqlDriver) {
     val v1Database = PlaybookDatabase(driver)
@@ -203,10 +203,10 @@ fun verifyGenreMigration(driver: SqlDriver) {
     )
     driver.execute(identifier = null, sql = "PRAGMA user_version = 1", parameters = 0).value
 
-    assertEquals(7L, PlaybookDatabase.Schema.version, "con 1.sqm..6.sqm el esquema debe ser v7")
+    assertEquals(8L, PlaybookDatabase.Schema.version, "con 1.sqm..7.sqm el esquema debe ser v8")
 
-    // Corre la migración real v1 -> v7 (aplica 1.sqm..6.sqm).
-    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 7)
+    // Corre la migración real v1 -> v8 (aplica 1.sqm..7.sqm).
+    PlaybookDatabase.Schema.migrate(driver, oldVersion = 1, newVersion = 8)
 
     val database = PlaybookDatabase(driver)
     val migrated = database.noteQueries.selectNoteById("note-v1").executeAsOneOrNull()

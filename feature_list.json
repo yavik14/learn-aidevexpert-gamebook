@@ -901,12 +901,29 @@
       "local-persistence-sqldelight",
       "genres-catalog-persistence"
     ],
-    "status": "not_started",
+    "status": "passing",
     "verification": [
-      "Provisional: tests del core (Android/JVM) del Proyecto singleton + migración v7→v8."
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM 55 tests, 0 failures: `GameProjectAndroidTest` 1/1 (`projectRoundTrip`, escenarios 1–9), `MigrationAndroidTest` 4/4 (v1→v8, v5→v6, v6→v7, v7→v8), `DatabaseMigrationAndroidTest` 1/1, `NoteRepositoryAndroidTest` 4/4 (`migrationV1ToV8PreservesNotes`) + suite existente.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (vía `CI=true ./init.sh`, exit 0; gate Android-only).",
+      "`PlaybookDatabase.Schema.version == 8`; `.sqm` = `1.sqm`..`7.sqm` (sólo `7.sqm` nuevo); `1.sqm`..`6.sqm` sin cambios.",
+      "Escenarios 1–9 por `verifyGameProject` (incluye regresión de orden de Géneros mixed-case); migración v7→v8 (Nota, Género, Adjunto, Enlace y Embedding) y bootstrap vs migración por `MigrationCheck`/`DatabaseMigrationCheck`.",
+      "iOS (no bloqueante): `:core:iosSimulatorArm64Test` 55 tests/0 failures y `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "E2E persistente: no aplica (sin harness E2E y `init.sh` no levanta simuladores); tests del core sobre el esquema real + compilación de la app."
     ],
-    "evidence": [],
-    "notes": "Esquema v8 (`7.sqm`). Singleton: un único Proyecto por instalación (multi-proyecto y banco de ideas son post-MVP)."
+    "evidence": [
+      "2026-10-19: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL in 7s; Android/JVM 55 tests, 0 failures (core/build/test-results/testDebugUnitTest/): GameProjectAndroidTest 1/1, MigrationAndroidTest 4/4, DatabaseMigrationAndroidTest 1/1, NoteRepositoryAndroidTest 4/4, más la suite existente.",
+      "2026-10-19: `GameProjectAndroidTest.projectRoundTrip` cubre escenarios 1–9: `get()` null y `countGameProjects() == 0`; upsert vacío con owner trim y timestamps; ficha completa con Géneros normalizados (`[\"JRPG\", \"Platformer\", \"Zelda-like\"]`), listas ordenadas y 5 mecánicas con categoría; update que reemplaza hijas, preserva `owner`/`createdAt` y avanza `updatedAt`; blanks→null/vacíos descartados; límites 3/3/5 con `IllegalArgumentException` sin escritura parcial; round-trip de `Movimiento`/`Interacción`/`Conflicto`; owner distinto falla; `MechanicCategory` desconocida → `IllegalArgumentException`.",
+      "2026-10-19: `verifyMigrationV1ToV8` y `MigrationAndroidTest.migratesV7ToV8AddingProjectTables` confirman que la migración preserva Nota/Géneros y crea las 5 tablas del Proyecto vacías; `DatabaseMigrationAndroidTest.migratesV1ToV8AndMatchesCreate` confirma que bootstrap v8 y migración v1→v8 coinciden en columnas/PKs/FKs.",
+      "2026-10-19: `CI=true ./init.sh` → exit 0 (`:composeApp:assembleDebug` + `:core:testDebugUnitTest`), sin dev servers ni red; `:composeApp:assembleDebug` BUILD SUCCESSFUL in 6s.",
+      "2026-10-19: `PlaybookDatabase.Schema.version` getter = 8; `find core/src -name '*.sqm'` = `1.sqm`..`7.sqm`; sólo `7.sqm` nuevo; `1.sqm`..`6.sqm` sin cambios.",
+      "2026-10-19: iOS no bloqueante: `:core:iosSimulatorArm64Test` 55 tests/0 failures (incluye `GameProjectIosTest` 1/1 y `MigrationIosTest` 4/4) y `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL in 32s.",
+      "2026-10-19: controles negativos reproducidos y restaurados byte-idénticos (hashes `7.sqm` 006d68bc…, `SqlDelightGameProjectRepository.kt` 06ab3322…, `GameProject.kt` efb29c94…): (a) `7.sqm` con `game_project_inspiration` renombrada → falla `MigrationAndroidTest.migratesV7ToV8AddingProjectTables`; (b) `save` sin borrar inspiraciones previas → `projectRoundTrip` falla con `SQLiteException` (PK); (c) sin `require(size <= max)` → `projectRoundTrip` falla (el CHECK de SQLite atrapa la posición fuera del límite).",
+      "2026-10-19: `git status` sólo con archivos de la feature; sin deps nuevas, secrets ni cambios en `composeApp`/`iosApp`/`init.sh`/build files; sin smoke real en emulador (no se invocó `adb`).",
+      "2026-10-19 (validación independiente + repair): se corrigió el orden de Géneros en `get()` (`sortedBy { it.lowercase() }`, mismo criterio que `normalizeGenres`) y se agregó la regresión mixed-case (`[\"apple\", \"Banana\"]`) en `GameProjectCheck`; se reforzó `verifyMigrationV7ToV8` sembrando Adjunto, Enlace y Embedding; se eliminó `docs/specs/audio.mp3` (untracked ajeno). `:core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL, 55/0; `CI=true ./init.sh` → exit 0; iOS 55/0 + link del framework OK.",
+      "2026-10-19 (validación independiente): controles negativos propios con hashes post-fix y restauración byte-idéntica: (a) `7.sqm` con `game_project_inspiration` renombrada (`8fc76855…`) → falla `MigrationAndroidTest.migratesV7ToV8AddingProjectTables`; (b) `save` sin borrar inspiraciones (`a6c1c6ab…`) → falla `projectRoundTrip` con `SQLiteException` (PK); (c) sin `require(size <= max)` (`a577384c…`) → falla `projectRoundTrip` (CHECK de posición). Restaurados a `7.sqm` `006d68bc…`, repositorio `fe7265a7…` y `GameProject.kt` `efb29c94…`; suite completa verde después. Detalle en `docs/validations/game-project-persistence.md`.",
+      "2026-10-19: validación independiente con veredicto `accept` (tras el repair); DDL `.sq`/`7.sqm` espejado 5/5, `Schema.version` getter 8, `.sqm` 1..7, paths protegidos sin cambios."
+    ],
+    "notes": "Esquema v8 (`7.sqm`): `game_project` (singleton `id = 'singleton'` con CHECK) + `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert). Sólo `:core`; sin UI/wiring, sin estado persistido `vacío`/`esbozado` (derivado), sin FK Nota→Proyecto y sin `delete()`. `passing`; validación independiente `accept` el 2026-10-19 (pendiente persistir `accepted` por la sesión integradora). Ver docs/specs/game-project-persistence.md y docs/validations/game-project-persistence.md."
   },
   {
     "id": "brainstorming-wizard",

@@ -1,0 +1,108 @@
+-- Esquema v8 de Playbook: Proyecto de Juego singleton (ficha estructurada).
+-- `id` es fijo (`singleton`) para garantizar una sola fila por instalación. El
+-- DDL de esta tabla y de sus hijas se replica exactamente en `7.sqm`; la
+-- equivalencia se cubre con `DatabaseMigrationCheck`.
+CREATE TABLE game_project (
+  id TEXT NOT NULL PRIMARY KEY CHECK (id = 'singleton'),
+  owner TEXT NOT NULL,
+  title TEXT,
+  core_loop TEXT,
+  audience TEXT,
+  concept TEXT,
+  fantasy TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- Géneros del Proyecto (catálogo fijo + personalizados), normalizados al
+-- escribir con `normalizeGenres`. Se reemplazan completos en cada `save`.
+CREATE TABLE game_project_genre (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  genre TEXT NOT NULL,
+  PRIMARY KEY (project_id, genre)
+);
+
+-- Inspiraciones ordenadas (0..2). La posición conserva el orden de ingreso.
+CREATE TABLE game_project_inspiration (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 3)
+);
+
+-- Mecánicas clave ordenadas (0..4), cada una con categoría + descripción.
+CREATE TABLE game_project_key_mechanic (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 5)
+);
+
+-- Elementos fuera de alcance ordenados (0..2).
+CREATE TABLE game_project_out_of_scope (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 3)
+);
+
+selectGameProject:
+SELECT * FROM game_project WHERE id = ?;
+
+countGameProjects:
+SELECT count(*) FROM game_project;
+
+insertGameProject:
+INSERT INTO game_project (
+  id, owner, title, core_loop, audience, concept, fantasy, created_at, updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateGameProject:
+UPDATE game_project
+SET title = ?, core_loop = ?, audience = ?, concept = ?, fantasy = ?, updated_at = ?
+WHERE id = ?;
+
+selectGameProjectGenres:
+SELECT genre FROM game_project_genre WHERE project_id = ? ORDER BY genre;
+
+insertGameProjectGenre:
+INSERT OR IGNORE INTO game_project_genre (project_id, genre) VALUES (?, ?);
+
+deleteGameProjectGenres:
+DELETE FROM game_project_genre WHERE project_id = ?;
+
+selectGameProjectInspirations:
+SELECT value FROM game_project_inspiration WHERE project_id = ? ORDER BY position;
+
+insertGameProjectInspiration:
+INSERT INTO game_project_inspiration (project_id, position, value) VALUES (?, ?, ?);
+
+deleteGameProjectInspirations:
+DELETE FROM game_project_inspiration WHERE project_id = ?;
+
+selectGameProjectKeyMechanics:
+SELECT category, description
+FROM game_project_key_mechanic
+WHERE project_id = ?
+ORDER BY position;
+
+insertGameProjectKeyMechanic:
+INSERT INTO game_project_key_mechanic (project_id, position, category, description)
+VALUES (?, ?, ?, ?);
+
+deleteGameProjectKeyMechanics:
+DELETE FROM game_project_key_mechanic WHERE project_id = ?;
+
+selectGameProjectOutOfScope:
+SELECT value FROM game_project_out_of_scope WHERE project_id = ? ORDER BY position;
+
+insertGameProjectOutOfScope:
+INSERT INTO game_project_out_of_scope (project_id, position, value) VALUES (?, ?, ?);
+
+deleteGameProjectOutOfScope:
+DELETE FROM game_project_out_of_scope WHERE project_id = ?;
