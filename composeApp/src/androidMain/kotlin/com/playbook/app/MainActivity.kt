@@ -70,7 +70,12 @@ class MainActivity : ComponentActivity() {
         val diagnostics = FileDiagnostics(
             diagnosticStorage(File(filesDir, "diagnostics.log").absolutePath),
         )
-        val noteIndexingService = NoteIndexingService(aiClient, embeddingRepository, diagnostics)
+        val noteIndexingService = NoteIndexingService(
+            aiClient,
+            embeddingRepository,
+            diagnostics,
+            expectedDimension = aiRuntime.embeddingDimension,
+        )
         // Orquestador de indexado: envuelve el servicio y persiste la transición
         // real de `NoteStatus` (la UI lo usa al guardar y al re-indexar a mano).
         val noteIndexingOrchestrator = NoteIndexingOrchestrator(noteIndexingService, noteRepository)

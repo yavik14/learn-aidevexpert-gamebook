@@ -1224,12 +1224,31 @@
       "ai-fake-real-switch",
       "offline-pending-retry"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: tests con fake; comportamiento PENDING/retry ante fallo de red; smoke manual Android."
+      "Validación independiente `$feature-validator` → **`accept`** (2026-10-19): spec y Scenarios 1–11 satisfechos, evidencia real, paths protegidos intactos y sin secretos; smoke real re-ejecutado por el validador (2/2 OK, `dim=1536`, `INDEXED`, `sources=1`, salida sanitizada).",
+      "Post-rebase sobre `origin/develop` `65adc62` (incluye `brainstorming-wizard`): `CI=true ./init.sh` exit 0; `:core:testDebugUnitTest --rerun-tasks` 79/0; `:composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` 7/0; `:core:iosSimulatorArm64Test --rerun-tasks` 79/0; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL; esquema v8 (`1.sqm`..`7.sqm`) sin `.sqm` nuevos.",
+      "`CI=true ./init.sh` → exit 0 con IA fake (sin red ni key); `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy CI=true ./init.sh` → exit 0, `AI_MODE=fake` y `AI_API_KEY` vacío.",
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 79 tests / 0 failures; nuevos `RealEmbeddingIndexingAndroidTest` (integración real+fake transport), `OpenAiAdaptersCheck` (19, incluye mismatch por vector) y el guard/default de `NoteIndexingCheck`.",
+      "`./gradlew :composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 7 tests / 0 failures; el smoke indexado key-gated queda omitido en fake.",
+      "`./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → 79 tests / 0 failures; `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "`RealEmbeddingIndexingCheck` cubre Scenarios 2–9: éxito 1536 (`INDEXED`), mismatch no persistido (`Failed`/`PENDING`, sin fila), re-indexado fallido sin degradar `INDEXED`, RAG con fuentes, Enlaces (score 1.0 sin tocar estados/embeddings), red/500 (`RetrySummary` stillPending=1 → failed=1 con `index_attempts`), fallo transitorio recuperado y reconciliación 8→1536 con reindexado y RAG.",
+      "Controles negativos (restaurados byte-idénticos por `cmp` + sha256): (a) sin guard en `OpenAiAiClient.embed` → fallan 2 tests de mismatch del adaptador; (b) sin límite en `NoteIndexingService` → falla `NoteIndexingAndroidTest`; (c) HTTP 500 cubierto por el Scenario 7 (PENDING/presupuesto).",
+      "Smoke real key-gated fuera del gate (`PLAYBOOK_AI_SMOKE=1 ... -Pplaybook.ai.mode=real -Pplaybook.ai.smoke=1`): `AI smoke indexing OK: dim=1536, status=INDEXED, sources=1, answerLen=286`; los 6 modelos también OK. Salida sanitizada (sin key ni bodies).",
+      "Sin cambios en paths protegidos (`init.sh`, esquema/`.sqm`, `AiClient`, `FakeAiClient`, `AiRuntime`, `HttpTransport`, `OpenAiHttp`, `AiRuntimeConfig`, `NoteIndexingOrchestrator`, `PendingIndexingRetry`, `EmbeddingDimensionReconciler`, `RagQueryService`, `App.kt`, `iosApp/**`): el esquema sigue v8 sin `.sqm` nuevos."
     ],
-    "evidence": [],
-    "notes": "Respeta la máquina de estados (`PENDING`/reintento) de `offline-pending-retry`."
+    "evidence": [
+      "2026-10-19: `CI=true ./init.sh` exit 0 (fake) en worktree/ai-real-embeddings; gate con env real (`PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy`) exit 0 con `BuildConfig.AI_MODE=fake` y `AI_API_KEY=\"\"`.",
+      "2026-10-19: `:core:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL, **79 tests / 0 failures** (`RealEmbeddingIndexingAndroidTest` 1, `OpenAiAdaptersCheck` 19, `NoteIndexingAndroidTest` 1).",
+      "2026-10-19: `:composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` BUILD SUCCESSFUL, **7 tests / 0 failures** (`RealAiSmokeTest` 2, omitidos por gate).",
+      "2026-10-19: `:core:iosSimulatorArm64Test --rerun-tasks` **79 tests / 0 failures**; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-19: integración con `openAiAiRuntime(config 1536, ScriptedTransport)` + SQLDelight in-memory: éxito 1536/INDEXED; mismatch del adaptador `embedding devolvió dimensión 8, se esperaba 1536` sin key/body y sin fila `embedding`; re-indexado con 500/mismatch conserva `INDEXED` y el embedding previo; RAG `Answer` con 2 fuentes y `Failed` sin red; Enlaces `LinkingSummary(notesConsidered=2, linksWritten=1, score=1.0)`; red → `PENDING`, retry `stillPending=1` (`index_attempts=1`) y luego `failed=1` (`index_attempts=2`, sin embedding huérfano); fallo transitorio → `indexed=1`, `index_attempts=0`, dim 1536; reconciliación `cleared=1`, compatible intacta, reindexado 1536 y RAG con fuentes.",
+      "2026-10-19: controles negativos reproducidos y restaurados byte-idénticos (sha256 idéntico): (a) guard del adaptador desactivado → `OpenAiAdaptersCheck > embeddingWrongDimensionIsRejectedAndSanitized` y `embeddingValidatesEveryVectorDimension` FAILED; (b) límite de persistencia desactivado → `NoteIndexingAndroidTest` FAILED; (c) 500 cubierto por el test de presupuesto.",
+      "2026-10-19: smoke real key-gated (key sólo en `local.properties`, nunca impresa): `AI smoke OK: embedding=1536, chat=2, tts=42624, transcribe=26, image=609063 (image/jpeg), track=MECHANICS, genres=1` y `AI smoke indexing OK: dim=1536, status=INDEXED, sources=1, answerLen=286`; 2/2 tests OK.",
+      "2026-10-19: `git diff --stat` sin paths protegidos; esquema global v8 (`1.sqm`..`7.sqm`), sin `.sqm` nuevos; sin key en el diff.",
+      "2026-10-19 (integración): validación independiente `accept`; rebase sobre `origin/develop` `65adc62` con conflictos resueltos conservando `brainstorming-wizard` y `ai-real-embeddings`. Post-rebase: `CI=true ./init.sh` exit 0; `:core:testDebugUnitTest --rerun-tasks` 79/0; `:composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` 7/0; `:core:iosSimulatorArm64Test --rerun-tasks` 79/0; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL; `Schema.version == 8` y `.sqm` `1..7`; paths protegidos sin cambios. Smoke real no re-ejecutado en la integración (evitó costo/cuota); se conserva el 2/2 OK del validador (`dim=1536`, `INDEXED`, `sources=1`)."
+    ],
+    "notes": "Implementada sobre el runtime/flag/wiring de `ai-fake-real-switch` sin duplicarlos: guard de dimensión en `OpenAiAiClient.embed` + `NoteIndexingService.expectedDimension` (pass-through de `aiRuntime.embeddingDimension` en roots) + integración real con transporte falso + smoke de indexado key-gated. Respeta `PENDING`/`FAILED`/presupuesto de `offline-pending-retry`. Riesgos aceptados: offline real puede agotar presupuesto hasta `FAILED` (sonda de conectividad = follow-up); la reconciliación no recomputa `note_link`; los tests con transporte falso no validan calidad semántica; la dimensión activa no se expone en UI/diagnóstico. `accepted` (validación independiente `accept`, 2026-10-19; integrada sobre `develop` `65adc62`)."
   },
   {
     "id": "transcribe-audio-attachment",

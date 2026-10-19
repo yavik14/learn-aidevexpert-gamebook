@@ -1248,3 +1248,47 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
   géneros catálogo + personalizado, topes 3/3/5, reapertura, cancelación,
   iteración/reemplazo y error de mecánica incompleta). Evidencia en
   `composeApp/build/smoke-evidence/brainstorming-wizard/`.
+
+## AI Real Embeddings Decisions (ai-real-embeddings)
+
+Implementado 2026-10-19. No duplica el flag/runtime/adaptadores/wiring de
+`ai-fake-real-switch`: el diff de producción son dos límites de dimensión y el
+pass-through de la dimensión a `NoteIndexingService`.
+
+- **Contrato en el adaptador:** `OpenAiAiClient.embed` valida que **cada** vector
+  mida `config.embeddingDimension` después de ordenar por `index` y validar
+  cantidad. Un mismatch lanza
+  `AiClientException("embedding devolvió dimensión N, se esperaba M")`; el
+  mensaje sólo contiene dimensiones (sin key, headers ni body). Esto también
+  cubre el `embed` de la pregunta en RAG.
+- **Límite de persistencia:** `NoteIndexingService` recibe
+  `expectedDimension: Int? = null` (`require` > 0 o `null`). Con `null` conserva
+  el comportamiento previo; con valor, un mismatch devuelve
+  `IndexingResult.Failed`, registra `AI_INDEXING` (`indexing_failed` con detalle
+  sanitizado) y **no** llama a `embeddingRepository.upsert`. Los roots Android e
+  iOS pasan `aiRuntime.embeddingDimension` (`1536` real / `8` fake), por lo que
+  un cambio de modo no puede persistir vectores incompatibles.
+- **Máquina de estados intacta:** el mismatch se comporta como cualquier fallo de
+  IA: el indexado directo deja `PENDING` (nunca `FAILED`), el reintento consume
+  presupuesto y promueve a `FAILED` al agotarlo, y un re-indexado fallido de una
+  Nota `INDEXED` no la degrada ni pisa el embedding previo. La reconciliación
+  fake(8)→real(1536) sigue borrando sólo los incompatibles y dejando
+  `index_attempts=0`.
+- **Verificación de integración:** `RealEmbeddingIndexingCheck` (commonTest +
+  runners Android/iOS) conecta `openAiAiRuntime(config, HttpTransport falso)` con
+  SQLDelight in-memory, `NoteIndexingOrchestrator`, `PendingIndexingRetry`,
+  `EmbeddingDimensionReconciler`, `SemanticLinkingService` y `RagQueryService`.
+  Cubre éxito 1536, mismatch no persistido, re-indexado fallido sin degradación,
+  RAG con fuentes, Enlaces (score 1.0), red/500 con `PENDING`/presupuesto,
+  fallo transitorio recuperado y reconciliación 8→1536. El transporte falso no
+  valida calidad semántica ni disponibilidad del proveedor.
+- **Smoke real key-gated:** `RealAiSmokeTest.smokeRealIndexingFeedsRag` (fuera del
+  gate, `PLAYBOOK_AI_SMOKE=1`) indexa una Nota sobre una base in-memory y
+  verifica dimensión = `runtime.embeddingDimension`, estado `INDEXED` y RAG con
+  fuentes; imprime sólo longitudes/estado. Dependencia test-only
+  `sqldelight.sqlite.driver` en `composeApp` (bloque `androidUnitTest`).
+- **Riesgos aceptados:** el runtime real no sondea conectividad (arranques
+  offline pueden agotar presupuesto y terminar en `FAILED`; sonda = follow-up);
+  la reconciliación no recomputa `note_link` (Relacionadas se recomputa al
+  abrir); la dimensión activa no se expone en UI/diagnóstico. Sin cambios de
+  esquema (v8), `init.sh`, `App.kt`, `iosApp/**` ni dependencias de producción.

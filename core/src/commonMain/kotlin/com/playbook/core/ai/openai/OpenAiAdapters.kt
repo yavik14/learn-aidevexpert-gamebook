@@ -60,6 +60,17 @@ internal class OpenAiAiClient(
                 "embedding devolvió ${ordered.size} vectores para ${texts.size} textos",
             )
         }
+        // Contrato de dimensión: un vector de tamaño distinto al configurado
+        // corrompería Enlaces/RAG y nunca debe persistirse. El mensaje sólo
+        // incluye dimensiones (sin key, headers ni body).
+        ordered.forEach { (_, values) ->
+            if (values.size != config.embeddingDimension) {
+                throw AiClientException(
+                    "embedding devolvió dimensión ${values.size}, " +
+                        "se esperaba ${config.embeddingDimension}",
+                )
+            }
+        }
         return ordered.map { Embedding(it.second) }
     }
 

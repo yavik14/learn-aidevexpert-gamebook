@@ -3,12 +3,16 @@ package com.playbook.core.ai
 import app.cash.sqldelight.db.SqlDriver
 import com.playbook.core.db.DatabaseDriverFactory
 import com.playbook.core.db.createDatabase
+import com.playbook.core.diagnostics.DiagnosticSource
+import com.playbook.core.diagnostics.InMemoryDiagnostics
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -153,4 +157,62 @@ suspend fun verifyNoteIndexing(driver: SqlDriver) {
         embeddingRepository.getByNoteId(noteWithoutEmbedding.id),
         "una respuesta inválida no debe persistir ninguna fila",
     )
+
+    // --- expectedDimension: default null conserva el comportamiento --------
+    val defaultDimensionNote = noteRepository.create(NoteDraft("owner-1", "sin dimensión", null))
+    assertTrue(
+        NoteIndexingService(FakeAiClient(), embeddingRepository).index(defaultDimensionNote)
+            is IndexingResult.Indexed,
+        "sin expectedDimension el servicio mantiene el comportamiento anterior",
+    )
+
+    // --- expectedDimension: coincidencia persiste --------------------------
+    val matchingNote = noteRepository.create(NoteDraft("owner-1", "dimensión correcta", null))
+    val matching = NoteIndexingService(
+        aiClient = FakeAiClient(),
+        embeddingRepository = embeddingRepository,
+        expectedDimension = FakeAiClient.DEFAULT_DIMENSION,
+    ).index(matchingNote)
+    assertTrue(matching is IndexingResult.Indexed, "una dimensión coincidente se persiste")
+    assertEquals(
+        FakeAiClient.DEFAULT_DIMENSION,
+        embeddingRepository.getByNoteId(matchingNote.id)?.values?.size,
+    )
+
+    // --- expectedDimension: mismatch no persiste y registra AI_INDEXING ----
+    val diagnostics = InMemoryDiagnostics(clock = { now })
+    val mismatchNote = noteRepository.create(
+        NoteDraft("owner-1", "body que no debe filtrarse", null),
+    )
+    val mismatch = NoteIndexingService(
+        aiClient = FakeAiClient(),
+        embeddingRepository = embeddingRepository,
+        diagnostics = diagnostics,
+        expectedDimension = 3,
+    ).index(mismatchNote)
+    assertTrue(mismatch is IndexingResult.Failed, "un mismatch de dimensión debe dar Failed")
+    val cause = (mismatch as IndexingResult.Failed).cause
+    assertEquals(
+        "El embedding devolvió dimensión 8, se esperaba 3",
+        cause.message,
+        "el mensaje sólo reporta dimensiones",
+    )
+    assertNull(
+        embeddingRepository.getByNoteId(mismatchNote.id),
+        "un mismatch no debe persistir embedding",
+    )
+    val entry = diagnostics.snapshot().single()
+    assertEquals(DiagnosticSource.AI_INDEXING, entry.source)
+    assertEquals("indexing_failed", entry.summary)
+    assertFalse(entry.detail.orEmpty().contains(mismatchNote.body))
+    assertFalse(entry.detail.orEmpty().contains("owner-1"))
+
+    // --- expectedDimension: require > 0 ------------------------------------
+    assertFailsWith<IllegalArgumentException>("expectedDimension = 0 debe fallar") {
+        NoteIndexingService(
+            aiClient = FakeAiClient(),
+            embeddingRepository = embeddingRepository,
+            expectedDimension = 0,
+        )
+    }
 }

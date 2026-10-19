@@ -134,6 +134,15 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   los embeddings de otra dimensión se reconcilian a `PENDING`/`index_attempts=0`
   antes del reintento de arranque (`EmbeddingDimensionReconciler`). Razón:
   `ai-fake-real-switch`.
+- Todo embedding generado por el runtime real **MUST** medir
+  `playbook.ai.embeddingDimension` (1536). Un mismatch **MUST** rechazarse antes
+  de persistir, **MUST NOT** pisar un embedding previo y **MUST** seguir el ciclo
+  `PENDING`/reintento existente (`NoteIndexingService.expectedDimension` +
+  guard en `OpenAiAiClient.embed`); el mensaje/diagnóstico **MUST NOT** incluir
+  key, headers ni body. Razón: un vector de otra dimensión corrompe
+  Enlaces/RAG, y el límite de persistencia no puede depender sólo del proveedor.
+  Un mismatch persistente agota el presupuesto y termina en `FAILED` según
+  `offline-pending-retry` (no se agrega sonda de conectividad en esta feature).
 
 ## GDD
 

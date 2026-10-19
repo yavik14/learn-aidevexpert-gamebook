@@ -373,6 +373,22 @@ composeApp (Android app / commonMain) ──▶ core
   `index_attempts=0`; el reintento de arranque la re-indexa. No cambia el
   esquema ni llama a la IA. Se ejecuta en los composition roots antes de
   `retryPending()`.
+- **Embeddings reales en el indexado (`ai-real-embeddings`, 2026-10-19):**
+  contrato de dimensión en dos límites. (1) `OpenAiAiClient.embed` exige que
+  **cada** vector mida `config.embeddingDimension` (1536 real) y, si no, lanza
+  `AiClientException("embedding devolvió dimensión N, se esperaba M")` sin key,
+  headers ni body. (2) `NoteIndexingService` acepta
+  `expectedDimension: Int? = null` (`require` > 0 o `null`); con `null` conserva
+  el comportamiento anterior y con un valor rechaza el mismatch **antes** de
+  `embeddingRepository.upsert` (`IndexingResult.Failed` + `AI_INDEXING`). Los
+  composition roots pasan `aiRuntime.embeddingDimension` (8 fake / 1536 real).
+  Un mismatch deja la Nota `PENDING` y sigue el presupuesto de
+  `offline-pending-retry`; nunca se persiste un vector de dimensión inesperada
+  ni se degrada una Nota ya `INDEXED` en un re-indexado fallido. La cobertura de
+  integración conecta `openAiAiRuntime(config, HttpTransport falso)` con
+  SQLDelight in-memory, orquestador, retry, reconciliación, Enlaces y RAG, sin
+  red. Esto valida contrato/máquina de estados, **no** calidad semántica ni
+  disponibilidad del proveedor (eso lo cubre el smoke real key-gated).
 - **Política de secrets (durable):** ninguna API key/token/secret se versiona ni
   se commitea; el adaptador cloud lee su credencial de configuración fuera del
   repo (p. ej. `local.properties` ignorado o variable de entorno de build). El
