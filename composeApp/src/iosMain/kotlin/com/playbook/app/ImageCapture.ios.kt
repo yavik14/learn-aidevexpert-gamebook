@@ -10,6 +10,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import com.playbook.core.storage.AttachmentFileStore
+import com.playbook.core.storage.attachmentFileStore
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import platform.AVFoundation.AVAuthorizationStatusAuthorized
@@ -20,12 +22,8 @@ import platform.AVFoundation.authorizationStatusForMediaType
 import platform.AVFoundation.requestAccessForMediaType
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSData
-import platform.Foundation.NSFileManager
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
-import platform.Foundation.NSUUID
 import platform.Foundation.NSUserDomainMask
-import platform.Foundation.create
-import platform.Foundation.writeToFile
 import platform.PhotosUI.PHPickerConfiguration
 import platform.PhotosUI.PHPickerFilter
 import platform.PhotosUI.PHPickerResult
@@ -202,46 +200,22 @@ actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
     }
 
 @Composable
-actual fun rememberAttachmentFileStore(): AttachmentFileStore = remember { IosAttachmentFileStore() }
+actual fun rememberAttachmentFileStore(): AttachmentFileStore =
+    remember { attachmentFileStore(applicationSupportDir()) }
 
 /**
- * Archivos de adjuntos en `Application Support/images/` (almacenamiento privado).
- * La ruta guardada en la base es relativa al contenedor de la app para sobrevivir
- * a reinstalaciones/actualizaciones de iOS.
+ * Store de `:core` anclado a `Application Support` (almacenamiento privado). La
+ * ruta guardada en la base sigue siendo relativa al contenedor para sobrevivir a
+ * reinstalaciones/actualizaciones de iOS.
  */
-private class IosAttachmentFileStore : AttachmentFileStore {
-    private val fileManager = NSFileManager.defaultManager
+private fun applicationSupportDir(): String =
+    NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory,
+        NSUserDomainMask,
+        true,
+    ).firstOrNull() as? String ?: error("No se encontró Application Support")
 
-    private fun applicationSupportDir(): String =
-        NSSearchPathForDirectoriesInDomains(
-            NSApplicationSupportDirectory,
-            NSUserDomainMask,
-            true,
-        ).firstOrNull() as? String ?: error("No se encontró Application Support")
-
-    override fun saveImage(bytes: ByteArray, mimeType: String): StoredImage {
-        val imagesDir = "${applicationSupportDir()}/images"
-        if (!fileManager.fileExistsAtPath(imagesDir)) {
-            fileManager.createDirectoryAtPath(
-                path = imagesDir,
-                withIntermediateDirectories = true,
-                attributes = null,
-                error = null,
-            )
-        }
-        val name = "${NSUUID().UUIDString}.jpg"
-        bytes.toNSData().writeToFile("$imagesDir/$name", atomically = true)
-        return StoredImage(relativePath = "images/$name", byteSize = bytes.size.toLong())
-    }
-
-    override fun delete(relativePath: String): Boolean =
-        try {
-            fileManager.removeItemAtPath("${applicationSupportDir()}/$relativePath", error = null)
-        } catch (_: Throwable) {
-            false
-        }
-}
-
+/** Convierte los bytes de un `NSData` del picker a `ByteArray` (previsualización). */
 private fun NSData.toByteArray(): ByteArray {
     val size = length.toInt()
     if (size == 0) return ByteArray(0)
@@ -251,12 +225,3 @@ private fun NSData.toByteArray(): ByteArray {
     }
     return result
 }
-
-private fun ByteArray.toNSData(): NSData =
-    if (isEmpty()) {
-        NSData.create(bytes = null, length = 0uL)
-    } else {
-        usePinned { pinned ->
-            NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
-        }
-    }

@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.playbook.core.storage.AttachmentFileStore
+import com.playbook.core.storage.attachmentFileStore
 import java.io.File
 import java.util.UUID
 
@@ -158,25 +160,7 @@ actual fun decodeImageBitmap(bytes: ByteArray): ImageBitmap? =
 @Composable
 actual fun rememberAttachmentFileStore(): AttachmentFileStore {
     val context = LocalContext.current
-    return remember(context) { AndroidAttachmentFileStore(context) }
-}
-
-/**
- * Archivos de adjuntos en `filesDir/images/` (almacenamiento privado). La ruta
- * devuelta es relativa al contenedor de la app.
- */
-private class AndroidAttachmentFileStore(private val context: Context) : AttachmentFileStore {
-    override fun saveImage(bytes: ByteArray, mimeType: String): StoredImage {
-        val dir = File(context.filesDir, "images").apply { mkdirs() }
-        val name = "${UUID.randomUUID()}.jpg"
-        File(dir, name).writeBytes(bytes)
-        return StoredImage(relativePath = "images/$name", byteSize = bytes.size.toLong())
+    return remember(context) {
+        attachmentFileStore(context.filesDir.absolutePath)
     }
-
-    override fun delete(relativePath: String): Boolean =
-        try {
-            File(context.filesDir, relativePath).delete()
-        } catch (_: Throwable) {
-            false
-        }
 }

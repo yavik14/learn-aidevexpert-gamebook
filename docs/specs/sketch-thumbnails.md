@@ -14,6 +14,14 @@
 > almacén de adjuntos `AttachmentFileStore` de `:composeApp` a `:core` (patrón
 > `expect`/`actual` basado en `baseDir`, como `DiagnosticStorage`) y se le agrega
 > `read(relativePath): ByteArray?`. El cacheo de miniaturas queda **diferido**.
+>
+> **Estado del código al planificar (2026-10-19).** La UI ya usa **Géneros**
+> (`GenreLabelChip`) y no Etiquetas. `NotesListScreen` recibe
+> `attachmentKinds: Map<noteId, Set<AttachmentKind>>`; `GddScreen` recibe
+> `attachmentCounts: Map<noteId, Int>` y muestra `status`, Géneros y el chip
+> "Imagen". Las props nuevas de miniatura son **aditivas** y no cambian esos
+> contratos. `AttachmentRepository.getAll()` devuelve los Adjuntos ordenados por
+> `created_at ASC, id ASC`.
 
 ## Goal
 
@@ -34,6 +42,9 @@ reubicación del store). Sin dependencias nuevas, sin cambio de esquema, sin cac
   otras superficies (relacionadas, Q&A).
 - Cambiar la **captura/persistencia** de imágenes (formato, path, mime); sólo se
   reubica el store y se agrega `read`.
+- Corregir el comportamiento preexistente del chip "Imagen" del GDD (hoy se
+  muestra ante cualquier Adjunto, incluido `AUDIO`); esta feature sólo agrega la
+  miniatura cuando hay `IMAGE` y no altera los chips.
 - Audio (`AttachmentKind.AUDIO`) no tiene miniatura.
 - Deps nuevas, esquema, `init.sh`, IA, GDD híbrido/Proyecto.
 
@@ -60,11 +71,13 @@ so I can reconocer mis ideas visuales de un vistazo sin abrir cada Nota.
    reubica por testabilidad). `:composeApp` conserva `rememberAttachmentFileStore()`
    (ahora sólo calcula el `baseDir` y delega) y `decodeImageBitmap`.
 2. **Render tonto y perezoso.** `App` calcula `imagePaths: Map<noteId, relativePath>`
-   y un `loadThumbnail: suspend (String) -> ImageBitmap?`; las pantallas reciben esos
-   props y cada tarjeta carga la miniatura con `produceState` (sólo al componerse, es
+   (sólo `IMAGE`, primer Adjunto en el orden determinista del repositorio) y un
+   `loadThumbnail: suspend (String) -> ImageBitmap?`; las pantallas reciben esos
+   props **además** de las props actuales (`attachmentKinds`/`attachmentCounts`) y
+   cada tarjeta carga la miniatura con `produceState` (sólo al componerse, es
    decir, visible). Sin `ViewModel`/Flow/DI/ImageLoader.
 3. **Degradación tolerante.** Si el archivo no existe / no decodifica, no se muestra
-   imagen y se conserva el chip "Imagen"; nunca crashea.
+   imagen y se conservan los chips existentes (incluido "Imagen"); nunca crashea.
 
 ## Acceptance Scenarios
 
@@ -99,7 +112,8 @@ los chips.
 
 ### Scenario 7: miniatura en el GDD
 Given una Nota con Adjunto `IMAGE` en una sección, When se renderiza `GddScreen`,
-Then su tarjeta muestra la miniatura además de `status`/Etiquetas/chip "Imagen".
+Then su tarjeta muestra la miniatura además de `status`/Géneros (`GenreLabelChip`)
+y el chip "Imagen".
 
 ### Scenario 8: sin imagen no hay miniatura
 Given una Nota sin Adjunto `IMAGE` (o sólo `AUDIO`), When se renderiza su tarjeta,
@@ -107,13 +121,15 @@ Then no aparece miniatura (no hay hueco vacío) y el resto de la tarjeta no camb
 
 ### Scenario 9: degradación sin archivo/decodificación
 Given un Adjunto `IMAGE` cuyo archivo falta o cuyos bytes no decodifican, When se
-renderiza la tarjeta, Then no aparece miniatura, se conserva el chip "Imagen" y la
-pantalla **no** crashea.
+renderiza la tarjeta, Then no aparece miniatura, se conservan los chips existentes
+(incluido "Imagen") y la pantalla **no** crashea.
 
 ### Scenario 10: gate honesto
 Given los escenarios 1–9, When corren `:core:testDebugUnitTest`,
 `:composeApp:assembleDebug` y `./init.sh`, Then todo pasa en Android/JVM, sin red ni
-deps nuevas, y `./init.sh` termina en `0`.
+deps nuevas, y `./init.sh` termina en `0`. En macOS, adicionalmente,
+`:composeApp:linkDebugFrameworkIosSimulatorArm64` compila (no bloqueante para el
+gate Android-only).
 
 ## Repository Research
 
@@ -134,11 +150,20 @@ deps nuevas, y `./init.sh` termina en `0`.
   archivos en `:core` (`interface` + `expect fun diagnosticStorage(path)` + actuals
   `java.io.File`/`NSFileManager`) y su test `verifyDiagnosticStorage` +
   `DiagnosticsStorage{Android,Ios}Test`.
-- `composeApp/.../{App,NotesListScreen,GddScreen}.kt` — `App` carga `attachments`,
-  calcula `attachmentKinds`/`attachmentCounts`, y pasa esos mapas a las pantallas;
-  las tarjetas renderizan cuerpo + chips.
+- `composeApp/.../App.kt` — carga `attachments`, calcula
+  `attachmentKinds: Map<noteId, Set<AttachmentKind>>` y
+  `attachmentCounts: Map<noteId, Int>`, y crea `fileStore` con
+  `rememberAttachmentFileStore()`.
+- `composeApp/.../NotesListScreen.kt` — `NotesListScreen(notes, attachmentKinds, …)`;
+  `NoteCard(note, attachmentKinds, onClick)` renderiza cuerpo + chips de Adjunto,
+  `track`, `status` y Géneros.
+- `composeApp/.../GddScreen.kt` — `GddScreen(notes, attachmentCounts, …)`;
+  `GddNoteCard(note, hasAttachment, onClick)` renderiza cuerpo + `status`, chip
+  "Imagen" y Géneros (`GenreLabelChip`).
 - `core/src/commonTest/.../repository/AttachmentRepositoryCheck.kt` — metadatos del
-  Adjunto (ruta relativa `images/…`), sin bytes.
+  Adjunto (ruta relativa `images/…`), sin bytes. `selectAllAttachments` ordena por
+  `created_at ASC, id ASC`.
+- `DESIGN.md` — tarjeta de Nota con miniatura y recorte `rounded.md` (ya vigente).
 
 ### Existing Patterns To Follow
 
@@ -183,9 +208,12 @@ expect fun attachmentFileStore(baseDir: String): AttachmentFileStore
   `read` = `readBytes()` si `isFile`, `delete` = `File.delete()`.
 - `iosMain/.../storage/AttachmentFileStore.ios.kt`: `NSFileManager`/`NSUUID`/
   `NSData` (helpers `ByteArray`↔`NSData` movidos desde `ImageCapture.ios.kt`);
-  `read` = `NSData.dataWithContentsOfFile`.
-- **Path traversal**: `read`/`delete` resuelven la ruta y verifican que quede dentro
-  de `baseDir`; si no, `null`/`false`.
+  `read` = `NSData.dataWithContentsOfFile`; `delete` =
+  `removeItemAtPath(_:error:)` devolviendo `true/false`.
+- **Path traversal**: `read`/`delete` normalizan la ruta y verifican que quede
+  dentro de `baseDir` (prefijo con separador final); si no, `null`/`false`. La
+  implementación iOS evita APIs de canonicalización exóticas: normaliza `..` y
+  separadores antes del chequeo de prefijo.
 
 ### 2. `:composeApp` (reubicación + loader)
 
@@ -197,22 +225,32 @@ expect fun attachmentFileStore(baseDir: String): AttachmentFileStore
 - `ImageCapture.ios.kt`: `actual` →
   `attachmentFileStore(applicationSupportDir())` (borra `IosAttachmentFileStore`;
   mueve `toNSData` a `:core`; mantiene el `toByteArray` del picker).
-- `App.kt`: calcula `imagePaths = attachments.filter { it.kind == IMAGE }
-  .associate { it.noteId to it.filePath }` (primer Adjunto `IMAGE` por Nota) y
-  `loadThumbnail = { path -> fileStore.read(path)?.let(::decodeImageBitmap) }`;
-  los pasa a `NotesListScreen` y `GddScreen`.
+- `App.kt`: calcula `imagePaths` sólo con Adjuntos `IMAGE`, quedándose con el
+  **primero** por Nota en el orden determinista del repositorio:
+  ```kotlin
+  val imagePaths = attachments
+      .filter { it.kind == AttachmentKind.IMAGE }
+      .distinctBy { it.noteId }
+      .associate { it.noteId to it.filePath }
+  val loadThumbnail: suspend (String) -> ImageBitmap? =
+      { path -> fileStore.read(path)?.let(::decodeImageBitmap) }
+  ```
+  Los pasa a `NotesListScreen` y `GddScreen` sin quitar las props actuales.
 
 ### 3. UI (miniaturas)
 
 - Nuevo composable `NoteThumbnail(path, loadThumbnail)`:
   `val bitmap by produceState<ImageBitmap?>(null, key1 = path) { value =
   withContext(Dispatchers.Default) { loadThumbnail(path) } }`; si no es `null`,
-  `Image(bitmap, contentDescription = "Miniatura del boceto",
-  modifier = Modifier.size(72.dp).clip(RoundedCornerShape(8.dp)),
-  contentScale = ContentScale.Crop)`.
+  `Column { Image(bitmap, contentDescription = "Miniatura del boceto",
+  modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)),
+  contentScale = ContentScale.Crop); Spacer(8.dp) }`. El espaciado vive dentro
+  del composable: no hay hueco si la imagen falta o no decodifica.
 - `NotesListScreen`/`GddScreen`: props nuevas `imagePaths` + `loadThumbnail`; la
-  tarjeta renderiza `NoteThumbnail` sólo si `imagePaths[note.id] != null`. Chips y
-  cuerpo sin cambios.
+  tarjeta renderiza `NoteThumbnail` sólo si `imagePaths[note.id] != null`. En la
+  lista se conserva `attachmentKinds`; en el GDD se conserva `attachmentCounts`.
+  Chips, Géneros y cuerpo sin cambios. Si la miniatura no decodifica, el
+  composable no emite `Image` (no deja hueco).
 
 ## Expected File Changes
 
@@ -228,6 +266,7 @@ expect fun attachmentFileStore(baseDir: String): AttachmentFileStore
   `core/src/iosTest/.../storage/AttachmentFileStoreIosTest.kt` — **crear**; runners.
 - `composeApp/.../ImageCapture.kt`, `ImageCapture.android.kt`, `ImageCapture.ios.kt`
   — modificar; usan el store de `:core` (`read` disponible).
+- `composeApp/.../NoteThumbnail.kt` — **crear**; composable perezoso + degradación.
 - `composeApp/.../{App,NotesListScreen,GddScreen}.kt` — modificar; `imagePaths` +
   `loadThumbnail` + render de miniatura.
 - `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`
@@ -289,7 +328,8 @@ No se esperan cambios en `Attachment.kt`/`AttachmentRepository`, el esquema/`.sq
 - `./init.sh` → exit 0; gate Android-only, sin dev servers ni red.
 - `git status`/`git diff` → `attachment` (esquema) sin cambios; sin `.sqm` ni deps.
 - **iOS (no bloqueante, macOS):** `./gradlew :core:iosSimulatorArm64Test` y
-  `:composeApp:linkDebugFrameworkIosSimulatorArm64` compilan.
+  `:composeApp:linkDebugFrameworkIosSimulatorArm64` compilan. El `actual` iOS del
+  store debe existir aunque el gate no lo ejecute.
 - **Smoke manual Android** (emulador): crear una Nota con imagen (cámara/galería) →
   la **lista** y el **GDD** muestran la miniatura; una Nota sólo-texto/sólo-audio no
   muestra miniatura; borrar el archivo del Adjunto → la tarjeta sigue sin crashear.
@@ -299,6 +339,19 @@ No se esperan cambios en `Attachment.kt`/`AttachmentRepository`, el esquema/`.sq
   (c) quitar el guard de path traversal → falla el Scenario 4.
 - E2E persistente: **no aplica** (sin harness E2E; `init.sh` no levanta simuladores).
   Cobertura: test del store en `:core` + compilación de la app + smoke manual Android.
+
+## Risks and Limits
+
+- Se decodifica la imagen a tamaño completo y se escala en pantalla; con bocetos
+  grandes puede haber picos de memoria. El cacheo/redimensionado queda diferido
+  (non-goal), así que se declara como límite, no se optimiza aquí.
+- No hay test de UI/E2E automatizado: la miniatura visible se verifica por
+  compilación + smoke manual Android; si no hay `adb`/emulador, se registra
+  honestamente como no ejecutado.
+- Varios Adjuntos `IMAGE` por Nota son posibles en el modelo pero no en el flujo
+  de producto; se muestra el primero según `created_at ASC, id ASC`.
+- El `actual` iOS no se ejecuta en el gate (iOS congelado); sólo se exige que
+  compile/linkee.
 
 ## Evidence To Capture
 

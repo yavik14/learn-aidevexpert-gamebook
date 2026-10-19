@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
 import com.playbook.app.voice.RecordedAudio
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
@@ -445,10 +446,22 @@ fun App(
             .mapValues { (_, kinds) -> kinds.toSet() }
         val attachmentCounts = attachmentKinds.mapValues { (_, kinds) -> kinds.size }
 
+        // `attachments` llega ordenado por `created_at ASC, id ASC`: `distinctBy`
+        // conserva el primer Adjunto IMAGE por Nota, de forma determinista.
+        val imagePaths = attachments
+            .filter { it.kind == AttachmentKind.IMAGE }
+            .distinctBy { it.noteId }
+            .associate { it.noteId to it.filePath }
+        val loadThumbnail: suspend (String) -> ImageBitmap? = { path ->
+            fileStore.read(path)?.let(::decodeImageBitmap)
+        }
+
         when (val current = destination) {
             NotesDestination.List -> NotesListScreen(
                 notes = notes,
                 attachmentKinds = attachmentKinds,
+                imagePaths = imagePaths,
+                loadThumbnail = loadThumbnail,
                 onCreate = { destination = NotesDestination.Create },
                 onCaptureImage = { showImageSourceDialog = true },
                 onEdit = { noteId -> destination = NotesDestination.Edit(noteId) },
@@ -483,6 +496,8 @@ fun App(
             NotesDestination.Gdd -> GddScreen(
                 notes = notes,
                 attachmentCounts = attachmentCounts,
+                imagePaths = imagePaths,
+                loadThumbnail = loadThumbnail,
                 onOpenNote = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
             )

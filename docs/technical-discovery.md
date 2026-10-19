@@ -1027,9 +1027,11 @@ Revisión de alcance 2026-10-15. Decisión en `docs/adr/0003-ios-congelado-mvp.m
   verifique) para no romper el build compartido.
 - **Sugerencias de Brainstorming:** vía `AiClient.generate` (2 por paso, a
   demanda); hoy `FakeAiClient`.
-- **Miniaturas de imagen:** se extiende `AttachmentFileStore` con
-  `read(relativePath): ByteArray?` y se decodifica con `decodeImageBitmap()`
-  existente (sin deps nuevas).
+- **Miniaturas de imagen:** implementadas en `sketch-thumbnails` (2026-10-19).
+  El store de Adjuntos se reubicó en `:core` (`com.playbook.core.storage`) y se
+  extendió con `read(relativePath): ByteArray?`; la UI decodifica con
+  `decodeImageBitmap()` (sin deps nuevas). El cacheo/redimensionado sigue
+  diferido. Ver "Thumbnail Decisions".
 - **Esquema v7 (Géneros):** renombre N—N a **Géneros** (catálogo fijo +
   personalizados) con `6.sqm` v6→v7, copiando las etiquetas libres a Géneros
   personalizados (verbatim).
@@ -1293,6 +1295,7 @@ pass-through de la dimensión a `NoteIndexingService`.
   la reconciliación no recomputa `note_link` (Relacionadas se recomputa al
   abrir); la dimensión activa no se expone en UI/diagnóstico. Sin cambios de
   esquema (v8), `init.sh`, `App.kt`, `iosApp/**` ni dependencias de producción.
+
 ## Inline Dictation Decisions (inline-dictation-30s)
 
 Implementado 2026-10-19. Detalles en `ARCHITECTURE.md`.
@@ -1353,3 +1356,42 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md`.
   `AttachmentRepository`, `AttachmentKind.AUDIO` y `currentTimeMillis()`; sin
   `.sqm`, sin build files, sin `init.sh` y sin permisos nuevos. iOS congelado sólo
   se verifica que compile.
+
+## Thumbnail Decisions (sketch-thumbnails)
+
+Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y
+`docs/specs/sketch-thumbnails.md`.
+
+- **Store en `:core` por testabilidad.** `StoredImage` y
+  `AttachmentFileStore` (`saveImage`/`read`/`delete`) se movieron de
+  `:composeApp` a `com.playbook.core.storage` como `interface` + `expect fun
+  attachmentFileStore(baseDir: String)`, siguiendo el precedente de
+  `DiagnosticStorage`. `read` es nuevo: devuelve los bytes exactos o `null` si
+  el archivo no existe/no se puede leer.
+- **Actuals por plataforma.** Android/JVM usa `java.io.File` y
+  `canonicalFile` para el guard; iOS usa `NSFileManager`/`NSData` y normaliza
+  `.`/`..`/separadores antes del chequeo de prefijo (sin APIs de
+  canonicalización exóticas). En ambos, `read`/`delete` devuelven `null`/`false`
+  si la ruta escapa de `baseDir` (path traversal).
+- **Rutas y contrato preservados.** `saveImage` sigue escribiendo
+  `images/<uuid>.jpg` y devolviendo la ruta **relativa**; no hay migración ni
+  cambio de la tabla `attachment`. `rememberAttachmentFileStore()` en
+  `:composeApp` sólo calcula el `baseDir` (`filesDir` Android, `Application
+  Support` iOS) y delega en `:core`.
+- **Render perezoso y tolerante.** `App` calcula `imagePaths` sólo con Adjuntos
+  `IMAGE` (el primero por Nota según `created_at ASC, id ASC`) y un
+  `loadThumbnail` que lee + decodifica. `NoteThumbnail` usa
+  `produceState` (carga al componerse) y `Dispatchers.Default`; `Image` de
+  72 dp con recorte `rounded.md` de 16 dp y `ContentScale.Crop`. El espaciado
+  inferior se emite dentro de `NoteThumbnail`, junto con la imagen. Si el archivo
+  falta o no decodifica, no hay `Image` ni espaciado (sin placeholder) y la
+  tarjeta conserva cuerpo y chips (incluido "Imagen" en el GDD).
+- **Cacheo diferido.** Se decodifica a tamaño completo y se escala en pantalla;
+  no hay cache en memoria/disco ni redimensionado en esta feature. Límite
+  declarado en `docs/risks-and-open-questions.md`.
+- **Verificación:** `:core:testDebugUnitTest` 26 suites/77 tests/0 failures
+  (incluye `AttachmentFileStoreAndroidTest`), `:core:iosSimulatorArm64Test`
+  26/77/0 (incluye `AttachmentFileStoreIosTest`), `:composeApp:assembleDebug`
+  OK, `./init.sh` exit 0 y link iOS OK. Controles negativos (a/b/c)
+  reproducidos y restaurados. Smoke Android manual no ejecutado (sin
+  `adb`/emulador en el entorno).
