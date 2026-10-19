@@ -19,10 +19,12 @@ import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.platform.randomNoteId
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.EmbeddingRepository
+import com.playbook.core.repository.GameProjectRepository
 import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
 import com.playbook.core.repository.SqlDelightAttachmentRepository
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
+import com.playbook.core.repository.SqlDelightGameProjectRepository
 import com.playbook.core.repository.SqlDelightNoteLinkRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
 import platform.Foundation.NSApplicationSupportDirectory
@@ -30,11 +32,12 @@ import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
 import platform.UIKit.UIViewController
 
-// Base local, repositorios (notas, adjuntos, embeddings, enlaces) y runtime de IA
-// fake en iOS: se crean una sola vez al arrancar y aplican el esquema v5. La UI
-// compartida los consume vía App(...).
+// Base local, repositorios (notas, Proyecto, adjuntos, embeddings, enlaces) y
+// runtime de IA fake en iOS: se crean una sola vez al arrancar y aplican el
+// esquema v8. La UI compartida los consume vía App(...).
 private var playbookDatabase: PlaybookDatabase? = null
 private var noteRepository: NoteRepository? = null
+private var gameProjectRepository: GameProjectRepository? = null
 private var attachmentRepository: AttachmentRepository? = null
 private var embeddingRepository: EmbeddingRepository? = null
 private var noteLinkRepository: NoteLinkRepository? = null
@@ -67,6 +70,10 @@ fun MainViewController(): UIViewController {
         idFactory = ::randomNoteId,
         clock = ::currentTimeMillis,
     ).also { noteRepository = it }
+    val projects = gameProjectRepository ?: SqlDelightGameProjectRepository(
+        database = database,
+        clock = ::currentTimeMillis,
+    ).also { gameProjectRepository = it }
     val attachments = attachmentRepository ?: SqlDelightAttachmentRepository(
         database = database,
         idFactory = ::randomNoteId,
@@ -117,6 +124,17 @@ fun MainViewController(): UIViewController {
     // iOS fake usa 8 dimensiones; reconcilia por consistencia con el runtime activo.
     EmbeddingDimensionReconciler(embeddings, notes).reconcile(runtime.embeddingDimension)
     return ComposeUIViewController {
-        App(notes, attachments, transcriber, orchestrator, retry, rag, links, linking, diag)
+        App(
+            noteRepository = notes,
+            gameProjectRepository = projects,
+            attachmentRepository = attachments,
+            voiceTranscriber = transcriber,
+            noteIndexingOrchestrator = orchestrator,
+            pendingIndexingRetry = retry,
+            ragQueryService = rag,
+            noteLinkRepository = links,
+            semanticLinkingService = linking,
+            diagnostics = diag,
+        )
     }
 }

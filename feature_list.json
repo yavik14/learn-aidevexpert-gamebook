@@ -950,14 +950,50 @@
     "title": "Wizard de Brainstorming (9 pasos)",
     "user_visible_behavior": "El usuario completa/itera el Proyecto con un asistente de 9 pasos (todos opcionales) con progreso y navegación atrás/siguiente.",
     "depends_on": [
-      "game-project-persistence"
+      "game-project-persistence",
+      "genres-catalog-ui"
+    ],
+    "status": "accepted",
+    "verification": [
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL.",
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 23 suites / 55 tests / 0 failures / 0 errors en la validación (25 suites / 76 tests / 0 failures al rebasar sobre `develop` con `ai-fake-real-switch`).",
+      "`CI=true ./init.sh` → exit 0 (Android-only, sin red ni dev servers).",
+      "iOS (no bloqueante): `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "Esquema v8 sin cambios: `.sqm` = `1.sqm`..`7.sqm`; sin `.sqm` nuevo ni cambios en `:core`, build files, `init.sh`, `iosApp` o `GenrePicker.kt`.",
+      "Smoke Android: entrada desde la lista; 9 pasos y progreso; guardado vacío; ficha completa (Título, Géneros catálogo + personalizado, Core Loop, Audiencia, Concepto, 3 Inspiraciones, Fantasía, tope 5/5 de Mecánicas verificado en UI con filas vacías descartadas, 3 Fuera de alcance); reapertura con precarga; cancelación sin escritura; iteración/reemplazo; error de mecánica sin categoría; topes 3/3/5 deshabilitados. Evidencia en `composeApp/build/smoke-evidence/brainstorming-wizard/`.",
+      "Controles negativos (restaurados): (a) sin `GameProjectRepository.save` no se crea fila y aparece error; (b) ignorar `initialProject` deja el Título vacío al reabrir; (c) sin la validación de categoría no aparece el error y la mecánica incompleta se descarta.",
+      "E2E persistente: no aplica (sin harness UI/E2E; `init.sh` no levanta simuladores). Cobertura: tests de `GameProjectRepository` en `:core`, compilación + link iOS y smoke manual Android."
+    ],
+    "evidence": [
+      "2026-10-19: `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (54 tasks en la base rebasada; luego 60 tasks con caché/integración).",
+      "2026-10-19: `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 23 suites / 55 tests / 0 failures / 0 errors / 0 skipped en la validación original (conteo de `core/build/test-results/testDebugUnitTest/TEST-*.xml`).",
+      "2026-10-19: `CI=true ./init.sh` → exit 0 (assembleDebug + testDebugUnitTest; Android-only, sin dev servers ni red).",
+      "2026-10-19: `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (iOS congelado, sólo compilación).",
+      "2026-10-19: `BrainstormingWizardScreen.kt` nuevo: `LinearProgressIndicator` + `Paso X/9`, 9 pasos, `GenrePicker` reutilizado, topes 3/3/5, `StringListStep`/`MechanicsStep`, validación de mecánica sin categoría y `AlertDialog` de error.",
+      "2026-10-19: `App` recibe `gameProjectRepository`, carga `project` en `LaunchedEffect(refreshKey)` y agrega `NotesDestination.Brainstorming`; `onSave` llama `save(draft)` (draft completo) y navega sólo si tuvo éxito. `MainActivity`/`MainViewController` construyen y pasan `SqlDelightGameProjectRepository`; la llamada iOS pasó a argumentos nombrados.",
+      "2026-10-19: `NotesListScreen` agrega la fila temporal \"Brainstorming\" (`onOpenBrainstorming`); sin cambios en `GenrePicker.kt`, `NoteEditorScreen.kt`, `:core`, esquema, build files, `init.sh` ni `iosApp`.",
+      "2026-10-19 (smoke Android, emulator-5556, Pixel_3A_API_35): lista con \"Brainstorming\" → `Paso 1/9`, Atrás deshabilitado; navegación hasta `Paso 9/9`; Guardar vacío → DB `singleton|local|||||` y tablas hijas vacías; reapertura; ficha completa → DB `ProyectoAurora2|Explorar|Jugadores|Metroidvania|Poder`, `game_project_genre` `JRPG`/`Platformer`/`Zelda`, `game_project_inspiration` `Hollow`/`Celeste`, `game_project_key_mechanic` `movimiento|Dash`, `game_project_out_of_scope` `Multijugador`/`Editor`/`VR`; guardado desde el paso 1 conserva el resto de la ficha (draft completo); quitar la Inspiración 3 y guardar deja sólo `Hollow`/`Celeste` (sin huérfanas); Cancelar tras editar no cambia la DB; reabrir precarga Título/Géneros/Inspiraciones/Mecánica. Evidencia en `composeApp/build/smoke-evidence/brainstorming-wizard/` (`01`–`07`, PNG/XML/DB).",
+      "2026-10-19: controles negativos reproducidos y restaurados byte-idénticos (backup + `diff -q`): (a) `onSave` sin `save` → `No se pudo guardar` y `SELECT id FROM game_project` vacío; (b) Título inicializado en `\"\"` → se abre vacío pese a `ProyectoAurora2` en DB; (c) `incompleteMechanic = false` → desaparece el diálogo y la mecánica incompleta se descarta; restaurados y recompilados.",
+      "2026-10-19: validación independiente (`feature-validator`) → **accept**; ver `docs/validations/brainstorming-wizard.md`. Re-ejecutó `./gradlew :composeApp:assembleDebug --rerun-tasks` (BUILD SUCCESSFUL, 54 tasks), `./gradlew :core:testDebugUnitTest --rerun-tasks` (23 suites / 55 tests / 0 failures / 0 errors), `CI=true ./init.sh` (exit 0) y `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` (BUILD SUCCESSFUL); verificó esquema v8 (`.sqm` 1..7) y ausencia de cambios en `:core`, build files, `init.sh`, `iosApp` y `GenrePicker.kt`. Smoke Android propio en emulator-5556 (entrada, progreso, guardado vacío, ficha completa, topes, reapertura, cancelación, iteración/reemplazo y error de mecánica). Hallazgos Low no bloqueantes: encabezado sin `Paso X/9 · <paso>` en una sola línea, emulador compartido y evidencia del smoke del implementer sobre mecánicas.",
+      "2026-10-19 (post-rebase sobre `origin/develop`, que incluye `ai-fake-real-switch`): `./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL; `./gradlew :core:testDebugUnitTest --rerun-tasks` → 25 suites / 76 tests / 0 failures / 0 errors / 0 skipped; `CI=true ./init.sh` → exit 0; `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL. Conflictos de docs resueltos conservando ambas features; sin cambios en `:core`, esquema (v8, `.sqm` 1..7), build files, `init.sh`, `iosApp/**` ni `GenrePicker.kt`."
+    ],
+    "notes": "Wizard de 9 pasos para crear/iterar únicamente la ficha del Proyecto: todos los pasos opcionales, progreso `Paso X/9`, guardado explícito de un `GameProjectDraft` completo, reapertura con precarga y Cancelar sin escritura. Reutiliza `GenrePicker`; topes 3/3/5; mecánica con descripción sin categoría bloquea con error; entrada temporal \"Brainstorming\" en la lista. Sin IA, sin Notas por paso (`brainstorming-note-per-step`), sin onboarding/GDD híbrido/rediseño de principal, sin cambios en `:core`, esquema, build files, `init.sh` ni `iosApp`. `accepted` (validación independiente `accept`, 2026-10-19; `docs/validations/brainstorming-wizard.md`)."
+  },
+  {
+    "id": "brainstorming-note-per-step",
+    "area": "ui",
+    "title": "Guardar cada paso del Brainstorming como Nota",
+    "user_visible_behavior": "Desde cada paso del wizard, el usuario puede guardar su contenido como una Nota pre-clasificada por contexto (Track/Géneros), sin salir del flujo.",
+    "depends_on": [
+      "brainstorming-wizard",
+      "create-text-note"
     ],
     "status": "not_started",
     "verification": [
-      "Provisional: build Android + smoke del wizard (pasos, progreso X/9, guardar/iterar)."
+      "Provisional: build Android + smoke de \"Guardar como Nota\" en cada paso; la Nota aparece en la lista/GDD con el Track/Géneros esperados."
     ],
     "evidence": [],
-    "notes": "Pasos: Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones (≤3), Fantasía, Mecánicas clave (5 con categoría), Fuera de alcance (≤3). Reabrible para iterar."
+    "notes": "Separada de brainstorming-wizard por decisión del autor (2026-10-19). Requiere definir el mapeo paso→body/Track/Géneros (propuesto en docs/risks-and-open-questions.md) y si la Nota se indexa al guardar."
   },
   {
     "id": "brainstorming-ai-suggestions",

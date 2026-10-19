@@ -20,17 +20,20 @@ import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.platform.randomNoteId
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.EmbeddingRepository
+import com.playbook.core.repository.GameProjectRepository
 import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
 import com.playbook.core.repository.SqlDelightAttachmentRepository
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
+import com.playbook.core.repository.SqlDelightGameProjectRepository
 import com.playbook.core.repository.SqlDelightNoteLinkRepository
 import com.playbook.core.repository.SqlDelightNoteRepository
 import java.io.File
 
 class MainActivity : ComponentActivity() {
-    // Se instancia al arrancar para aplicar el esquema local (v5) y alimentar los
-    // repositorios de notas, adjuntos, embeddings y enlaces que consume la UI.
+    // Se instancia al arrancar para aplicar el esquema local (v8) y alimentar los
+    // repositorios de notas, Proyecto, adjuntos, embeddings y enlaces que consume
+    // la UI.
     private lateinit var database: PlaybookDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +42,10 @@ class MainActivity : ComponentActivity() {
         val noteRepository: NoteRepository = SqlDelightNoteRepository(
             database = database,
             idFactory = ::randomNoteId,
+            clock = ::currentTimeMillis,
+        )
+        val gameProjectRepository: GameProjectRepository = SqlDelightGameProjectRepository(
+            database = database,
             clock = ::currentTimeMillis,
         )
         val attachmentRepository: AttachmentRepository = SqlDelightAttachmentRepository(
@@ -91,6 +98,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 noteRepository = noteRepository,
+                gameProjectRepository = gameProjectRepository,
                 attachmentRepository = attachmentRepository,
                 voiceTranscriber = voiceTranscriber,
                 noteIndexingOrchestrator = noteIndexingOrchestrator,

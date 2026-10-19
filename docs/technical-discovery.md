@@ -1209,3 +1209,42 @@ Implementado 2026-10-19. Proveedor propio OpenAI-compatible
   transporte Android (servidor HTTP local). El smoke de los 6 modelos es
   key-gated (`PLAYBOOK_AI_SMOKE=1`), fuera del gate.
 - **iOS:** congelado; usa `fakeAiRuntime()`, sin transporte real.
+
+## Brainstorming Wizard Decisions (brainstorming-wizard)
+
+Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
+
+- **Sólo ficha del Proyecto.** El wizard de 9 pasos escribe únicamente
+  `GameProject` con `GameProjectRepository.save(draft)`; no crea Notas,
+  Adjuntos, embeddings ni llamadas de IA. La creación de Notas por paso se
+  separó a `brainstorming-note-per-step` (`not_started`).
+- **Guardado explícito.** "Guardar" envía un `GameProjectDraft` **completo**
+  construido con todo el formulario; el repositorio reemplaza la ficha y sus
+  hijas. Nunca se guarda sólo el paso actual (un draft parcial borraría campos).
+  "Cancelar" descarta los cambios locales; "Atrás" no guarda. Reabrir precarga
+  desde `get()` y se re-inicializa si el Proyecto termina de cargar (clave
+  `updatedAt`).
+- **Todos opcionales.** Se permite avanzar con campos vacíos y guardar un
+  Proyecto vacío; el singleton se crea con `owner = "local"` y campos
+  `null`/listas vacías. `owner`/`createdAt` se preservan en updates.
+- **Géneros compartidos.** El paso Género reutiliza `GenrePicker` de
+  `genres-catalog-ui` (catálogo + personalizado, `normalizeGenres`); no se
+  duplica el picker ni se toca `NoteEditorScreen`.
+- **Límites.** Inspiraciones ≤3, Fuera de alcance ≤3, Mecánicas ≤5. La UI
+  deshabilita "Agregar" al tope; el repositorio valida después de normalizar.
+  Las filas vacías se descartan. Una mecánica con descripción y sin categoría
+  bloquea el guardado con un `AlertDialog`; una fila totalmente vacía se
+  descarta.
+- **Entrada temporal.** `NotesListScreen` suma un botón "Brainstorming" en una
+  fila propia; `main-screen-playbook-shell` lo reemplazará por el icono de top
+  bar. No hay apertura automática en el primer arranque
+  (`first-run-project-onboarding`).
+- **Sin IA ni rediseño.** No se muestran sugerencias; `brainstorming-ai-suggestions`
+  las agrega después. Progreso con `LinearProgressIndicator` + `Paso X/9`, sin
+  artefacto de diseño nuevo.
+- **Verificación:** `assembleDebug` OK, `:core:testDebugUnitTest` 23 suites/55
+  tests/0 failures con `--rerun-tasks`, `./init.sh` exit 0, link iOS no
+  bloqueante y smoke Android (entrada, 9 pasos, guardado vacío, ficha completa,
+  géneros catálogo + personalizado, topes 3/3/5, reapertura, cancelación,
+  iteración/reemplazo y error de mecánica incompleta). Evidencia en
+  `composeApp/build/smoke-evidence/brainstorming-wizard/`.

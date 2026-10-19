@@ -33,8 +33,9 @@ import com.playbook.core.model.Note
 /**
  * Lista de notas locales. Permite crear una nota de texto, capturar/adjuntar una
  * imagen, dictar una nota de voz ("Dictar nota"), abrir una tarjeta para
- * editarla y abrir la vista de GDD ("Ver GDD"). El refresco tras la mutación lo
- * maneja [App]: esta pantalla sólo emite intenciones.
+ * editarla, abrir la vista de GDD ("Ver GDD"), consultar ("Preguntar") y abrir
+ * el wizard de Brainstorming. El refresco tras la mutación lo maneja [App]:
+ * esta pantalla sólo emite intenciones.
  *
  * El estado vacío y el estado con notas se manejan de forma explícita. El
  * `track` y el `status` se muestran como texto (nunca sólo con color), según la
@@ -51,6 +52,7 @@ fun NotesListScreen(
     onDictate: () -> Unit,
     onOpenGdd: () -> Unit,
     onAsk: () -> Unit,
+    onOpenBrainstorming: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -96,6 +98,13 @@ fun NotesListScreen(
                 ) {
                     Text(text = "Preguntar")
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            FilledTonalButton(
+                onClick = onOpenBrainstorming,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "Brainstorming")
             }
             Spacer(modifier = Modifier.height(16.dp))
             if (notes.isEmpty()) {

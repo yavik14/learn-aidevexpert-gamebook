@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` (gate no bloqueante **Android-only**) corre `:composeApp:assembleDebug` + `:core:testDebugUnitTest`, sin levantar dev servers. iOS está congelado (ADR 0003).
-- Última feature `accepted`: `ai-fake-real-switch` (2026-10-19; Session 056; selección fake/real por build flag + adaptadores reales OpenAI-compatible de los 6 modelos + reconciliación de dimensión de embeddings; validación independiente `accept`); antes `game-project-persistence` (Session 054) y `genres-catalog-ui` (Sessions 052/053).
+- Última feature `accepted`: `brainstorming-wizard` (2026-10-19; Session 060; wizard de 9 pasos sobre la ficha del Proyecto, esquema v8; validación independiente `accept` en `docs/validations/brainstorming-wizard.md`); antes `ai-fake-real-switch` (Session 057), `game-project-persistence` (Session 054) y `genres-catalog-ui` (Sessions 052/053).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -34,8 +34,9 @@
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
 - `game-project-persistence` `accepted` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, persistida en Session 054): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
 - `genres-catalog-ui` `accepted` (2026-10-19; Sessions 052/053; validación independiente `accept` en `docs/validations/genres-catalog-ui.md`; rebasada sobre `develop` con `game-project-persistence` v8): picker de **Géneros** en `:composeApp` — 12 chips de catálogo en `FlowRow` con toggle, "Seleccionados" con `×`, alta de personalizado y toda alta/remoción vía `normalizeGenres`; `GenreLabelChip` distingue catálogo (`primaryContainer`) vs personalizado (`secondaryContainer`) en tarjetas, GDD y relacionadas. Incluye el **fix de layout** tras la validación `revise`: `NoteEditorScreen` con contenido scrollable y fila Borrar/Cancelar/Guardar fija (cuerpo `heightIn(200..320dp)`). No toca `:core`/esquema (el global es v8 por `game-project-persistence`)/`App.kt`/build files/deps. Gate en la base rebasada: `assembleDebug` OK, `:core:testDebugUnitTest` 23 suites/55 tests/0 failures, `./init.sh` exit 0 e iOS link OK. Smoke Android completo (toggle, canonización, dedupe, tarjeta, reapertura, edición, 13 Géneros, GDD con personalizado y persistencia tras relanzar). Ver `feature_list.json`, `docs/validations/genres-catalog-ui.md` y `composeApp/build/smoke-evidence/genres-catalog-ui/`.
+- `brainstorming-wizard` `accepted` (2026-10-19; Session 059 implementación + Session 060 cierre; validación independiente `accept` en `docs/validations/brainstorming-wizard.md`): wizard de 9 pasos para crear/iterar la **ficha del Proyecto** (`GameProject`), todos los pasos opcionales, progreso `Paso X/9`, guardado explícito de un `GameProjectDraft` completo, reapertura con precarga y Cancelar sin escritura. Reutiliza `GenrePicker`; topes 3/3/5; mecánica con descripción sin categoría bloquea con error; entrada temporal "Brainstorming" en la lista. `App` recibe `GameProjectRepository`, carga `project` y agrega `NotesDestination.Brainstorming`; roots cableados con `SqlDelightGameProjectRepository`. Sin IA, sin Notas por paso (`brainstorming-note-per-step`), sin cambios en `:core`/esquema (v8)/build files/`init.sh`/`iosApp`. `assembleDebug` OK, `:core` 25 suites/76 tests/0 failures en la base rebasada (23/55 en la validación), `./init.sh` exit 0 e iOS link OK; smoke Android completo con evidencia en `composeApp/build/smoke-evidence/brainstorming-wizard/`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
-- Current state: `ai-fake-real-switch` quedó `accepted` (validación independiente `accept`, 2026-10-19); `game-project-persistence` y `genres-catalog-ui` también están `accepted`. Siguientes: las `not_started` de la Ola 2. Ver `feature_list.json`.
+- Current state: `brainstorming-wizard` quedó `accepted` (validación independiente `accept`, 2026-10-19); `ai-fake-real-switch`, `game-project-persistence` y `genres-catalog-ui` también están `accepted`. Siguiente ready: `inline-dictation-30s` (spec lista); luego las demás `not_started` de la Ola 2. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-19.
 
@@ -1284,3 +1285,63 @@
 - Evidence captured: verificación post-rebase y evidencia de integración en `feature_list.json`; este bloque.
 - Known risk or unresolved issue (Low residual): `findProperty` también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*` (hardening a sólo `-P` diferido); el smoke real no se repitió (sin key en el worktree); la clave sigue embebida en un APK real (no distribuir).
 - Next best step: `develop` local actualizado con la feature (sin push); las sesiones activas deben rebasear sobre `develop`. Continuar con las features de la Ola 2.
+
+### Session 058
+
+- Date: 2026-10-19
+- Goal: planificar `brainstorming-wizard` (rol planner, one-step) y separar la creación de Notas por paso.
+- Completed:
+  - Rebase de `feature/brainstorming-wizard` sobre `develop` `e5ff8b9` (incluye `genres-catalog-ui` `accepted` y `GenrePicker.kt`).
+  - `feature_list.json`: `brainstorming-wizard.depends_on` suma `genres-catalog-ui`; se agrega `brainstorming-note-per-step` (`not_started`; depende de `brainstorming-wizard` y `create-text-note`).
+  - `docs/specs/brainstorming-wizard.md` (nuevo): wizard de 9 pasos, sólo ficha, guardado explícito, reutilización de `GenrePicker`, topes 3/3/5, entrada temporal en la lista, sin IA y sin Nota por paso.
+  - `AGENTS.md`: cola de features actualizada (siguiente ready `brainstorming-wizard`).
+- Verification run:
+  - `python3 -c "import json; json.load(open('feature_list.json'))"` → JSON válido.
+  - `git diff --check` → sin errores de whitespace.
+  - `CI=true ./init.sh` → exit 0 (BUILD SUCCESSFUL, 60 actionable tasks; Android-only, sin red ni dev servers).
+- Evidence captured: spec, entradas de `feature_list.json` y este bloque de sesión.
+- Files or artifacts updated: `docs/specs/brainstorming-wizard.md`, `feature_list.json`, `AGENTS.md`, `PROGRESS.md`.
+- Known risk or unresolved issue: `brainstorming-note-per-step` queda `not_started` y sin spec; no hay tests de UI/E2E persistentes (la spec lo justifica). El implementer debe partir de `develop` con `genres-catalog-ui` mergeada.
+- Next best step: revisión del spec por el autor; tras la aprobación, ejecutar `$feature-implementer` para `brainstorming-wizard`.
+
+### Session 059
+
+- Date: 2026-10-19
+- Goal: implementar `brainstorming-wizard` (spec `docs/specs/brainstorming-wizard.md`): wizard de 9 pasos para crear/iterar la ficha del Proyecto.
+- Completed:
+  - `composeApp/.../BrainstormingWizardScreen.kt` (nuevo): 9 pasos (Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones, Fantasía, Mecánicas clave, Fuera de alcance), progreso `Paso X/9`, Atrás/Siguiente, Guardar explícito y Cancelar. Estado inicial desde `initialProject` (clave `updatedAt`), topes 3/3/5, filas removibles, mecánicas con categoría + descripción y `AlertDialog` de error; guarda un `GameProjectDraft` completo.
+  - Paso Género reutiliza `GenrePicker` de `genres-catalog-ui`; Inspiraciones/Fuera de alcance usan `OutlinedTextField`; Mecánicas usan chips de `MechanicCategory` con `✓`/borde y validación de categoría faltante.
+  - `App`: parámetro `gameProjectRepository`, estado `project`, carga en `LaunchedEffect(refreshKey)`, `NotesDestination.Brainstorming` y `onSave` con `save(draft)` + `reload()`/`goToList()`; `NotesListScreen` suma la fila temporal "Brainstorming".
+  - `MainActivity`/`MainViewController`: construyen y pasan `SqlDelightGameProjectRepository`; la llamada iOS pasó a argumentos nombrados. Comentarios de esquema actualizados a v8.
+  - Docs: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json` y esta sesión.
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL.
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 23 suites / 55 tests / 0 failures / 0 errors / 0 skipped.
+  - `CI=true ./init.sh` → exit 0 (Android-only, sin red ni dev servers).
+  - iOS (no bloqueante): `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.
+  - Esquema v8 sin cambios; `.sqm` = `1.sqm`..`7.sqm`; sin cambios en `:core`, build files, `init.sh`, `iosApp` ni `GenrePicker.kt`.
+  - Smoke Android (emulator-5556): entrada, 9 pasos/progreso, guardado vacío (`singleton|local|||||`), ficha completa con Géneros/Inspiraciones/Mecánicas/Fuera de alcance en DB, reapertura con precarga, guardado desde el paso 1 preservando el resto, cancelación sin escritura, iteración/reemplazo sin huérfanas y error de mecánica sin categoría. Evidencia en `composeApp/build/smoke-evidence/brainstorming-wizard/` (`01`–`07`).
+  - Controles negativos restaurados: (a) sin `save` no hay fila ni navegación; (b) ignorar `initialProject` deja el Título vacío; (c) sin validación no aparece el error y se descarta la mecánica incompleta.
+- Evidence captured: arreglo `evidence` de `brainstorming-wizard` en `feature_list.json`; capturas/UI dumps/DB en `composeApp/build/smoke-evidence/brainstorming-wizard/`.
+- Files or artifacts updated: `composeApp/.../{BrainstormingWizardScreen.kt (nuevo), App.kt, NotesListScreen.kt}`, `composeApp/.../androidMain/.../MainActivity.kt`, `composeApp/.../iosMain/.../MainViewController.kt`, `docs/specs/brainstorming-wizard.md`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: no hay tests de UI/E2E persistentes (la spec lo justifica); `brainstorming-note-per-step` queda `not_started` y sin spec; el wizard no se abre solo en el primer arranque (`first-run-project-onboarding`).
+- Next best step: validación independiente de `brainstorming-wizard` con `$feature-validator`; tras el `accept`, persistir `accepted`, escribir `docs/validations/brainstorming-wizard.md` e integrar.
+
+### Session 060
+
+- Date: 2026-10-19
+- Goal: persistir la aceptación independiente de `brainstorming-wizard`, rebasar sobre `develop` y cerrar con commit y PR.
+- Completed:
+  - `feature_list.json`: `brainstorming-wizard` `passing` → `accepted`; evidencia de la validación independiente (`docs/validations/brainstorming-wizard.md`) y de los comandos re-ejecutados; corregido el claim del smoke para no afirmar 5 Mecánicas persistidas (se verificó el tope 5/5 en UI y el descarte de filas vacías). `brainstorming-note-per-step` sigue `not_started`.
+  - `PROGRESS.md`: estado actual, última feature `accepted`, próxima feature ready (`inline-dictation-30s`) y esta sesión de cierre. Las sesiones de `brainstorming-wizard` se renumeraron a **058/059/060** al rebasar sobre `develop`, que ya usaba 055–057 para `ai-fake-real-switch`.
+  - `AGENTS.md`: cola de features actualizada (wizard aceptado; siguiente ready `inline-dictation-30s`).
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL.
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → 25 suites / 76 tests / 0 failures / 0 errors / 0 skipped en la base rebasada (23 suites / 55 tests en la validación original).
+  - `CI=true ./init.sh` → exit 0 (Android-only, sin red ni dev servers), re-ejecutado tras el rebase sobre `origin/develop`.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL (iOS congelado, sólo compilación).
+  - Sin cambios en `:core`, esquema (v8, `.sqm` 1..7), build files, `init.sh`, `iosApp/**` ni `GenrePicker.kt`.
+- Evidence captured: entrada `accepted` en `feature_list.json` y `docs/validations/brainstorming-wizard.md`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/brainstorming-wizard.md` (junto con el resto del diff de la feature ya presente en el árbol).
+- Known risk or unresolved issue: hallazgos Low no bloqueantes del validador (encabezado del wizard sin `Paso X/9 · <paso>` en una línea, evidencia de mecánicas del smoke del implementer y emulador compartido); sin tests de UI/E2E persistentes.
+- Next best step: PR contra `develop`; tras el merge, planificar/implementar `inline-dictation-30s`.
