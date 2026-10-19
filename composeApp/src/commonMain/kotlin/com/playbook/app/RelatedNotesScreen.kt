@@ -136,7 +136,7 @@ private fun RelatedNoteCard(relatedNote: RelatedNote, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     relatedNote.note.genres.forEach { genre ->
-                        LabelChip(text = genre)
+                        GenreLabelChip(text = genre)
                     }
                 }
             }

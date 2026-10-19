@@ -1115,3 +1115,51 @@ Implementado 2026-10-16. Contratos en `AiPorts.kt`; fakes en `FakeAiPorts.kt`.
 - **Sin cambios** en `AiClient`/`FakeAiClient`/`AiAvailability`/servicios,
   esquema SQLDelight (v6, sin `.sqm` nuevo), dependencias ni `init.sh`. Los
   adaptadores reales, el build flag y los casos de uso son features posteriores.
+
+## Géneros UI Decisions (genres-catalog-ui)
+
+Implementado 2026-10-19. Sólo `:composeApp` + docs; sin cambios de esta feature
+en `:core`/esquema (el global es **v8** con `7.sqm` por
+`game-project-persistence`), `App.kt`, build files, dependencias ni `init.sh`.
+
+- **Picker (`GenrePicker.kt`, `internal`):** "Géneros" con tres zonas — (1) si
+  hay elegidos, "Seleccionados" con chips removibles `×`; (2) "Catálogo" con los
+  12 `GenreCatalog.GENRES` **siempre visibles** en un `FlowRow` (estable en
+  Compose MP 1.8.2, sin opt-in experimental); (3) "Género personalizado"
+  (`OutlinedTextField` con placeholder "Escribí uno nuevo…") + "Agregar"
+  habilitado sólo con texto no blanco.
+- **Toggle:** tocar un chip del catálogo lo agrega si no está y lo quita si está
+  (comparación case-insensitive). **Toda** alta/remoción pasa por
+  `normalizeGenres` de `:core` (trim, canonización contra el catálogo, dedupe y
+  orden), así que `jrpg` deviene `JRPG` sin duplicar. Sin límites de cantidad ni
+  largo; el truncado es sólo visual (`maxLines = 1` + ellipsis).
+- **Selección ≠ sólo color:** el chip de catálogo seleccionado muestra `✓`, borde
+  de 2.dp y `semantics { selected = true }`; los controles usan
+  `Modifier.clickable(onClickLabel = "Agregar género X"/"Quitar género X", role =
+  Role.Button)` y `defaultMinSize(minHeight = 48.dp)`. En Android, Compose mapea
+  `SemanticsProperties.Selected` con `Role.Button` a `checkable/checked` (no a
+  `isSelected`), verificado en el UI dump del smoke.
+- **Chip de lectura (`GenreLabelChip`):** en `LabelChip.kt`; detecta el catálogo
+  case-insensitive y usa `primaryContainer`/`onPrimaryContainer` para catálogo y
+  `secondaryContainer`/`onSecondaryContainer` para personalizado, con texto a una
+  línea y ellipsis. `LabelChip` queda igual para `track`/`status`/adjuntos. Se usa
+  en las filas de Géneros de tarjetas, GDD y Notas relacionadas.
+- **Integración mínima:** `NoteEditorScreen` delega en
+  `GenrePicker(selected = genres, onChange = { genres = it })`, conserva
+  `genres = normalizeGenres(initialGenres)` y el contrato
+  `onSave(body, track, genres)`; se elimina el `GenreChip` privado de texto libre.
+  `App.kt` no cambia.
+- **Layout del editor (fix 2026-10-19):** el contenido es scrollable
+  (`verticalScroll(rememberScrollState())`) y la fila `Borrar/Cancelar/Guardar`
+  queda fija fuera del scroll; el cuerpo usa `heightIn(min = 200.dp, max =
+  320.dp)`. Motivo: con el picker siempre visible y "Seleccionados", en modo
+  edición el cuerpo quedaba en una línea y las acciones se recortaban fuera del
+  viewport. El picker no se colapsa ni se limita; `App.kt`/`:core` no cambian.
+- **Verificación:** `assembleDebug` (60 tasks en la base rebasada),
+  `:core:testDebugUnitTest` (55/55 en la base rebasada con `game-project-persistence`;
+  53/53 en la base pre-integración), `./init.sh` exit 0, link iOS no
+  bloqueante y smoke Android (12 chips en orden, toggle, `" jrpg "` → `JRPG`,
+  personalizado, tarjeta/GDD/relacionadas, reapertura y persistencia tras
+  relanzar; fix de layout verificado con 3 y 13 Géneros, GDD con personalizado y
+  `jrpg` sembrado → `JRPG`). Evidencia en
+  `composeApp/build/smoke-evidence/genres-catalog-ui/` (`29`–`41`).
