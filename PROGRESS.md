@@ -31,7 +31,8 @@
 - `app-icon-configuration` `accepted` (2026-10-16; validación independiente `accept` en `docs/validations/app-icon-configuration.md`): icono de launcher Android desde `docs/design/icon.png` (**RGB sin alfa**, fondo `#F7EFE2`) — adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` = `@color/ic_launcher_background` + `@drawable/ic_launcher_foreground`) + PNG legacy por densidad (48/72/96/144/192) y `android:icon`/`android:roundIcon` en el manifest. Generado con `sips` (sin deps); foreground en `drawable-nodpi` (432 px, safe zone ~66 %), sin costura. Sin cambios en `:core`/`iosApp`/`init.sh`/build files/Kotlin/esquema. Ver `docs/technical-discovery.md`.
 - `ai-client-ports` `accepted` (2026-10-16; Session 049; validación independiente `accept` en `docs/validations/ai-client-ports.md`): puertos de IA `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + fakes deterministas en `:core`; chat/embedding siguen en `AiClient`; sin adaptadores reales ni build flag (feature posterior). Ver `docs/technical-discovery.md`.
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
-- Current next ready features: `genres-catalog-ui` (picker de chips) y `game-project-persistence` (v8). Ver `feature_list.json`.
+- **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
+- Current next ready features: `genres-catalog-ui` (picker de chips), `game-project-persistence` (v8) y `ai-fake-real-switch`. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-16.
 
@@ -1046,3 +1047,21 @@
 - Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/model/{Genres.kt (nuevo), Note.kt, NoteMappers.kt}`, `core/src/commonMain/sqldelight/com/playbook/core/db/{Genre.sq (nuevo), 6.sqm (nuevo), NoteTag.sq (eliminado)}`, `core/src/commonMain/kotlin/com/playbook/core/repository/{NoteRepository.kt, SqlDelightNoteRepository.kt}`, `core/src/commonMain/kotlin/com/playbook/core/gdd/GddMarkdown.kt`, `composeApp/src/commonMain/kotlin/com/playbook/app/{App.kt, NoteEditorScreen.kt, NotesListScreen.kt, GddScreen.kt, RelatedNotesScreen.kt, LabelChip.kt, EnrichmentStatus.kt}`, `core/src/{commonTest,androidUnitTest,iosTest}/**`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `docs/specs/gdd-export.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
 - Known risk or unresolved issue: sin emulador Android disponible (`adb` ausente), el smoke real v6→v7 sobre `playbook.db` no se ejecutó; la migración se cubre con los tests del core sobre el esquema real. El picker de catálogo en la UI queda para `genres-catalog-ui`. La feature queda `passing` hasta la validación independiente.
 - Next best step: validación independiente de `genres-catalog-persistence` con `$feature-validator`; tras el `accept`, derivar/implementar `genres-catalog-ui` (picker de chips) o `game-project-persistence` (v8).
+
+### Session 051
+
+- Date: 2026-10-16
+- Goal: preparar la ejecución del MVP restante (plan, excepción de paralelismo y tarea de README-bitácora).
+- Completed:
+  - `docs/mvp-execution-plan.md` (nuevo): alcance de las 18 features `not_started`, modelo de sesión/worktree/rama, paradas planner → implementer → validator, 6 olas con orden de merge, protocolo de coordinación paralela y criterio de cierre del MVP.
+  - `feature_list.json`: nueva tarea `readme-project-documentation` (`area: docs`) con `depends_on` = las 18 features del MVP, para que se seleccione recién al final; es documentación de cierre, no feature de producto.
+  - `AGENTS.md`: excepción controlada al WIP=1 (hasta 3 features en vuelo, una por sesión, una sola cola de merge) y referencia al plan vivo.
+  - `PROGRESS.md`: estado actual y esta sesión.
+- Verification run:
+  - `python3 -c "import json; json.load(open('feature_list.json'))"` → JSON válido; 19 `not_started` (18 features + README) y 28 `accepted`.
+  - `git diff --check` → sin errores de whitespace.
+  - `CI=true ./init.sh` → exit 0 (Android-only, sin red ni dev servers).
+- Evidence captured: este bloque de sesión; `feature_list.json` y `docs/mvp-execution-plan.md`.
+- Files or artifacts updated: `docs/mvp-execution-plan.md` (nuevo), `feature_list.json`, `AGENTS.md`, `PROGRESS.md`.
+- Known risk or unresolved issue: la ejecución paralela introduce conflictos esperables en `feature_list.json`/`PROGRESS.md` y en los hotspots de UI; se mitiga con el orden de merge y la cola única.
+- Next best step: crear los worktrees de la Ola 1 y abrir una sesión por feature para correr sólo el rol `planner`: `game-project-persistence`, `genres-catalog-ui` y `ai-fake-real-switch`.

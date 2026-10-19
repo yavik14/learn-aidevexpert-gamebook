@@ -64,6 +64,14 @@ accepted` (o `blocked`). `passing` = implementada y auto-verificada; solo un
 validador independiente (`accept`) habilita `accepted`. Trabaja **una feature a
 la vez** (WIP=1).
 
+**Ejecución paralela controlada (MVP restante).** Por decisión del autor, el
+backlog pendiente puede ejecutarse con **hasta 3 features en vuelo**, una por
+sesión/worktree/rama, coordinadas por una sesión integradora. Sigue vigente:
+una feature por sesión, planner → implementer → validator dentro de cada feature,
+una sola cola de merge y WIP=1 por sesión. La sesión integradora es la única que
+mergea a `develop`; las demás sesiones rebasean después de cada integración. El
+plan vivo está en `docs/mvp-execution-plan.md`.
+
 Selección de la próxima feature: la primera en orden de `feature_list.json` que
 no esté `passing`/`accepted`, cuyos `depends_on` estén satisfechos (una
 dependencia se satisface cuando su estado es `accepted`) y que ya tenga spec.
