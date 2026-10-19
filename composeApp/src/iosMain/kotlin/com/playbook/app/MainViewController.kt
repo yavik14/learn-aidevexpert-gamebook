@@ -94,7 +94,12 @@ fun MainViewController(): UIViewController {
     val diag = diagnostics ?: FileDiagnostics(
         diagnosticStorage(diagnosticsFilePath()),
     ).also { diagnostics = it }
-    val indexing = noteIndexingService ?: NoteIndexingService(ai, embeddings, diag).also {
+    val indexing = noteIndexingService ?: NoteIndexingService(
+        ai,
+        embeddings,
+        diag,
+        expectedDimension = runtime.embeddingDimension,
+    ).also {
         noteIndexingService = it
     }
     // Orquestador de indexado: envuelve el servicio y persiste la transición

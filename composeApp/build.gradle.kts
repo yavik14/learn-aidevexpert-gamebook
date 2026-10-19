@@ -191,6 +191,8 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
+                // Smoke real de indexado (fuera del gate): base SQLDelight in-memory.
+                implementation(libs.sqldelight.sqlite.driver)
             }
         }
     }

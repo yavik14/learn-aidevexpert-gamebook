@@ -26,12 +26,22 @@ sealed interface IndexingResult {
  * sin propagar la excepción del sink ni registrar el `body` de la Nota.
  *
  * @param diagnostics sink de diagnóstico (default [NoOpDiagnostics]).
+ * @param expectedDimension dimensión exigida al vector (la del runtime activo);
+ *   `null` conserva el comportamiento anterior (sólo exige un vector no vacío).
+ *   Un mismatch devuelve [IndexingResult.Failed] y **no** persiste nada.
  */
 class NoteIndexingService(
     private val aiClient: AiClient,
     private val embeddingRepository: EmbeddingRepository,
     private val diagnostics: Diagnostics = NoOpDiagnostics,
+    private val expectedDimension: Int? = null,
 ) {
+    init {
+        require(expectedDimension == null || expectedDimension > 0) {
+            "expectedDimension debe ser > 0 o null (se recibió $expectedDimension)"
+        }
+    }
+
     suspend fun index(note: Note): IndexingResult {
         val embeddings = try {
             aiClient.embed(listOf(note.body))
@@ -51,6 +61,16 @@ class NoteIndexingService(
         val values = embeddings.single().values
         if (values.isEmpty()) {
             val cause = AiClientException("El runtime devolvió un embedding de dimensión 0")
+            diagnostics.recordFailure(DiagnosticSource.AI_INDEXING, SUMMARY_FAILED, cause.message)
+            return IndexingResult.Failed(cause)
+        }
+
+        // Límite de persistencia: un vector de dimensión inesperada no se
+        // guarda (ni pisa el previo) y sigue el ciclo PENDING/reintento.
+        if (expectedDimension != null && values.size != expectedDimension) {
+            val cause = AiClientException(
+                "El embedding devolvió dimensión ${values.size}, se esperaba $expectedDimension",
+            )
             diagnostics.recordFailure(DiagnosticSource.AI_INDEXING, SUMMARY_FAILED, cause.message)
             return IndexingResult.Failed(cause)
         }

@@ -115,6 +115,41 @@ class OpenAiAdaptersCheck {
     }
 
     @Test
+    fun embeddingWrongDimensionIsRejectedAndSanitized() = runTest {
+        val transport = RecordingTransport {
+            jsonResponse("""{"data":[{"index":0,"embedding":[1.0,2.0]}]}""")
+        }
+        val runtime = openAiAiRuntime(realConfig(), transport)
+
+        val cause = assertFailsWith<AiClientException> {
+            runtime.aiClient.embed(listOf("body secreto de la nota"))
+        }
+
+        assertEquals("embedding devolvió dimensión 2, se esperaba 3", cause.message)
+        assertFalse(cause.message!!.contains("test-key"))
+        assertFalse(cause.message!!.contains("body secreto"))
+    }
+
+    @Test
+    fun embeddingValidatesEveryVectorDimension() = runTest {
+        val transport = RecordingTransport {
+            jsonResponse(
+                """{"data":[
+                    {"index":0,"embedding":[1.0,2.0,3.0]},
+                    {"index":1,"embedding":[4.0,5.0]}
+                ]}""",
+            )
+        }
+        val runtime = openAiAiRuntime(realConfig(), transport)
+
+        val cause = assertFailsWith<AiClientException> {
+            runtime.aiClient.embed(listOf("a", "b"))
+        }
+
+        assertEquals("embedding devolvió dimensión 2, se esperaba 3", cause.message)
+    }
+
+    @Test
     fun embeddingEmptyListDoesNotCallTransport() = runTest {
         val transport = RecordingTransport { jsonResponse("{}") }
         val runtime = openAiAiRuntime(realConfig(), transport)

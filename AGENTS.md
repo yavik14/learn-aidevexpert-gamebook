@@ -37,8 +37,9 @@ OpenAI-compatible) quedaron implementadas y aceptadas (validación independiente
 `docs/specs/brainstorming-wizard.md`; validación independiente `accept` en
 `docs/validations/brainstorming-wizard.md`). La creación de Notas por paso se
 separó en `brainstorming-note-per-step` (`not_started`, sin spec). La siguiente
-ready es `inline-dictation-30s` (spec lista); luego las demás `not_started` de
-la Ola 2. Para iOS: el upload firmado
+ready con spec es `sketch-thumbnails` (worktree ya en curso por otra sesión);
+también está ready `inline-dictation-30s` (spec lista); luego las demás
+`not_started` de la Ola 2. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
