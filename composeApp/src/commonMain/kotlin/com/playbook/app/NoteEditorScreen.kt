@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -23,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +43,14 @@ import com.playbook.core.model.normalizeGenres
  * (modo `isEditing = true`).
  *
  * - El `body` es multilínea. Guardar se deshabilita si el `body` está vacío **y**
- *   no hay imagen: una nota sólo-imagen es válida.
+ *   no hay imagen: una nota sólo-imagen es válida. También se deshabilita
+ *   mientras hay un texto dictado pendiente de anexarse (`dictatedText != null`),
+ *   para no guardar el audio sin su texto.
+ * - En **Nueva nota** (`!isEditing`) se muestra un panel de dictado inline
+ *   (estado [DictationUiState], progreso de 30s y parcial en vivo). El texto
+ *   final llega en [dictatedText], se anexa una sola vez con [appendDictation] y
+ *   se avisa con [onDictatedTextConsumed]; la sesión y el audio pendiente viven
+ *   en [App]. En edición el panel no existe.
  * - El `track` es opcional ("Sin track" por defecto); la selección se comunica
  *   con más que color (borde + marca textual), según `DESIGN.md`.
  * - Los Géneros se eligen del [GenreCatalog] fijo (toggle de chips) o se escriben
@@ -79,6 +88,11 @@ fun NoteEditorScreen(
     onOpenRelated: (() -> Unit)? = null,
     initialStatus: NoteStatus? = null,
     onReindex: (() -> Unit)? = null,
+    dictationState: DictationUiState = DictationUiState.Idle,
+    dictatedText: String? = null,
+    onStartDictation: (() -> Unit)? = null,
+    onStopDictation: (() -> Unit)? = null,
+    onDictatedTextConsumed: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
@@ -86,7 +100,18 @@ fun NoteEditorScreen(
     var genres by remember { mutableStateOf(normalizeGenres(initialGenres)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    val canSave = body.isNotBlank() || initialImage != null
+    // El texto final del dictado se anexa una sola vez. Mientras esté pendiente,
+    // Guardar queda deshabilitado para no persistir el audio sin su texto.
+    LaunchedEffect(dictatedText) {
+        val dictated = dictatedText
+        if (!dictated.isNullOrBlank()) {
+            body = appendDictation(body, dictated)
+            onDictatedTextConsumed?.invoke(dictated)
+        }
+    }
+
+    val canSave =
+        (body.isNotBlank() || initialImage != null) && dictatedText == null
 
     Column(
         modifier = modifier
@@ -158,6 +183,14 @@ fun NoteEditorScreen(
                     .heightIn(min = 200.dp, max = 320.dp),
             )
             Spacer(modifier = Modifier.height(16.dp))
+            if (!isEditing && onStartDictation != null && onStopDictation != null) {
+                DictationPanel(
+                    state = dictationState,
+                    onStart = onStartDictation,
+                    onStop = onStopDictation,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             Text(text = "Track", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -235,6 +268,75 @@ fun NoteEditorScreen(
                 }
             },
         )
+    }
+}
+
+/**
+ * Panel de dictado inline de Nueva nota: `Idle` invita a dictar; `Listening`
+ * muestra la barra de progreso (`elapsed / 30s`), el parcial en vivo y "Detener";
+ * `Processing` deja la acción deshabilitada; `Error` muestra el mensaje textual y
+ * "Reintentar". Todos los estados se comunican con texto, no sólo color.
+ */
+@Composable
+private fun DictationPanel(
+    state: DictationUiState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(text = "Dictado", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        when (state) {
+            DictationUiState.Idle -> {
+                Button(onClick = onStart) {
+                    Text(text = "Dictar")
+                }
+            }
+
+            is DictationUiState.Listening -> {
+                LinearProgressIndicator(
+                    progress = {
+                        (state.elapsedMillis.toFloat() / DICTATION_MAX_MILLIS)
+                            .coerceIn(0f, 1f)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Escuchando… (${state.elapsedMillis / 1000}s / 30s)",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (state.partial.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = state.partial,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onStop) {
+                    Text(text = "Detener")
+                }
+            }
+
+            DictationUiState.Processing -> {
+                Button(onClick = {}, enabled = false) {
+                    Text(text = "Transcribiendo…")
+                }
+            }
+
+            is DictationUiState.Error -> {
+                Text(
+                    text = state.error.message(),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onStart) {
+                    Text(text = "Reintentar")
+                }
+            }
+        }
     }
 }
 

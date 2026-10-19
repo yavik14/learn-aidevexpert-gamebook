@@ -1071,12 +1071,27 @@
       "voice-attachment-storage",
       "create-text-note"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: smoke Android del dictado inline (progreso, auto-stop) y persistencia del texto/audio."
+      "Validación independiente `accept` (2026-10-19; `docs/validations/inline-dictation-30s.md`): escenarios 1–16 revisados y checks re-ejecutados sobre la base `ed48a45`.",
+    "Rebase final sobre `origin/develop` `a00c72d` (con `brainstorming-wizard` y `ai-real-embeddings` integrados): conflictos resueltos preservando todas las features; sesiones de integración renumeradas a 063/064; gate completo re-ejecutado después del rebase.",
+    "`./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL (56/56 tasks, post-rebase `a00c72d`).",
+    "`./gradlew :core:testDebugUnitTest --rerun-tasks` → 26 suites / 79 tests / 0 failures (sin regresiones; `:core` sin cambios de esta feature).",
+      "`CI=true ./init.sh` → exit 0 (gate Android-only, sin dev servers).",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (iOS no bloqueante).",
+      "Smoke Android (emulador API 35, `emulator-5556`): \"Dictar nota\" abre Nueva nota y muestra Listening con barra; el cap arranca recién al conceder el permiso (diálogo abierto >1 min → 4s al conceder); denegar permiso muestra `Error(PERMISSION_DENIED)` sin timer; cancelar durante Listening vuelve a la lista sin Nota ni archivo; Guardar durante Listening crea la Nota con el body y sin audio huérfano.",
+      "Auto-stop: con una sesión Listening se avanzó el reloj del emulador +45s (el entorno no provee voz real): la UI pasó a `Processing` (\"Transcribiendo…\") y luego `NO_MATCH`, sin crear Nota ni audio; reloj restaurado.",
+      "`git status`/`git diff` → sólo `composeApp` + docs de la feature; sin cambios en `:core`, esquema/`.sqm`, build files, deps, `init.sh` ni `iosApp`."
     ],
-    "evidence": [],
-    "notes": "Reemplaza la pantalla de voz separada. Cap 30s con auto-stop."
+  "evidence": [
+    "2026-10-19: validación independiente `accept` (`docs/validations/inline-dictation-30s.md`): `assembleDebug --rerun-tasks` OK, `:core` 25 suites/76 tests/0 failures, `CI=true ./init.sh` exit 0 e iOS link OK; sin hallazgos Critical/High/Medium.",
+    "2026-10-19 Session 064 (integración): rebase final sobre `origin/develop` `a00c72d` (tras el primer rebase sobre `65adc62`); conflictos resueltos en `AGENTS.md`, `PROGRESS.md` y `docs/technical-discovery.md` preservando `brainstorming-wizard`, `ai-real-embeddings` y el dictado inline; gate post-rebase en verde (assembleDebug 56/56, core 26 suites/79 tests/0 failures, init.sh exit 0, iOS link OK); branch re-verificada sin cambios en `:core`/esquema/build files/deps/`init.sh`/`iosApp`.",
+    "2026-10-19: `:composeApp:assembleDebug` BUILD SUCCESSFUL; `:core:testDebugUnitTest --rerun-tasks` 25 suites/76 tests/0 failures; `CI=true ./init.sh` exit 0; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-19 smoke Android (API 35; capturas/UI dumps en `composeApp/build/smoke-evidence/inline-dictation-30s/`): `03-editor-listening-2s.xml` (Listening 4s al conceder tras un diálogo abierto >1 min), `04-editor-after-10s.xml` (NO_MATCH), `32-permission-denied.xml` (Error de permiso, sin timer), `33-listening-before-cancel.xml` + `34-after-cancel.xml` (cancelación; `run-as ... ls files/audio` vacío, 0 notas/0 adjuntos), `41-listening-at-save.png` (Guardar durante Listening) + `41-after-save-live.xml` (Nota \"Captura en vivo\" sin Adjunto), `42b-autostop-after-clock.png` (28s/30s) y `43-autostop-after-clock.png` (Processing tras el cap).",
+      "2026-10-19: `git status` sólo archivos de la feature; `git diff` sin `:core`/esquema/build files/deps/`init.sh`/`iosApp`.",
+      "Límite honesto: el STT real no es inyectable de forma determinista en este entorno; no se observó una transcripción con texto/audio real (los escenarios 6/7/9/10/14 quedan cubiertos por diseño/revisión y por los tests aceptados de `voice-attachment-storage`). El auto-stop se ejerció avanzando el reloj del emulador, no con 30s de voz real."
+    ],
+    "notes": "Reemplaza la pantalla de voz separada. Cap 30s con auto-stop. Aceptada tras validación independiente `accept` e integrada sobre `develop` `a00c72d`. `:composeApp` únicamente; sin deps, esquema ni `:core`."
   },
   {
     "id": "gdd-document-hybrid",

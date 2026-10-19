@@ -517,12 +517,15 @@ composeApp (Android app / commonMain) ──▶ core
 ## Voice capture (STT)
 
 - **Puerto** (`com.playbook.app.voice`, en `:composeApp/commonMain`):
-  `VoiceTranscriber` con `start(onPartialResult, onFinalResult, onError)`,
+  `VoiceTranscriber` con `start(onPartialResult, onFinalResult, onError, onStarted = {})`,
   `stop()` y `cancel()`, más `VoiceCaptureError`
   (`PERMISSION_DENIED`/`UNAVAILABLE`/`NO_MATCH`/`NETWORK`/`BUSY`/`UNKNOWN`) y
   `RecordedAudio(relativePath, byteSize, mimeType)`. `onFinalResult` recibe
   `(String, RecordedAudio?)`: el texto transcripto y el audio original ya cerrado
-  (o `null` si no se pudo grabar), en un único callback terminal. Vive en
+  (o `null` si no se pudo grabar), en un único callback terminal. `onStarted` se
+  invoca **una vez por sesión** cuando el reconocimiento/grabación ya arrancó
+  (permiso concedido), no durante el diálogo de permiso ni en errores de
+  permiso/disponibilidad/arranque; `cancel()` lo descarta. Vive en
   `:composeApp` (no en `:core`): es una integración nativa que sólo consume la UI
   y necesita contexto de plataforma; `:core` no cambia.
 - **Adaptadores por plataforma** (mismo patrón que `DatabaseDriverFactory`, **sin**
@@ -534,15 +537,23 @@ composeApp (Android app / commonMain) ──▶ core
     `RecognitionListener` a los callbacks del puerto y recrea el recognizer por
     sesión. Graba el audio original con `MediaRecorder` (MIC, MPEG_4, AAC) a
     `filesDir/audio/<uuid>.m4a`; si no puede iniciar/escribir, entrega `null` y
-    sigue la transcripción. `cancel()` descarta el parcial.
+    sigue la transcripción. Emite `onStarted` después de `startListening(...)`
+    (permiso ya concedido y grabación lanzada). `cancel()` descarta el parcial y
+    limpia `onStarted`.
   - `IosVoiceTranscriber()` (`iosMain`): `SFSpeechRecognizer` +
     `SFSpeechAudioBufferRecognitionRequest` + `AVAudioEngine`; pide
     `requestAuthorization` y `requestRecordPermission` y, como los callbacks de
     `Speech`/AVFoundation llegan en colas secundarias, los despacha al main queue
     (`dispatch_async(dispatch_get_main_queue())`). El tap del `inputNode` alimenta
     al reconocedor **y** escribe el audio original a un `AVAudioFile` AAC en
-    `Application Support/audio/<uuid>.m4a`. `cancel()` cancela la tarea, quita el
-    tap, detiene el engine, descarta el parcial y desactiva la `AVAudioSession`.
+    `Application Support/audio/<uuid>.m4a`. Emite `onStarted` sólo si
+    `engine.startAndReturnError(...)` devuelve `true`; si el engine no arranca,
+    limpia y reporta `UNKNOWN` sin emitirlo. Un **guard de generación** (contador
+    que `start()` captura y `cancel()` incrementa) invalida los callbacks tardíos
+    de autorización/reconocimiento, de modo que una sesión cancelada no arranca
+    el micrófono, no emite `onStarted` ni entrega resultados. `cancel()` además
+    cancela la tarea, quita el tap, detiene el engine, descarta el parcial y
+    desactiva la `AVAudioSession`.
 - **Wiring sin DI:** `MainActivity` construye `AndroidVoiceTranscriber(this)` y
   `MainViewController` construye `IosVoiceTranscriber()`; ambos se pasan a
   `App(noteRepository, attachmentRepository, voiceTranscriber)`.
@@ -570,9 +581,11 @@ composeApp (Android app / commonMain) ──▶ core
   es la raíz de la UI y dueña del estado. Hoistea `notes`, `project`
   (`GameProject?`) y `attachments` (`mutableStateOf`), `destination`
   (`NotesDestination`:
-  `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`/`Ask`/
+  `List`/`Create`/`Edit(noteId)`/`CreateWithImage(image)`/`Gdd`/`Ask`/
   `Brainstorming`/`Related(noteId)`),
-  `refreshKey`, `relatedNotes`, `voiceState` (`VoiceUiState`), `askState` (`AskUiState`) y el
+  `refreshKey`, `relatedNotes`, `dictation` (`DictationUiState`), `dictatedText`
+  (texto final pendiente de anexar), `pendingAudio` (`RecordedAudio?`),
+  `dictationJob`, `askState` (`AskUiState`) y el
   estado de captura de imagen (`showImageSourceDialog`/`imageError`). La lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
@@ -635,13 +648,22 @@ composeApp (Android app / commonMain) ──▶ core
   al usuario) y `StatusBadge(status)`, un `Surface` con borde y texto que **nunca**
   comunica sólo con color; es el "Badge de Estado" de `DESIGN.md` y lo reutilizan
   la lista de Notas y el editor.
-- **`VoiceCaptureScreen`**: pantalla "tonta" de dictado. Recibe
-  `VoiceUiState` (`Idle`/`Listening(partial)`/`Processing`/`Error`) y emite
-  `onStart`/`onStop`/`onCancel`. La acción primaria es "Grabar" (Idle),
-  "Detener" (Listening) o "Reintentar" (Error); "Cancelar" vuelve a la lista.
-  Los estados y los errores se comunican con texto (nunca sólo color) y hay una
-  línea informativa ("Se guarda también el audio original como Adjunto."). No
-  mantiene el `VoiceTranscriber`.
+- **`Dictation` + panel inline (`inline-dictation-30s`)**: `Dictation.kt`
+  (`commonMain`) define `DictationUiState` (`Idle`/`Listening(partial,
+  elapsedMillis)`/`Processing`/`Error`), `DICTATION_MAX_MILLIS = 30_000`,
+  `DICTATION_TICK_MILLIS = 100`, `VoiceCaptureError.message()` y
+  `appendDictation(body, dictated)` (`trim` de ambos, omite vacíos y une con
+  `\n`). El dictado **no** tiene pantalla propia: en **Nueva nota**
+  (`Create`/`CreateWithImage`, nunca en edición) `NoteEditorScreen` muestra un
+  panel después de "Cuerpo" y antes de "Track": "Dictar" (Idle), barra
+  `LinearProgressIndicator` + "Escuchando… (Ns / 30s)" + parcial + "Detener"
+  (Listening), acción deshabilitada "Transcribiendo…" (Processing) o mensaje
+  textual + "Reintentar" (Error). El editor es tonto: recibe `dictationState`,
+  `dictatedText` y callbacks; anexa el texto final una sola vez con
+  `appendDictation` y avisa `onDictatedTextConsumed(text)` (limpia sólo si
+  coincide). `canSave` además exige `dictatedText == null` para no guardar el
+  audio sin su texto. El texto final se anexa al `body` previo sin duplicar
+  espacios.
 - **`AskNotesScreen`** (nuevo): pantalla "tonta" de consulta RAG. Recibe
   `AskUiState` (`Idle`/`Asking`/`Answered(text, sources)`/`NoIndexedNotes`/`Error`)
   y emite `onAsk(question)`/`onOpenSource(noteId)`/`onBack`. La acción primaria es
@@ -651,24 +673,43 @@ composeApp (Android app / commonMain) ──▶ core
   Nota (abre `NotesDestination.Edit(noteId)`); un mensaje explícito si no hay Notas
   indexadas, y un error con "Reintentar"; "Volver" siempre vuelve a la lista. Todos
   los estados se comunican con texto (nunca sólo color).
-- **Orquestación de voz (`App`):** la sesión se inicia sólo al tocar "Grabar"
-  (para que el prompt de permiso sea explícito); `onPartialResult` actualiza el
-  parcial; `onError` pasa a `Error`; `onFinalResult(text, audio)` no vacío crea la
-  Nota (`NoteDraft(LOCAL_OWNER_ID, text.trim(), track = null)`) y, si `audio != null`,
-  persiste el Adjunto `AUDIO` (`attachmentRepository.create(note.id, AUDIO,
-  audio.mimeType, audio.relativePath, audio.byteSize)`); si el Adjunto falla se
-  borra el archivo y se conserva la Nota; luego vuelve a la lista con `reload()`.
-  Un final vacío se trata como `NO_MATCH` y borra el audio si lo hubo. Al salir del
-  destino un `DisposableEffect` llama `voiceTranscriber.cancel()` (libera el
-  micrófono y descarta el audio parcial).
+- **Orquestación de dictado (`App`):** "Dictar nota" en la lista abre
+  `NotesDestination.Create` y llama `startDictation()`; el botón "Dictar" del
+  editor hace lo mismo sin cambiar de destino. `startDictation()` cancela el job
+  y la sesión previa (descarta su audio parcial), **conserva** el `pendingAudio`
+  finalizado y deja `Listening("", 0)`; el timer de 30s **no** arranca al tocar
+  "Dictar" sino en `onStarted`, con `currentTimeMillis()` como base y tick de
+  100ms, acotado a `DICTATION_MAX_MILLIS`; al llegar al cap llama
+  `stopDictation()` una sola vez. `stopDictation()` es idempotente: sólo desde
+  `Listening` pasa a `Processing` y llama `voiceTranscriber.stop()`.
+  `onPartialResult` actualiza el parcial preservando el elapsed; `onError` pasa
+  a `Error` conservando el audio pendiente anterior; `onFinalResult(text,
+  audio)` cancela el timer; si el texto queda vacío borra **sólo** el audio nuevo
+  y fija `Error(NO_MATCH)` (conserva el pendiente anterior); si hay texto y
+  `audio != null` borra el pendiente anterior y guarda el nuevo (si `audio ==
+  null` conserva el anterior), fija `dictatedText = text.trim()` y `Idle`.
+  `onStarted` que llega con `Processing` (el usuario detuvo antes) sólo llama
+  `voiceTranscriber.stop()`; con `Idle`/`Error` se ignora (sesión cancelada).
+  Guardar una Nueva nota (texto o texto+imagen) primero `cancelDictation()`,
+  crea la Nota y luego `attachAudio(note.id)` (Adjunto `AUDIO` best-effort; si
+  falla se registra `STORAGE` y se borra el archivo, siempre limpiando
+  `pendingAudio`). Si la Nota no se crea, se descarta el audio pendiente y —con
+  imagen— también el archivo recién guardado. "Cancelar" del editor ejecuta
+  `cancelDictation()` + `discardPendingAudio()` y vuelve a la lista. Un
+  `DisposableEffect(Unit)` **a nivel App** cancela el job, `cancel()` del
+  transcriber y borra el audio pendiente al salir de composición; **no** hay
+  `DisposableEffect` por destino, por lo que alternar imagen
+  (`Create ↔ CreateWithImage`) no corta el dictado.
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
   track, genres = genres))` (status default `CAPTURED`); **crear con imagen** →
   `fileStore.saveImage(bytes, mime)` → `create(NoteDraft(...))` →
   `attachmentRepository.create(note.id, IMAGE, mime, relativePath, byteSize)` →
   `reload()`; si algo falla después de guardar el archivo, se borra (sin
-  huérfanos). **Dictar** → `create(NoteDraft(...))` → `attachmentRepository.create(
-  note.id, AUDIO, audio.mimeType, audio.relativePath, audio.byteSize)` →
-  `reload()` (misma limpieza ante fallo). Editar → `update(note.copy(body =
+  huérfanos). **Dictar inline** → el texto final se anexa al `body` del editor y
+  el audio queda en `pendingAudio`; al Guardar → `create(NoteDraft(...))` →
+  `attachAudio(note.id)` (`attachmentRepository.create(note.id, AUDIO,
+  audio.mimeType, audio.relativePath, audio.byteSize)`) → `reload()` (misma
+  limpieza ante fallo; cancelar borra el pendiente). Editar → `update(note.copy(body =
   body.trim(), track = ..., genres = genres))` (re-sella `updatedAt`, reemplaza el
   conjunto de Géneros y preserva `owner`/`createdAt`/`status`); borrar → se leen
   los adjuntos de la nota, `delete(id)` (limpia `note_genre` y las filas `attachment`

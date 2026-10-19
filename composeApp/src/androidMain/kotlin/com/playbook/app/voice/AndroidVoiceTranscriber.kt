@@ -40,6 +40,7 @@ class AndroidVoiceTranscriber(
     private var onPartialResult: ((String) -> Unit)? = null
     private var onFinalResult: ((String, RecordedAudio?) -> Unit)? = null
     private var onError: ((VoiceCaptureError) -> Unit)? = null
+    private var onStarted: (() -> Unit)? = null
 
     private var recognizer: SpeechRecognizer? = null
     private var pendingStartAfterPermission: (() -> Unit)? = null
@@ -62,10 +63,12 @@ class AndroidVoiceTranscriber(
         onPartialResult: (String) -> Unit,
         onFinalResult: (String, RecordedAudio?) -> Unit,
         onError: (VoiceCaptureError) -> Unit,
+        onStarted: () -> Unit,
     ) {
         this.onPartialResult = onPartialResult
         this.onFinalResult = onFinalResult
         this.onError = onError
+        this.onStarted = onStarted
 
         if (hasAudioPermission()) {
             startRecognition()
@@ -90,6 +93,7 @@ class AndroidVoiceTranscriber(
         onPartialResult = null
         onFinalResult = null
         onError = null
+        onStarted = null
     }
 
     private fun hasAudioPermission(): Boolean =
@@ -108,6 +112,11 @@ class AndroidVoiceTranscriber(
         }
         recognizer = active
         active.startListening(recognizerIntent())
+        // El permiso ya está concedido y el reconocedor/MediaRecorder arrancaron:
+        // recién acá empieza a correr el cap de 30s.
+        val started = onStarted
+        onStarted = null
+        started?.invoke()
     }
 
     private fun recognizerIntent(): Intent =

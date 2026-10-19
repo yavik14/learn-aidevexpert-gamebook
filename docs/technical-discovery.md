@@ -849,8 +849,9 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   pasa a `attachmentKinds: Map<String, Set<AttachmentKind>>`; renderiza chips
   textuales por tipo en orden estable (`AttachmentKind.entries` → "Imagen", luego
   "Audio"), sin comunicar el estado sólo con color. `App` calcula el mapa desde
-  `attachments`. `VoiceCaptureScreen` agrega una línea informativa
-  ("Se guarda también el audio original como Adjunto.").
+  `attachments`. La pantalla separada `VoiceCaptureScreen` de esta feature fue
+  **retirada** por `inline-dictation-30s`: hoy el dictado vive en el editor de
+  Nueva nota (ver "Inline Dictation Decisions" al final).
 - **Sin dependencias ni permisos nuevos:** `MediaRecorder` es framework Android;
   `AVAudioFile`/`AVFoundation`/`CoreAudioTypes` son platform libs de Kotlin/Native.
   El micrófono es el mismo `RECORD_AUDIO`/`NSMicrophoneUsageDescription` de
@@ -1292,3 +1293,63 @@ pass-through de la dimensión a `NoteIndexingService`.
   la reconciliación no recomputa `note_link` (Relacionadas se recomputa al
   abrir); la dimensión activa no se expone en UI/diagnóstico. Sin cambios de
   esquema (v8), `init.sh`, `App.kt`, `iosApp/**` ni dependencias de producción.
+## Inline Dictation Decisions (inline-dictation-30s)
+
+Implementado 2026-10-19. Detalles en `ARCHITECTURE.md`.
+
+- **Se retira la pantalla separada:** desaparecen `VoiceCaptureScreen.kt`,
+  `VoiceUiState` y `NotesDestination.VoiceCapture`. El dictado se integra en
+  `NoteEditorScreen` **sólo en Nueva nota** (`Create` y `CreateWithImage`), dentro
+  del contenido scrollable después de "Cuerpo" y antes de "Track"; editar una
+  Nota existente no muestra el panel. "Dictar nota" en la lista abre `Create` y
+  arranca la sesión.
+- **Estado y dueño:** `Dictation.kt` (commonMain) define
+  `DictationUiState` (`Idle`/`Listening(partial, elapsedMillis)`/`Processing`/
+  `Error`), `DICTATION_MAX_MILLIS = 30_000`, `DICTATION_TICK_MILLIS = 100`,
+  `VoiceCaptureError.message()` (movido desde la pantalla vieja) y
+  `appendDictation(body, dictated)` (`trim`, omite vacíos, une con `\n`). `App`
+  es dueña de la sesión, del timer, de `dictatedText` y de `pendingAudio`; el
+  editor sólo renderiza y anexa.
+- **Cap desde la sesión real (`onStarted`):** el puerto suma
+  `onStarted: () -> Unit = {}` (aditivo). Android lo emite después de
+  `startListening(...)` (permiso concedido y `MediaRecorder` lanzado); iOS sólo si
+  `engine.startAndReturnError(...)` es `true` (si no, limpia y reporta `UNKNOWN`).
+  No se emite en permiso denegado, `UNAVAILABLE` ni error de arranque. El timer de
+  30s arranca en ese callback, así que el diálogo de permiso no consume el cap.
+  `cancel()` limpia `onStarted` en ambos adaptadores.
+- **Guard de generación en iOS:** `start()` incrementa un contador y captura el
+  valor; los callbacks de autorización (speech y micrófono) y de reconocimiento
+  verifican que siga vigente antes de tocar estado. `cancel()` lo incrementa, de
+  modo que una sesión cancelada no arranca el engine, no emite `onStarted` ni
+  entrega resultados tardíos.
+- **Auto-stop y detener:** el timer mide `currentTimeMillis() - startedAt` (no se
+  reinicia con cada parcial), actualiza cada 100ms acotado a 30s y al llegar al cap
+  llama `stopDictation()` una sola vez. `stopDictation()` es idempotente (sólo
+  desde `Listening`) y pasa a `Processing` + `voiceTranscriber.stop()`.
+  `onStarted` tardío con estado `Processing` (el usuario detuvo antes) llama
+  `stop()`; con `Idle`/`Error` se ignora.
+- **Audio pendiente y reemplazo:** `onFinalResult(text, audio)` vacío borra
+  **sólo** el audio nuevo, fija `Error(NO_MATCH)` y conserva el `pendingAudio`
+  anterior; con texto y `audio != null` borra el pendiente anterior y guarda el
+  nuevo; con texto y `audio == null` conserva el anterior. `onError` también
+  conserva el pendiente. `startDictation()` cancela la sesión previa (y su parcial)
+  pero no toca `pendingAudio`.
+- **Guardado y limpieza:** Guardar (texto o texto+imagen) primero
+  `cancelDictation()`, crea la Nota y luego `attachAudio(note.id)` (Adjunto `AUDIO`
+  best-effort; ante fallo registra `STORAGE` y borra el archivo, siempre limpia
+  `pendingAudio`). Si la Nota no se crea se descarta el audio pendiente y, con
+  imagen, también el archivo recién guardado. Cancelar el editor corta la sesión,
+  borra el pendiente y vuelve a la lista. Un `DisposableEffect(Unit)` a nivel
+  `App` (no por destino) cubre la salida de composición; alternar imagen no corta
+  el dictado.
+- **Editor:** el panel muestra "Dictar" (Idle), barra de progreso
+  `elapsed / 30s` + "Escuchando… (Ns / 30s)" + parcial + "Detener" (Listening),
+  "Transcribiendo…" deshabilitado (Processing) o mensaje textual + "Reintentar"
+  (Error). El texto final se anexa con `LaunchedEffect(dictatedText)` y
+  `canSave` exige `dictatedText == null` para no guardar el audio sin su texto.
+- **Sin watchdog:** si tras `stop()` nunca llega el final, la UI queda en
+  `Processing`; "Cancelar" sigue disponible y limpia. Límite aceptado.
+- **Sin deps, esquema ni `:core`:** se reutilizan `VoiceTranscriber`,
+  `AttachmentRepository`, `AttachmentKind.AUDIO` y `currentTimeMillis()`; sin
+  `.sqm`, sin build files, sin `init.sh` y sin permisos nuevos. iOS congelado sólo
+  se verifica que compile.

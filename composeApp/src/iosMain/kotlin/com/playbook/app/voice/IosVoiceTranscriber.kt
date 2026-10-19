@@ -55,6 +55,14 @@ class IosVoiceTranscriber : VoiceTranscriber {
     private var onPartialResult: ((String) -> Unit)? = null
     private var onFinalResult: ((String, RecordedAudio?) -> Unit)? = null
     private var onError: ((VoiceCaptureError) -> Unit)? = null
+    private var onStarted: (() -> Unit)? = null
+
+    /**
+     * Generación de la sesión vigente. Los callbacks asíncronos de autorización y
+     * reconocimiento capturan el valor al arrancar y lo verifican antes de tocar
+     * estado; [cancel] la incrementa para invalidar callbacks tardíos.
+     */
+    private var sessionGeneration = 0
 
     private var recognizer: SFSpeechRecognizer? = null
     private var request: SFSpeechAudioBufferRecognitionRequest? = null
@@ -72,19 +80,23 @@ class IosVoiceTranscriber : VoiceTranscriber {
         onPartialResult: (String) -> Unit,
         onFinalResult: (String, RecordedAudio?) -> Unit,
         onError: (VoiceCaptureError) -> Unit,
+        onStarted: () -> Unit,
     ) {
         this.onPartialResult = onPartialResult
         this.onFinalResult = onFinalResult
         this.onError = onError
+        this.onStarted = onStarted
+        val generation = ++sessionGeneration
 
         SFSpeechRecognizer.requestAuthorization { status ->
             onMain {
+                if (!isSessionCurrent(generation)) return@onMain
                 val authorized =
                     status ==
                         SFSpeechRecognizerAuthorizationStatus
                             .SFSpeechRecognizerAuthorizationStatusAuthorized
                 if (authorized) {
-                    requestRecordPermissionThenStart()
+                    requestRecordPermissionThenStart(generation)
                 } else {
                     onError?.invoke(VoiceCaptureError.PERMISSION_DENIED)
                 }
@@ -98,6 +110,7 @@ class IosVoiceTranscriber : VoiceTranscriber {
     }
 
     override fun cancel() {
+        sessionGeneration++
         task?.cancel()
         task = null
         request = null
@@ -107,13 +120,15 @@ class IosVoiceTranscriber : VoiceTranscriber {
         onPartialResult = null
         onFinalResult = null
         onError = null
+        onStarted = null
     }
 
-    private fun requestRecordPermissionThenStart() {
+    private fun requestRecordPermissionThenStart(generation: Int) {
         AVAudioSession.sharedInstance().requestRecordPermission { granted ->
             onMain {
+                if (!isSessionCurrent(generation)) return@onMain
                 if (granted) {
-                    startRecognition()
+                    startRecognition(generation)
                 } else {
                     onError?.invoke(VoiceCaptureError.PERMISSION_DENIED)
                 }
@@ -121,7 +136,8 @@ class IosVoiceTranscriber : VoiceTranscriber {
         }
     }
 
-    private fun startRecognition() {
+    private fun startRecognition(generation: Int) {
+        if (!isSessionCurrent(generation)) return
         val localRecognizer = createRecognizer()
         if (localRecognizer == null || !localRecognizer.isAvailable()) {
             onError?.invoke(VoiceCaptureError.UNAVAILABLE)
@@ -154,6 +170,7 @@ class IosVoiceTranscriber : VoiceTranscriber {
 
         task = localRecognizer.recognitionTaskWithRequest(recognitionRequest) { result, error ->
             onMain {
+                if (!isSessionCurrent(generation)) return@onMain
                 when {
                     result != null -> {
                         val text = result.bestTranscription.formattedString
@@ -170,8 +187,27 @@ class IosVoiceTranscriber : VoiceTranscriber {
         }
 
         engine.prepare()
-        engine.startAndReturnError(null)
+        val started = engine.startAndReturnError(null)
+        if (!started) {
+            // El motor no arrancó: limpiar sin emitir onStarted (el cap no corre).
+            onStarted = null
+            task?.cancel()
+            task = null
+            request = null
+            recognizer = null
+            teardownAudio()
+            discardAudioRecording()
+            onError?.invoke(VoiceCaptureError.UNKNOWN)
+            return
+        }
+        // Recién acá la sesión arrancó de verdad (permiso concedido + engine vivo).
+        val startedCallback = onStarted
+        onStarted = null
+        startedCallback?.invoke()
     }
+
+    private fun isSessionCurrent(generation: Int): Boolean =
+        generation == sessionGeneration
 
     private fun finishWithResult(text: String) {
         teardownAudio()
