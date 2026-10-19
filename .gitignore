@@ -25,6 +25,7 @@ keystore.properties
 # IDE
 .idea/
 *.iml
+.vscode/
 
 # Xcode
 xcuserdata/
