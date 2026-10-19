@@ -35,15 +35,22 @@ Próximas features en cola: las `not_started` de `feature_list.json` (revisión
 OpenAI-compatible) quedaron implementadas y aceptadas (validación independiente
 `accept`). `brainstorming-wizard` quedó `accepted` (spec
 `docs/specs/brainstorming-wizard.md`; validación independiente `accept` en
-`docs/validations/brainstorming-wizard.md`). `inline-dictation-30s` también quedó
-`accepted` (spec `docs/specs/inline-dictation-30s.md`; validación independiente
-`accept` en `docs/validations/inline-dictation-30s.md`), `ai-real-embeddings`
-quedó `accepted` y `sketch-thumbnails` quedó `accepted` (spec
-`docs/specs/sketch-thumbnails.md`; validación independiente `accept`). La creación
-de Notas por paso sigue en `brainstorming-note-per-step` (`not_started`, sin spec).
-La siguiente ready con spec es `gdd-document-hybrid`; luego las demás
-`not_started` de la Ola 3. Para iOS: el upload firmado
-(`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
+`docs/validations/brainstorming-wizard.md`). `inline-dictation-30s`,
+`ai-real-embeddings` y `sketch-thumbnails` también quedaron `accepted` y
+mergeadas (specs `docs/specs/inline-dictation-30s.md`,
+`docs/specs/ai-real-embeddings.md` y `docs/specs/sketch-thumbnails.md`).
+
+**En vuelo (no tocar ni duplicar):** `brainstorming-note-per-step` (`in_progress`
+en `worktree/brainstorming-note-per-step`, spec y código sin commit) y
+`brainstorming-ai-suggestions` (`in_progress` en
+`worktree/brainstorming-ai-suggestions`, spec y código sin commit); ambas
+pendientes de revisión y de implementer → validator. La siguiente ready sin
+dependencias abiertas y sin worktree es `first-run-project-onboarding`
+(`not_started`, sin spec; arranca con planner); luego `gdd-document-hybrid` y las
+demás `not_started` de las olas 3–6. `gdd-export-hybrid` espera
+`gdd-document-hybrid` y `readme-project-documentation` cierra el MVP. Para iOS:
+el upload firmado (`ios-release-pipeline-first-upload`) sigue
+`blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
