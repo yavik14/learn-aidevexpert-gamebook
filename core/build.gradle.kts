@@ -21,6 +21,7 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.sqldelight.runtime)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
         }
         androidMain.dependencies {
             implementation(libs.sqldelight.android.driver)

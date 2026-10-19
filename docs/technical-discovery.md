@@ -1163,3 +1163,49 @@ en `:core`/esquema (el global es **v8** con `7.sqm` por
   relanzar; fix de layout verificado con 3 y 13 Géneros, GDD con personalizado y
   `jrpg` sembrado → `JRPG`). Evidencia en
   `composeApp/build/smoke-evidence/genres-catalog-ui/` (`29`–`41`).
+
+## AI Real Switch Decisions (ai-fake-real-switch)
+
+Implementado 2026-10-19. Proveedor propio OpenAI-compatible
+(`https://inference.devexpert.io/v1`) detrás de los puertos existentes.
+
+- **Flag/config:** `playbook.ai.mode` (`PLAYBOOK_AI_MODE`, default `fake`) con
+  precedencia `-P` > env > `local.properties`; `init.sh` fuerza
+  `-Pplaybook.ai.mode=fake`. Base URL, 6 modelos (`chat`, `embedding`,
+  `transcribe`, `tts`, `image`, `jev`), voz (`alloy`), tamaño de imagen
+  (`1024x1024`, quality low; el proveedor rechaza 512/256 y puede devolver JPEG)
+  y dimensión de embedding (`1536`) configurables por propiedad.
+- **Runtime:** `AiRuntime` (`com.playbook.core.ai.openai`) agrupa `AiClient` +
+  `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + `AiAvailability` +
+  `embeddingDimension`. `fakeAiRuntime()` es el default; `openAiAiRuntime(config,
+  transport)` arma los adaptadores reales. El transporte de red es un puerto
+  (`HttpTransport`); `UrlConnectionHttpTransport` vive en `:composeApp/androidMain`
+  y los tests usan un transporte falso.
+- **Adaptadores:** `POST /chat/completions` (`choices[0].message.content`),
+  `POST /embeddings` (`data[i].embedding`, orden por `index`),
+  `POST /audio/transcriptions` (multipart `model`+`file`+`response_format=json`,
+  parsea `text`; mp3/m4a, ≤30 s, ≤25 MB), `POST /audio/speech` (bytes mp3),
+  `POST /images/generations` (`data[0].b64_json` → bytes con mime detectado,
+  PNG/JPEG) y `POST /decisions`
+  (`answers.<q>.choice`; Track por código + un Género, sin auto-asignar).
+- **Errores:** cualquier no-2xx, timeout, IO o JSON inválido →
+  `AiClientException` con mensaje genérico por status; sin body, headers ni key.
+  El transporte **no sigue redirects** (`instanceFollowRedirects=false`): un 3xx
+  se reporta como no-2xx y el adaptador lo mapea a `AiClientException`, sin
+  reenviar key/body/headers a otro host. El I/O bloqueante corre en
+  `Dispatchers.IO` (dispatcher inyectable), nunca en el hilo Main; así el
+  indexado/RAG reales no lanzan `NetworkOnMainThreadException` ni bloquean la UI.
+- **Seguridad:** la key (`playbook.ai.apiKey` / `PLAYBOOK_AI_API_KEY` /
+  `local.properties`) se inyecta en `BuildConfig` sólo en modo real; en fake el
+  campo queda vacío. `real` es el default sólo en debug; release real exige
+  opt-in por propiedad Gradle (`-Pplaybook.ai.allowReleaseKey=true`; env/local se
+  ignoran; `findProperty` también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*`,
+  hardening estricto pendiente). Un real incompleto falla el build.
+- **Embeddings:** `EmbeddingDimensionReconciler` borra los vectores cuya
+  dimensión no coincide con el runtime activo y deja la Nota `PENDING` con
+  `index_attempts=0`; el reintento de arranque la re-indexa. Sin `.sqm`.
+- **Tests:** contractos de adaptadores con `HttpTransport` falso, JSON/base64,
+  errores sanitizados, selección fake/real, `AiAvailability`, reconciler y
+  transporte Android (servidor HTTP local). El smoke de los 6 modelos es
+  key-gated (`PLAYBOOK_AI_SMOKE=1`), fuera del gate.
+- **iOS:** congelado; usa `fakeAiRuntime()`, sin transporte real.

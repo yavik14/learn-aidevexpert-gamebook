@@ -32,7 +32,7 @@ fi
 # --- Gate no bloqueante: compilación Android + tests del core -------------
 echo ""
 echo ">> Compilando Android y corriendo tests del core..."
-./gradlew :composeApp:assembleDebug :core:testDebugUnitTest --console=plain
+./gradlew :composeApp:assembleDebug :core:testDebugUnitTest -Pplaybook.ai.mode=fake --console=plain
 
 # --- Comandos manuales (no se ejecutan aquí) ------------------------------
 echo ""
