@@ -46,7 +46,8 @@ personalizados por Nota, `normalizeGenres` con canonización case-insensitive; l
 columna/relación `note_tag`→`note_genre` se migra **verbatim**.
 `game-project-persistence` agrega el **Proyecto de Juego** singleton (esquema v8
 con `7.sqm`): ficha estructurada en `game_project` + tablas hijas y
-`GameProjectRepository` (`get`/`save` upsert); sólo `:core`, sin UI ni wiring.
+`GameProjectRepository` (`get`/`save` upsert); `brainstorming-wizard` cablea ese
+repositorio a la UI mediante un wizard de 9 pasos.
 
 ## Modules
 
@@ -175,7 +176,8 @@ composeApp (Android app / commonMain) ──▶ core
   singleton que preserva `owner`/`createdAt` (un owner distinto falla), avanza
   `updatedAt` y reemplaza las hijas en la transacción. Sin estado
   `vacío`/`esbozado` persistido (se deriva) y sin FK Nota→Proyecto (pertenencia
-  implícita). No está cableado a la UI todavía.
+  implícita). Cableado a la UI por `brainstorming-wizard` (wizard de 9 pasos;
+  guardado explícito de la ficha completa).
 - `Track.fromCode(null | desconocido)` → `null` (edge case "Nota sin `track`").
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.
@@ -545,13 +547,15 @@ composeApp (Android app / commonMain) ──▶ core
 ## UI
 
 - **`commonMain`** (`com.playbook.app`): `App(noteRepository: NoteRepository,
+  gameProjectRepository: GameProjectRepository,
   attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber,
   noteIndexingOrchestrator: NoteIndexingOrchestrator, ragQueryService: RagQueryService,
   noteLinkRepository: NoteLinkRepository, semanticLinkingService: SemanticLinkingService)`
-  es la raíz de la UI y dueña del estado. Hoistea `notes` y `attachments`
-  (`mutableStateOf`), `destination` (`NotesDestination`:
+  es la raíz de la UI y dueña del estado. Hoistea `notes`, `project`
+  (`GameProject?`) y `attachments` (`mutableStateOf`), `destination`
+  (`NotesDestination`:
   `List`/`Create`/`Edit(noteId)`/`VoiceCapture`/`CreateWithImage(image)`/`Gdd`/`Ask`/
-  `Related(noteId)`),
+  `Brainstorming`/`Related(noteId)`),
   `refreshKey`, `relatedNotes`, `voiceState` (`VoiceUiState`), `askState` (`AskUiState`) y el
   estado de captura de imagen (`showImageSourceDialog`/`imageError`). La lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
@@ -566,15 +570,29 @@ composeApp (Android app / commonMain) ──▶ core
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
 - **`NotesListScreen`**: `Scaffold` con una fila de `ExtendedFloatingActionButton`
   ("Nueva nota" + "Foto"); acciones secundarias `FilledTonalButton` "Dictar nota"
-  (`onDictate`) y "Ver GDD" (`onOpenGdd`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
+  (`onDictate`), "Ver GDD" (`onOpenGdd`) y "Preguntar" (`onAsk`); una fila propia
+  con "Brainstorming" (`onOpenBrainstorming`, entrada temporal hasta
+  `main-screen-playbook-shell`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
   + "Agregar foto"; y estado con notas (título "Notas" + `LazyColumn` de `Card`s
   clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra
   `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
   "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
   (o "Sin track") y un `StatusBadge` con la etiqueta legible del `status`, y —si
   `note.genres` no está vacía— una fila de
-  chips de Género (misma `LabelChip`, en `Row` con `horizontalScroll`). Todo se
+  chips de Género (`GenreLabelChip`, en `Row` con `horizontalScroll`). Todo se
   comunica con texto, no sólo color (`DESIGN.md`).
+- **`BrainstormingWizardScreen`** (`brainstorming-wizard`): wizard de 9 pasos
+  (Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones, Fantasía,
+  Mecánicas clave, Fuera de alcance) para crear/iterar la ficha del Proyecto.
+  Todos los pasos son opcionales; `LinearProgressIndicator` + `Paso X/9`;
+  "Atrás"/"Siguiente" y "Guardar" (explícito) o "Cancelar" (descarta). El estado
+  local se inicializa desde `initialProject` y se re-inicializa con
+  `updatedAt` como clave cuando `App` termina de cargar. El paso Género reutiliza
+  `GenrePicker`; Inspiraciones/Fuera de alcance topan en 3 y Mecánicas en 5 (con
+  categoría + descripción). "Guardar" construye un `GameProjectDraft` **completo**
+  (nunca parcial) y llama `GameProjectRepository.save`; si falla, muestra un
+  `AlertDialog` y no navega. La creación de Notas por paso queda en
+  `brainstorming-note-per-step` (no implementada).
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
   (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de
   `track` ("Sin track" + `Track.entries`) que comunica la selección con marca

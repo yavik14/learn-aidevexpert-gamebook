@@ -27,10 +27,12 @@ import com.playbook.core.linking.SemanticLinkingService
 import com.playbook.core.linking.buildRelatedNotes
 import com.playbook.core.model.Attachment
 import com.playbook.core.model.AttachmentKind
+import com.playbook.core.model.GameProject
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
 import com.playbook.core.repository.AttachmentRepository
+import com.playbook.core.repository.GameProjectRepository
 import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
 import kotlinx.coroutines.launch
@@ -54,6 +56,9 @@ sealed interface NotesDestination {
 
     /** Vista de GDD: proyección de las Notas agrupadas por `track`. */
     data object Gdd : NotesDestination
+
+    /** Wizard de 9 pasos para crear o iterar la ficha del Proyecto. */
+    data object Brainstorming : NotesDestination
 
     /** Creación con una imagen recién capturada/elegida, todavía en memoria. */
     data class CreateWithImage(val image: PickedImage) : NotesDestination
@@ -92,6 +97,7 @@ sealed interface NotesDestination {
 @Composable
 fun App(
     noteRepository: NoteRepository,
+    gameProjectRepository: GameProjectRepository,
     attachmentRepository: AttachmentRepository,
     voiceTranscriber: VoiceTranscriber,
     noteIndexingOrchestrator: NoteIndexingOrchestrator,
@@ -103,6 +109,7 @@ fun App(
 ) {
     MaterialTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
+        var project by remember { mutableStateOf<GameProject?>(null) }
         var attachments by remember { mutableStateOf(emptyList<Attachment>()) }
         var destination by remember { mutableStateOf<NotesDestination>(NotesDestination.List) }
         var refreshKey by remember { mutableStateOf(0) }
@@ -129,6 +136,7 @@ fun App(
         LaunchedEffect(refreshKey) {
             notes = noteRepository.getAll()
             attachments = attachmentRepository.getAll()
+            project = gameProjectRepository.get()
         }
 
         fun reload() {
@@ -298,6 +306,21 @@ fun App(
                     askState = AskUiState.Idle
                     destination = NotesDestination.Ask
                 },
+                onOpenBrainstorming = { destination = NotesDestination.Brainstorming },
+            )
+
+            NotesDestination.Brainstorming -> BrainstormingWizardScreen(
+                initialProject = project,
+                owner = project?.owner ?: LOCAL_OWNER_ID,
+                onSave = { draft ->
+                    val saved = runCatching { gameProjectRepository.save(draft) }.isSuccess
+                    if (saved) {
+                        reload()
+                        goToList()
+                    }
+                    saved
+                },
+                onCancel = ::goToList,
             )
 
             NotesDestination.Gdd -> GddScreen(

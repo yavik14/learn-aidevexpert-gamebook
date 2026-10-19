@@ -33,7 +33,12 @@ Próximas features en cola: las `not_started` de `feature_list.json` (revisión
 `game-project-persistence` (Proyecto, persistencia v8),
 `genres-catalog-ui` (picker de chips) y `ai-fake-real-switch` (IA real
 OpenAI-compatible) quedaron implementadas y aceptadas (validación independiente
-`accept`). Siguientes: las `not_started` de la Ola 2. Para iOS: el upload firmado
+`accept`). `brainstorming-wizard` quedó `accepted` (spec
+`docs/specs/brainstorming-wizard.md`; validación independiente `accept` en
+`docs/validations/brainstorming-wizard.md`). La creación de Notas por paso se
+separó en `brainstorming-note-per-step` (`not_started`, sin spec). La siguiente
+ready es `inline-dictation-30s` (spec lista); luego las demás `not_started` de
+la Ola 2. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero

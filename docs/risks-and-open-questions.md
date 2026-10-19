@@ -63,9 +63,14 @@
   paso de Brainstorming (Título→sin Track; Género→Género; Core Loop→`mecánicas`;
   Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin Track;
   Fantasía→`historia`; Keys→`mecánicas`; Out→sin Track) y **sin Track único** para
-  respuestas del Q&A. A refinar en la spec.
-- **UI fina del wizard** de Brainstorming (progreso X/9, navegación, disposición de
-  las 2 sugerencias) y comportamiento al reabrir para iterar.
+  respuestas del Q&A. El wizard actual **no** crea Notas; queda para
+  `brainstorming-note-per-step` (`not_started`, sin spec), que debe definir el
+  mapeo final y si la Nota se indexa.
+- **UI fina del wizard:** **resuelta** en `brainstorming-wizard` (2026-10-19;
+  validación independiente `accept` en `docs/validations/brainstorming-wizard.md`): 9 pasos,
+  progreso `Paso X/9`, guardado explícito, reapertura con precarga, topes 3/3/5,
+  `GenrePicker` compartido y sin sugerencias IA (esas quedan en
+  `brainstorming-ai-suggestions`). Ver `docs/specs/brainstorming-wizard.md`.
 - **Normalización de Géneros:** **resuelto** en `genres-catalog-persistence`
   (2026-10-16): `normalizeGenres` aplica trim, descarta vacíos, **canoniza**
   case-insensitive contra `GenreCatalog` (un personalizado que coincide con el
