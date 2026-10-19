@@ -1232,5 +1232,40 @@
       "2026-10-16: validación independiente (accept), registro en docs/validations/app-icon-configuration.md. El validador re-ejecutó `:composeApp:assembleDebug` BUILD SUCCESSFUL, `aapt dump badging` (`icon='res/mipmap-anydpi-v26/ic_launcher.xml'`), `aapt list`/`xmltree` (colors `#F7EFE2`, adaptive bg/fg) y `./init.sh` exit 0; verificó PNG legacy 48/72/96/144/192 + foreground 432² y smoke visual en emulator-5556 (API 35, mask circular, sin costuras); controles negativos propios (quitar `android:icon`; foreground inexistente → falla resource linking) restaurados byte-idénticos."
     ],
     "notes": "Fuente: `docs/design/icon.png` (gamepad + lápiz, acentos celeste/ámbar); fondo medido `#F7EFE2`. Android: adaptive icon (`mipmap-anydpi-v26` background color + foreground bitmap) + PNG legacy por densidad; `roundIcon` = mismo `@mipmap/ic_launcher`; foreground en `drawable-nodpi`. iOS congelado: `AppIcon` intacto. Sin dependencias nuevas ni cambios de código/esquema. Ver `docs/technical-discovery.md`."
+  },
+  {
+    "id": "readme-project-documentation",
+    "area": "docs",
+    "title": "README-bitácora del proyecto",
+    "user_visible_behavior": "El repositorio tiene un README que explica qué es Playbook, cómo ejecutarlo, su arquitectura, la metodología/harness, la bitácora de construcción y los próximos pasos.",
+    "depends_on": [
+      "genres-catalog-ui",
+      "game-project-persistence",
+      "brainstorming-wizard",
+      "brainstorming-ai-suggestions",
+      "first-run-project-onboarding",
+      "main-screen-playbook-shell",
+      "sketch-thumbnails",
+      "inline-dictation-30s",
+      "gdd-document-hybrid",
+      "gdd-export-hybrid",
+      "save-answer-as-note",
+      "ai-fake-real-switch",
+      "ai-real-chat",
+      "ai-real-embeddings",
+      "transcribe-audio-attachment",
+      "tts-read-aloud",
+      "image-generation-from-text",
+      "ai-suggest-classification"
+    ],
+    "status": "not_started",
+    "verification": [
+      "`README.md` existe en la raíz, está en español y sus enlaces relativos resuelven.",
+      "Los comandos del quick start coinciden con `init.sh`/`docs/release/android.md` y se ejecutan sin error.",
+      "El contenido no contradice `PROGRESS.md`, `feature_list.json`, ADRs ni validaciones; no contiene secrets.",
+      "`CI=true ./init.sh` → exit 0 (el README no altera el gate)."
+    ],
+    "evidence": [],
+    "notes": "Tarea de documentación de cierre, no feature de producto. Se ejecuta después de que las 18 features del MVP estén `accepted` y de la validación end-to-end. Debe cubrir app, arquitectura, metodología/harness (planner→implementer→validator, worktrees/sesiones, gate fake), bitácora por fases, verificación, riesgos, lecciones aprendidas y próximos pasos. `PROGRESS.md` y `feature_list.json` siguen siendo la fuente de verdad operativa."
   }
 ]
