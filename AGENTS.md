@@ -29,10 +29,12 @@ el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png
 
 Próximas features en cola: las `not_started` de `feature_list.json` (revisión
 2026-10-15); `app-icon-configuration`, `ai-client-ports`,
-`genres-catalog-persistence` (Géneros: dominio + persistencia v7) y
-`game-project-persistence` (Proyecto, persistencia v8) quedaron implementadas y
-aceptadas. Las siguientes ready son `genres-catalog-ui` (picker de chips) y
-`ai-fake-real-switch`. Para iOS: el upload firmado
+`genres-catalog-persistence` (Géneros: dominio + persistencia v7),
+`game-project-persistence` (Proyecto, persistencia v8) y `genres-catalog-ui`
+(picker de chips) quedaron implementadas y aceptadas (validación independiente
+`accept`; `genres-catalog-ui` en `docs/validations/genres-catalog-ui.md`). La
+siguiente ready es `ai-fake-real-switch` (spec pendiente) y luego las demás
+`not_started`. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero

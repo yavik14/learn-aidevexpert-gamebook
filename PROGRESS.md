@@ -32,8 +32,9 @@
 - `ai-client-ports` `accepted` (2026-10-16; Session 049; validación independiente `accept` en `docs/validations/ai-client-ports.md`): puertos de IA `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + fakes deterministas en `:core`; chat/embedding siguen en `AiClient`; sin adaptadores reales ni build flag (feature posterior). Ver `docs/technical-discovery.md`.
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
 - `game-project-persistence` `accepted` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, persistida en Session 054): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
+- `genres-catalog-ui` `accepted` (2026-10-19; Sessions 052/053; validación independiente `accept` en `docs/validations/genres-catalog-ui.md`; rebasada sobre `develop` con `game-project-persistence` v8): picker de **Géneros** en `:composeApp` — 12 chips de catálogo en `FlowRow` con toggle, "Seleccionados" con `×`, alta de personalizado y toda alta/remoción vía `normalizeGenres`; `GenreLabelChip` distingue catálogo (`primaryContainer`) vs personalizado (`secondaryContainer`) en tarjetas, GDD y relacionadas. Incluye el **fix de layout** tras la validación `revise`: `NoteEditorScreen` con contenido scrollable y fila Borrar/Cancelar/Guardar fija (cuerpo `heightIn(200..320dp)`). No toca `:core`/esquema (el global es v8 por `game-project-persistence`)/`App.kt`/build files/deps. Gate en la base rebasada: `assembleDebug` OK, `:core:testDebugUnitTest` 23 suites/55 tests/0 failures, `./init.sh` exit 0 e iOS link OK. Smoke Android completo (toggle, canonización, dedupe, tarjeta, reapertura, edición, 13 Géneros, GDD con personalizado y persistencia tras relanzar). Ver `feature_list.json`, `docs/validations/genres-catalog-ui.md` y `composeApp/build/smoke-evidence/genres-catalog-ui/`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
-- Current next ready features: `genres-catalog-ui` (picker de chips) y `ai-fake-real-switch` (ambas en validación). Ver `feature_list.json`.
+- Current next ready features: `genres-catalog-ui` y `game-project-persistence` quedan `accepted`; la siguiente ready es `ai-fake-real-switch` (spec pendiente). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-19.
 
@@ -1109,6 +1110,46 @@
 - Files or artifacts updated: `SqlDelightGameProjectRepository.kt`, `GameProjectCheck.kt`, `MigrationCheck.kt`, `docs/validations/game-project-persistence.md` (nuevo), `feature_list.json`, `PROGRESS.md`; eliminado `docs/specs/audio.mp3`.
 - Known risk or unresolved issue: sin emulador Android (`adb` ausente) no se ejecutó smoke real de la migración sobre `playbook.db`; cobertura por tests del core sobre el esquema real. La lectura fail-fast de categoría desconocida sólo se cubre por inserción directa (camino de corrupción).
 - Next best step: la sesión integradora persiste `accepted` para `game-project-persistence`; luego continuar con `genres-catalog-ui` (picker de chips) o `ai-fake-real-switch`.
+
+### Session 052 (genres-catalog-ui)
+
+- Date: 2026-10-19
+- Goal: implementar `genres-catalog-ui` (spec `docs/specs/genres-catalog-ui.md`): picker de Géneros con catálogo + personalizado y chip de lectura con variante catálogo/personalizado.
+- Completed:
+  - `composeApp/src/commonMain/kotlin/com/playbook/app/GenrePicker.kt` (nuevo): "Géneros"; si hay elegidos, "Seleccionados" con chips removibles `×`; "Catálogo" con los 12 `GenreCatalog.GENRES` en orden en un `FlowRow`; "Género personalizado" + placeholder "Escribí uno nuevo…" + "Agregar" habilitado sólo con texto no blanco.
+  - Toggle de catálogo (agrega/quita) y toda alta/remoción pasan por `normalizeGenres`; dedupe/canonización case-insensitive (`jrpg` → `JRPG`). Sin límites de cantidad ni largo; etiquetas a una línea con ellipsis.
+  - Accesibilidad: `onClickLabel` "Agregar género X"/"Quitar género X", `role = Role.Button`, `defaultMinSize(minHeight = 48.dp)`, `✓` + borde de 2.dp y `semantics { selected }` en el chip del catálogo.
+  - `NoteEditorScreen.kt`: usa `GenrePicker(selected = genres, onChange = { genres = it })`, conserva `genres = normalizeGenres(initialGenres)` y `onSave(..., genres)`, y elimina el `GenreChip` privado y el texto libre. `App.kt` sin cambios.
+  - `LabelChip.kt`: nuevo `GenreLabelChip(text, modifier)` con detección de catálogo case-insensitive, `primaryContainer` vs `secondaryContainer` y una línea con ellipsis; `LabelChip` intacto. Usado sólo en las filas de Géneros de `NotesListScreen.kt`, `GddScreen.kt` y `RelatedNotesScreen.kt`.
+  - Docs/evidencia: `docs/technical-discovery.md` (decisión de UI), `feature_list.json` (`passing` + evidencia), `AGENTS.md` (sólo la línea de próxima feature), esta sesión y capturas/UI dumps en `composeApp/build/smoke-evidence/genres-catalog-ui/` (ignorado por git).
+- Verification run (base `6ba979f`, pre `game-project-persistence`):
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL (54 tasks).
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 22 suites, **53 tests, 0 failures, 0 errors**. Nota honesta: el spec citaba 47 como expectativa; el branch ya incluía tests de features integradas posteriores y `:core` no se tocó.
+  - `./init.sh` → exit 0 (Android-only, sin dev servers ni red).
+  - iOS (no bloqueante): `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.
+  - `PlaybookDatabase.Schema.version == 7`; `.sqm` = `1.sqm`..`6.sqm`; `git diff --stat` vacío en `:core`, build files, `gradle/libs.versions.toml`, `init.sh`, `iosApp`, `App.kt`, `MainActivity`/`MainViewController`; sin dependencias ni secrets.
+  - Smoke manual Android (emulator-5556, Pixel_3A_API_35, 1080x2220/440 dpi): 12 chips de catálogo en orden y sin "Seleccionados" al inicio; toggle Platformer/JRPG; tocar JRPG de nuevo lo quita; `" jrpg "` + Agregar → `JRPG`; alta de `Zelda-like`; tarjeta, reapertura, remoción/alta, GDD y Notas relacionadas; persistencia tras force-stop + relanzar. UI dumps/capturas en `composeApp/build/smoke-evidence/genres-catalog-ui/` (`02`, `05`–`08`, `10`, `12`–`18`, `27`).
+- Evidence captured: arreglo `evidence` de `genres-catalog-ui` en `feature_list.json` + capturas/UI dumps.
+- Files or artifacts updated: `GenrePicker.kt` (nuevo), `NoteEditorScreen.kt`, `LabelChip.kt`, `NotesListScreen.kt`, `GddScreen.kt`, `RelatedNotesScreen.kt`, `docs/specs/genres-catalog-ui.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: el editor seguía siendo una `Column` no scrollable; el cuerpo perdía peso y los botones podían quedar al borde (resuelto en Session 053). Sin tests de UI/E2E persistentes (la spec lo justifica).
+- Next best step: validación independiente de `genres-catalog-ui`.
+
+### Session 053 (genres-catalog-ui)
+
+- Date: 2026-10-19
+- Goal: corregir el hallazgo High de la validación independiente de `genres-catalog-ui`: en modo edición el editor no era scrollable, el cuerpo quedaba en una línea y la fila `Borrar/Cancelar/Guardar` se recortaba fuera del viewport.
+- Completed:
+  - `NoteEditorScreen.kt`: el contenido (título, estado, imagen, cuerpo, Track, `GenrePicker`, "Ver relacionadas") vive en una `Column` con `verticalScroll(rememberScrollState())` y `weight(1f)`; la fila `Borrar/Cancelar/Guardar` queda **fija** fuera del scroll. El cuerpo usa `heightIn(min = 200.dp, max = 320.dp)`. KDoc actualizado.
+  - `GenrePicker.kt`/`GenreLabelChip`/`LabelChip` intactos: la reparación es sólo de layout del editor.
+  - Docs: `feature_list.json` (evidencia del fix), `docs/technical-discovery.md` (decisión durable de layout), `docs/specs/genres-catalog-ui.md` (tareas marcadas y conteo actualizado). `AGENTS.md` sin cambios en esta sesión.
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL (54 tasks).
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; 22 suites / **53 tests / 0 failures / 0 errors / 0 skipped** (base pre-integración).
+  - `./init.sh` → exit 0; iOS link no bloqueante → BUILD SUCCESSFUL.
+  - Smoke Android (emulator-5556): `29` edición con 3 Géneros → cuerpo 550 px (200 dp) y acciones completas en `[2061,2116]`; `31` 12 catálogo + `Zelda-like`; `33`/`39` persistencia; `35` `" jrpg "` → `JRPG` sin duplicado; `36` GDD con personalizado; `37` creación; `40`/`41` `jrpg` sembrado → `JRPG`. Evidencia `29`–`41` en `composeApp/build/smoke-evidence/genres-catalog-ui/`.
+- Validation: validación independiente (`docs/validations/genres-catalog-ui.md`) → **accept** (2026-10-19). El validador re-ejecutó `assembleDebug` (54 tasks), `:core` (22 suites / 53 tests / 0 failures), `init.sh` (exit 0) y el link iOS; verificó alcance vacío y schema v7 en la base validada; re-dirigió el smoke en emulator-5556 (3 y 13 Géneros, toggle/dedupe, GDD con personalizado, `jrpg` sembrado → `JRPG`) y restauró la DB. Notas Low no bloqueantes: casing legacy de lectura, ellipsis con scroll horizontal, tamaños extremos y altura acotada del cuerpo.
+- Integración (rebase final sobre `develop` @ `a404f09`, con `game-project-persistence` v8): la base incluye esquema **v8** (`7.sqm`), 23 suites / **55 tests / 0 failures**, `assembleDebug` 60 tasks y `./init.sh` exit 0; `genres-catalog-ui` no modifica `:core` ni el esquema. La validación `accept` se mantiene porque el diff de la feature es el mismo.
+- Next best step: PR listo para revisión; la sesión integradora puede mergear cuando el autor lo indique.
 
 ### Session 054
 

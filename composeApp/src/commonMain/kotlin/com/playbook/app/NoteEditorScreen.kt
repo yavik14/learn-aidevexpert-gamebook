@@ -2,7 +2,6 @@ package com.playbook.app
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,8 +10,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -29,8 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
 import com.playbook.core.model.normalizeGenres
@@ -43,10 +44,13 @@ import com.playbook.core.model.normalizeGenres
  *   no hay imagen: una nota sólo-imagen es válida.
  * - El `track` es opcional ("Sin track" por defecto); la selección se comunica
  *   con más que color (borde + marca textual), según `DESIGN.md`.
- * - Los Géneros son múltiples y se normalizan ([normalizeGenres]) al agregarlos;
- *   cada uno se muestra como chip con control de quitar "×". El editor todavía es
- *   de **texto libre** (el picker del catálogo llega con `genres-catalog-ui`). No
- *   hay Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
+ * - Los Géneros se eligen del [GenreCatalog] fijo (toggle de chips) o se escriben
+ *   como personalizados en [GenrePicker]; el conjunto inicial y toda alta/remoción
+ *   pasan por [normalizeGenres]. No hay Categoría/Tipo/Nivel: el `track` ya cubre
+ *   la clasificación fija.
+ * - El contenido es scrollable y la fila Borrar/Cancelar/Guardar queda fija al
+ *   pie: el picker puede crecer sin ocultar las acciones y el cuerpo conserva una
+ *   altura mínima usable.
  * - Si hay una [initialImage] se muestra una previsualización y "Quitar imagen".
  * - En modo edición se ofrece "Borrar", con `AlertDialog` de confirmación. La
  *   acción no destructiva es explícita: "Cancelar". Si [onOpenRelated] no es null
@@ -80,7 +84,6 @@ fun NoteEditorScreen(
     var body by remember { mutableStateOf(initialBody) }
     var selectedTrack by remember { mutableStateOf(initialTrack) }
     var genres by remember { mutableStateOf(normalizeGenres(initialGenres)) }
-    var newGenre by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val canSave = body.isNotBlank() || initialImage != null
@@ -90,128 +93,104 @@ fun NoteEditorScreen(
             .fillMaxSize()
             .padding(24.dp),
     ) {
-        Text(
-            text = if (isEditing) "Editar nota" else "Nueva nota",
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        if (isEditing && initialStatus != null) {
-            // Estado de indexado de sólo lectura + re-indexado manual. El badge
-            // comunica con texto/forma y el botón sólo se habilita si hay algo
-            // que embeber (body no vacío) y la Nota no está ya indexada.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusBadge(status = initialStatus)
-                Spacer(modifier = Modifier.weight(1f))
-                if (onReindex != null) {
-                    OutlinedButton(
-                        onClick = onReindex,
-                        enabled = initialStatus != NoteStatus.INDEXED && body.isNotBlank(),
-                    ) {
-                        Text(text = "Re-indexar")
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                text = if (isEditing) "Editar nota" else "Nueva nota",
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            if (isEditing && initialStatus != null) {
+                // Estado de indexado de sólo lectura + re-indexado manual. El badge
+                // comunica con texto/forma y el botón sólo se habilita si hay algo
+                // que embeber (body no vacío) y la Nota no está ya indexada.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    StatusBadge(status = initialStatus)
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (onReindex != null) {
+                        OutlinedButton(
+                            onClick = onReindex,
+                            enabled = initialStatus != NoteStatus.INDEXED && body.isNotBlank(),
+                        ) {
+                            Text(text = "Re-indexar")
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-        if (initialImage != null) {
-            val bitmap = remember(initialImage) { decodeImageBitmap(initialImage.bytes) }
-            Text(text = "Imagen adjunta", style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = "Previsualización de la imagen adjunta",
-                    modifier = Modifier.fillMaxWidth().height(180.dp),
-                    contentScale = ContentScale.Fit,
-                )
-            } else {
-                Text(
-                    text = "No se pudo previsualizar la imagen.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+            if (initialImage != null) {
+                val bitmap = remember(initialImage) { decodeImageBitmap(initialImage.bytes) }
+                Text(text = "Imagen adjunta", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = "Previsualización de la imagen adjunta",
+                        modifier = Modifier.fillMaxWidth().height(180.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    Text(
+                        text = "No se pudo previsualizar la imagen.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                TextButton(onClick = { onRemoveImage?.invoke() }) {
+                    Text(text = "Quitar imagen")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            TextButton(onClick = { onRemoveImage?.invoke() }) {
-                Text(text = "Quitar imagen")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        OutlinedTextField(
-            value = body,
-            onValueChange = { body = it },
-            label = { Text(text = "Cuerpo") },
-            placeholder = { Text(text = "Escribí tu idea…") },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Track", style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TrackOption(
-                label = "Sin track",
-                selected = selectedTrack == null,
-                onClick = { selectedTrack = null },
-            )
-            Track.entries.forEach { track ->
-                TrackOption(
-                    label = track.code,
-                    selected = selectedTrack == track,
-                    onClick = { selectedTrack = track },
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Géneros", style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
             OutlinedTextField(
-                value = newGenre,
-                onValueChange = { newGenre = it },
-                label = { Text(text = "Nuevo género") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
+                value = body,
+                onValueChange = { body = it },
+                label = { Text(text = "Cuerpo") },
+                placeholder = { Text(text = "Escribí tu idea…") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp, max = 320.dp),
             )
-            Button(
-                onClick = {
-                    genres = normalizeGenres(genres + newGenre)
-                    newGenre = ""
-                },
-                enabled = newGenre.isNotBlank(),
-            ) {
-                Text(text = "Agregar")
-            }
-        }
-        if (genres.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = "Track", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                genres.forEach { genre ->
-                    GenreChip(label = genre, onRemove = { genres = genres - genre })
+                TrackOption(
+                    label = "Sin track",
+                    selected = selectedTrack == null,
+                    onClick = { selectedTrack = null },
+                )
+                Track.entries.forEach { track ->
+                    TrackOption(
+                        label = track.code,
+                        selected = selectedTrack == track,
+                        onClick = { selectedTrack = track },
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            GenrePicker(selected = genres, onChange = { genres = it })
+            Spacer(modifier = Modifier.height(24.dp))
+            if (isEditing && onOpenRelated != null) {
+                // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
+                // Borrar/Cancelar/Guardar empujaba "Guardar" fuera del borde visible.
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onOpenRelated) {
+                        Text(text = "Ver relacionadas")
+                    }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
-        if (isEditing && onOpenRelated != null) {
-            // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
-            // Borrar/Cancelar/Guardar empujaba "Guardar" fuera del borde visible.
-            Row(modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onOpenRelated) {
-                    Text(text = "Ver relacionadas")
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -296,36 +275,5 @@ private fun TrackOption(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
         )
-    }
-}
-
-/**
- * Chip de Género con control de quitar "×". Todo el chip es clickeable para
- * quitarlo, con `onClickLabel` semántico y `role = Role.Button`. Se comunica con
- * texto, no sólo color (`DESIGN.md`).
- */
-@Composable
-private fun GenreChip(
-    label: String,
-    onRemove: () -> Unit,
-) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = Modifier.clickable(
-            onClickLabel = "Quitar género $label",
-            role = Role.Button,
-            onClick = onRemove,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = label, style = MaterialTheme.typography.labelMedium)
-            Text(text = "×", style = MaterialTheme.typography.labelMedium)
-        }
     }
 }

@@ -206,7 +206,7 @@ private fun GddNoteCard(note: Note, hasAttachment: Boolean, onClick: () -> Unit)
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     note.genres.forEach { genre ->
-                        LabelChip(text = genre)
+                        GenreLabelChip(text = genre)
                     }
                 }
             }

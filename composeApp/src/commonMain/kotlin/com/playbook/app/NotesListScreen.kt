@@ -188,7 +188,7 @@ private fun NoteCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     note.genres.forEach { genre ->
-                        LabelChip(text = genre)
+                        GenreLabelChip(text = genre)
                     }
                 }
             }
