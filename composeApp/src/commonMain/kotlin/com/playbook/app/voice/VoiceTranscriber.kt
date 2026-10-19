@@ -55,11 +55,18 @@ interface VoiceTranscriber {
      * [onFinalResult]; si no se pudo grabar, entrega `null` y la transcripción
      * sigue (degradación tolerante). Los callbacks se invocan en el hilo
      * principal.
+     *
+     * [onStarted] se invoca **una vez por sesión** cuando el reconocimiento y la
+     * grabación ya arrancaron de verdad (permiso concedido). No se invoca si hay
+     * error de permiso, disponibilidad o arranque; permite que el cap de 30s no
+     * cuente el diálogo de permiso. [cancel] lo descarta junto con el resto de
+     * callbacks.
      */
     fun start(
         onPartialResult: (String) -> Unit,
         onFinalResult: (String, RecordedAudio?) -> Unit,
         onError: (VoiceCaptureError) -> Unit,
+        onStarted: () -> Unit = {},
     )
 
     /** Pide el resultado final (sigue [onFinalResult]/[onError]). */

@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.playbook.app.voice.RecordedAudio
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.NoteIndexingOrchestrator
@@ -31,10 +32,13 @@ import com.playbook.core.model.GameProject
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
+import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.GameProjectRepository
 import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Owner único del MVP: lo provee la UI al construir cada [NoteDraft]. */
@@ -51,7 +55,6 @@ sealed interface NotesDestination {
     data object List : NotesDestination
     data object Create : NotesDestination
     data class Edit(val noteId: String) : NotesDestination
-    data object VoiceCapture : NotesDestination
     data object Ask : NotesDestination
 
     /** Vista de GDD: proyección de las Notas agrupadas por `track`. */
@@ -77,10 +80,12 @@ sealed interface NotesDestination {
  * `ViewModel`/`Lifecycle`, coroutines propias ni Flow: sólo estado de Compose y
  * las dependencias recibidas por parámetro.
  *
- * La captura por voz usa el puerto [VoiceTranscriber]: la sesión se inicia sólo
- * al tocar "Grabar" (para que el permiso sea explícito), el texto final se
- * persiste como `body` de una Nota (`track = null`, `status = CAPTURED`) por el
- * mismo camino que el texto, y al salir del destino se libera el micrófono.
+ * El dictado es **inline en Nueva nota**: la sesión y el cap de 30s viven acá,
+ * el editor muestra el progreso/parcial y anexa el texto final al `body`, y el
+ * audio original queda pendiente hasta Guardar (Adjunto `AUDIO`). El cap arranca
+ * con `onStarted` (permiso concedido), no al tocar "Dictar". Al cancelar o salir
+ * de la composición se corta la sesión y se borra el audio pendiente sin
+ * huérfanos.
  *
  * El enriquecimiento (embedding + `NoteStatus`) pasa por
  * [NoteIndexingOrchestrator]: al guardar una Nota con `body` no vacío se indexa
@@ -114,7 +119,10 @@ fun App(
         var destination by remember { mutableStateOf<NotesDestination>(NotesDestination.List) }
         var refreshKey by remember { mutableStateOf(0) }
         var relatedNotes by remember { mutableStateOf(emptyList<RelatedNote>()) }
-        var voiceState by remember { mutableStateOf<VoiceUiState>(VoiceUiState.Idle) }
+        var dictation by remember { mutableStateOf<DictationUiState>(DictationUiState.Idle) }
+        var dictatedText by remember { mutableStateOf<String?>(null) }
+        var pendingAudio by remember { mutableStateOf<RecordedAudio?>(null) }
+        var dictationJob by remember { mutableStateOf<Job?>(null) }
         var askState by remember { mutableStateOf<AskUiState>(AskUiState.Idle) }
         var showImageSourceDialog by remember { mutableStateOf(false) }
         var imageError by remember { mutableStateOf<ImageCaptureError?>(null) }
@@ -198,68 +206,160 @@ fun App(
             }
         }
 
-        fun startVoiceCapture() {
-            voiceState = VoiceUiState.Listening(partial = "")
+        /** Borra el audio pendiente (si lo hay) y lo limpia; idempotente. */
+        fun discardPendingAudio() {
+            val audio = pendingAudio ?: return
+            pendingAudio = null
+            fileStore.delete(audio.relativePath)
+        }
+
+        /**
+         * Persiste el audio pendiente como Adjunto `AUDIO` de [noteId]
+         * (best-effort: si falla se registra `STORAGE` y se borra el archivo) y
+         * siempre limpia `pendingAudio` para no dejarlo huérfano.
+         */
+        fun attachAudio(noteId: String) {
+            val audio = pendingAudio ?: return
+            pendingAudio = null
+            try {
+                attachmentRepository.create(
+                    noteId = noteId,
+                    kind = AttachmentKind.AUDIO,
+                    mimeType = audio.mimeType,
+                    filePath = audio.relativePath,
+                    byteSize = audio.byteSize,
+                )
+            } catch (_: Throwable) {
+                // Degradación tolerante: conservar la Nota sin Adjunto y no dejar
+                // el archivo huérfano.
+                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
+                fileStore.delete(audio.relativePath)
+            }
+        }
+
+        /** Corta la sesión de dictado y descarta el parcial; no toca el audio pendiente. */
+        fun cancelDictation() {
+            dictationJob?.cancel()
+            dictationJob = null
+            voiceTranscriber.cancel()
+            dictation = DictationUiState.Idle
+        }
+
+        /**
+         * Detiene una sesión `Listening` (idempotente) y espera el final. Si ya
+         * está en `Processing` o `Idle`/`Error`, no hace nada.
+         */
+        fun stopDictation() {
+            if (dictation !is DictationUiState.Listening) return
+            dictationJob?.cancel()
+            dictationJob = null
+            dictation = DictationUiState.Processing
+            voiceTranscriber.stop()
+        }
+
+        /**
+         * Lanza el timer del cap de 30s. Arranca recién con `onStarted` (sesión
+         * real iniciada), no al tocar "Dictar": el diálogo de permiso no consume
+         * el cap. Al llegar al máximo llama [stopDictation] una sola vez.
+         */
+        fun launchDictationTimer() {
+            dictationJob?.cancel()
+            dictationJob = scope.launch {
+                val startedAt = currentTimeMillis()
+                while (true) {
+                    delay(DICTATION_TICK_MILLIS)
+                    val current = dictation
+                    if (current !is DictationUiState.Listening) return@launch
+                    val elapsed = (currentTimeMillis() - startedAt)
+                        .coerceIn(0L, DICTATION_MAX_MILLIS)
+                    dictation = current.copy(elapsedMillis = elapsed)
+                    if (elapsed >= DICTATION_MAX_MILLIS) {
+                        stopDictation()
+                        return@launch
+                    }
+                }
+            }
+        }
+
+        /**
+         * Arranca una sesión inline: corta la anterior, conserva el
+         * `pendingAudio` finalizado hasta que un nuevo dictado traiga audio, y
+         * deja el estado en `Listening`. El timer espera a `onStarted`.
+         */
+        fun startDictation() {
+            dictationJob?.cancel()
+            dictationJob = null
+            voiceTranscriber.cancel()
+            dictation = DictationUiState.Listening(partial = "", elapsedMillis = 0L)
             voiceTranscriber.start(
                 onPartialResult = { partial ->
-                    voiceState = VoiceUiState.Listening(partial = partial)
+                    val current = dictation
+                    if (current is DictationUiState.Listening) {
+                        dictation = current.copy(partial = partial)
+                    }
                 },
                 onFinalResult = { text, audio ->
+                    dictationJob?.cancel()
+                    dictationJob = null
                     val trimmed = text.trim()
                     if (trimmed.isBlank()) {
-                        // Sin transcripción no hay Nota: descartar el audio grabado.
+                        // Sin transcripción no se anexa nada: descartar sólo el
+                        // audio nuevo y conservar el pendiente anterior.
                         audio?.let { fileStore.delete(it.relativePath) }
-                        voiceState = VoiceUiState.Error(VoiceCaptureError.NO_MATCH)
+                        dictation = DictationUiState.Error(VoiceCaptureError.NO_MATCH)
                     } else {
-                        val note = noteRepository.create(
-                            NoteDraft(owner = LOCAL_OWNER_ID, body = trimmed, track = null),
-                        )
                         if (audio != null) {
-                            try {
-                                attachmentRepository.create(
-                                    noteId = note.id,
-                                    kind = AttachmentKind.AUDIO,
-                                    mimeType = audio.mimeType,
-                                    filePath = audio.relativePath,
-                                    byteSize = audio.byteSize,
-                                )
-                            } catch (_: Throwable) {
-                                // Degradación tolerante: conservar la Nota sin
-                                // Adjunto y no dejar el archivo huérfano.
-                                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
-                                fileStore.delete(audio.relativePath)
-                            }
+                            // Reemplazo exitoso: borra el pendiente anterior.
+                            discardPendingAudio()
+                            pendingAudio = audio
                         }
-                        indexBestEffort(note)
-                        voiceState = VoiceUiState.Idle
-                        goToList()
-                        reload()
+                        dictatedText = trimmed
+                        dictation = DictationUiState.Idle
                     }
                 },
                 onError = { error ->
-                    // Fallo de integración nativa: registrar sin cambiar la UI.
+                    // Fallo de integración nativa: registrar y conservar el
+                    // audio pendiente anterior.
+                    dictationJob?.cancel()
+                    dictationJob = null
                     diagnostics.recordFailure(DiagnosticSource.VOICE, VOICE_FAILED, error.name)
-                    voiceState = VoiceUiState.Error(error)
+                    dictation = DictationUiState.Error(error)
+                },
+                onStarted = {
+                    when (dictation) {
+                        // El usuario detuvo antes de que la sesión arrancara.
+                        DictationUiState.Processing -> voiceTranscriber.stop()
+                        is DictationUiState.Listening -> launchDictationTimer()
+                        DictationUiState.Idle,
+                        is DictationUiState.Error,
+                        -> Unit
+                    }
                 },
             )
         }
 
-        fun stopVoiceCapture() {
-            voiceState = VoiceUiState.Processing
-            voiceTranscriber.stop()
+        /** `onDictatedTextConsumed` del editor: limpia sólo si coincide. */
+        fun consumeDictatedText(text: String) {
+            if (dictatedText == text) dictatedText = null
         }
 
-        fun cancelVoiceCapture() {
-            voiceTranscriber.cancel()
-            voiceState = VoiceUiState.Idle
+        /** Cancela una Nueva nota sin guardar: corta el dictado y borra su audio. */
+        fun cancelNewNote() {
+            cancelDictation()
+            discardPendingAudio()
+            dictatedText = null
             goToList()
         }
 
-        /** Guarda el archivo, luego la nota y el adjunto; limpia si algo falla. */
-        fun saveNoteWithImage(image: PickedImage, body: String, track: Track?, genres: List<String>) {
-            val stored = fileStore.saveImage(image.bytes, image.mimeType)
-            try {
-                val note = noteRepository.create(
+        /**
+         * Guarda una Nueva nota de texto: corta cualquier dictado en curso y
+         * adjunta el audio pendiente. Si la Nota no se crea, descarta el audio
+         * pendiente (sin huérfanos) y deja el editor abierto para reintentar.
+         */
+        fun saveTextNote(body: String, track: Track?, genres: List<String>) {
+            cancelDictation()
+            val note = try {
+                noteRepository.create(
                     NoteDraft(
                         owner = LOCAL_OWNER_ID,
                         body = body.trim(),
@@ -267,6 +367,49 @@ fun App(
                         genres = genres,
                     ),
                 )
+            } catch (_: Throwable) {
+                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
+                discardPendingAudio()
+                return
+            }
+            attachAudio(note.id)
+            indexBestEffort(note)
+            goToList()
+            reload()
+        }
+
+        /**
+         * Guarda el archivo, luego la Nota y los Adjuntos; limpia si algo falla.
+         * La Nota se crea primero; el Adjunto de imagen es best-effort (si falla
+         * se conserva la Nota y se borra la imagen) y el audio pendiente se
+         * adjunta después con [attachAudio]. Si la Nota no se crea, se borran la
+         * imagen recién guardada y el audio pendiente.
+         */
+        fun saveNoteWithImage(image: PickedImage, body: String, track: Track?, genres: List<String>) {
+            cancelDictation()
+            val stored = try {
+                fileStore.saveImage(image.bytes, image.mimeType)
+            } catch (_: Throwable) {
+                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
+                discardPendingAudio()
+                return
+            }
+            val note = try {
+                noteRepository.create(
+                    NoteDraft(
+                        owner = LOCAL_OWNER_ID,
+                        body = body.trim(),
+                        track = track,
+                        genres = genres,
+                    ),
+                )
+            } catch (_: Throwable) {
+                diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
+                fileStore.delete(stored.relativePath)
+                discardPendingAudio()
+                return
+            }
+            try {
                 attachmentRepository.create(
                     noteId = note.id,
                     kind = AttachmentKind.IMAGE,
@@ -274,15 +417,27 @@ fun App(
                     filePath = stored.relativePath,
                     byteSize = stored.byteSize,
                 )
-                indexBestEffort(note)
             } catch (_: Throwable) {
-                // Nada quedó persistido (o la nota se creó sin adjunto): no dejar
-                // el archivo recién guardado huérfano.
+                // La Nota se conserva; no dejar la imagen recién guardada huérfana.
                 diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
                 fileStore.delete(stored.relativePath)
             }
+            attachAudio(note.id)
+            indexBestEffort(note)
             goToList()
             reload()
+        }
+
+        // Limpieza a nivel App: al salir de composición se corta el micrófono y
+        // se borra el audio pendiente. No se pone un DisposableEffect por destino
+        // Create/CreateWithImage: alternar la imagen no debe cortar el dictado.
+        DisposableEffect(Unit) {
+            onDispose {
+                dictationJob?.cancel()
+                dictationJob = null
+                voiceTranscriber.cancel()
+                discardPendingAudio()
+            }
         }
 
         val attachmentKinds = attachments
@@ -298,8 +453,10 @@ fun App(
                 onCaptureImage = { showImageSourceDialog = true },
                 onEdit = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onDictate = {
-                    voiceState = VoiceUiState.Idle
-                    destination = NotesDestination.VoiceCapture
+                    // El dictado ahora vive dentro de Nueva nota: abrir el editor
+                    // y arrancar la sesión (el cap espera al onStarted real).
+                    destination = NotesDestination.Create
+                    startDictation()
                 },
                 onOpenGdd = { destination = NotesDestination.Gdd },
                 onAsk = {
@@ -362,22 +519,17 @@ fun App(
                 initialImage = null,
                 isEditing = false,
                 onSave = { body, track, genres ->
-                    val note = noteRepository.create(
-                        NoteDraft(
-                            owner = LOCAL_OWNER_ID,
-                            body = body.trim(),
-                            track = track,
-                            genres = genres,
-                        ),
-                    )
-                    indexBestEffort(note)
-                    goToList()
-                    reload()
+                    saveTextNote(body, track, genres)
                 },
                 onDelete = null,
-                onCancel = ::goToList,
+                onCancel = ::cancelNewNote,
                 onRemoveImage = null,
                 onOpenRelated = null,
+                dictationState = dictation,
+                dictatedText = dictatedText,
+                onStartDictation = ::startDictation,
+                onStopDictation = ::stopDictation,
+                onDictatedTextConsumed = ::consumeDictatedText,
             )
 
             is NotesDestination.CreateWithImage -> NoteEditorScreen(
@@ -390,9 +542,14 @@ fun App(
                     saveNoteWithImage(current.image, body, track, genres)
                 },
                 onDelete = null,
-                onCancel = ::goToList,
+                onCancel = ::cancelNewNote,
                 onRemoveImage = { destination = NotesDestination.Create },
                 onOpenRelated = null,
+                dictationState = dictation,
+                dictatedText = dictatedText,
+                onStartDictation = ::startDictation,
+                onStopDictation = ::stopDictation,
+                onDictatedTextConsumed = ::consumeDictatedText,
             )
 
             is NotesDestination.Edit -> {
@@ -434,20 +591,6 @@ fun App(
                         onReindex = { reindex(note) },
                     )
                 }
-            }
-
-            NotesDestination.VoiceCapture -> {
-                // Al salir del destino (cancelar o tras crear la Nota) se libera el
-                // micrófono. Es idempotente respecto de `cancelVoiceCapture()`.
-                DisposableEffect(Unit) {
-                    onDispose { voiceTranscriber.cancel() }
-                }
-                VoiceCaptureScreen(
-                    state = voiceState,
-                    onStart = ::startVoiceCapture,
-                    onStop = ::stopVoiceCapture,
-                    onCancel = ::cancelVoiceCapture,
-                )
             }
 
             NotesDestination.Ask -> AskNotesScreen(
