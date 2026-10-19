@@ -39,10 +39,10 @@
 - `sketch-thumbnails` `passing` (2026-10-19; Session 061; pendiente de validación independiente): miniatura del boceto en las tarjetas de la **lista** y del **GDD**. El store de Adjuntos se reubicó en `:core` (`com.playbook.core.storage`: `StoredImage` + `AttachmentFileStore.saveImage/read/delete` + `expect fun attachmentFileStore(baseDir)`) con actuals Android (`java.io.File`, `canonicalFile`) e iOS (`NSFileManager`/`NSData`, normalización) y **guard de path traversal**; `read` devuelve los bytes exactos o `null`. `:composeApp` conserva `rememberAttachmentFileStore()` (sólo calcula `baseDir`) y `decodeImageBitmap`; `App` deriva `imagePaths` (sólo `IMAGE`, primero por Nota en orden `created_at ASC, id ASC`) + `loadThumbnail`, y `NoteThumbnail` (`produceState` + `Dispatchers.Default`, 72 dp/16 dp/`ContentScale.Crop`) degrada sin imagen ni hueco (el espaciado vive dentro del composable). Tests `AttachmentFileStoreCheck` + runners Android/iOS (Escenarios 1–4). Sin deps, esquema (v8), `.sqm`, `init.sh`, `iosApp` ni cacheo/redimensionado. `:core:testDebugUnitTest` 26 suites/77 tests/0 failures; iOS 26/77/0; `assembleDebug` y `init.sh` OK. Smoke Android no ejecutado (sin `adb`/emulador en el entorno). **Reparación post-validación (dos Low):** recorte a `rounded.md` de 16 dp y espaciado de la miniatura dentro de `NoteThumbnail` (sin hueco en degradación); guard iOS léxico documentado como riesgo residual aceptado. Re-verificado en verde. Ver `feature_list.json`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
 - `inline-dictation-30s` `accepted` (2026-10-19; Session 063 implementación + Session 064 cierre/integración; validación independiente `accept` en `docs/validations/inline-dictation-30s.md`): el dictado pasa a ser **inline en Nueva nota** (panel con progreso de 30s + parcial + Detener/Processing/Error), el cap arranca con `onStarted` (no cuenta el diálogo de permiso), auto-stop a los 30s, audio pendiente adjuntado al guardar y limpieza sin huérfanos; se retira `VoiceCaptureScreen`/`VoiceUiState`/`NotesDestination.VoiceCapture`. Sin deps, esquema ni `:core`. Detalle en `docs/specs/inline-dictation-30s.md`, `ARCHITECTURE.md` y `docs/technical-discovery.md`.
+- `brainstorming-ai-suggestions` `accepted` (2026-10-19; Session 069 implementación + Session 070 cierre/integración; validación independiente `accept` en `docs/validations/brainstorming-ai-suggestions.md`): `BrainstormingSuggestionService` en `:core` (prompt/contexto por paso, parsing/dedupe, parcial/error y máximo 2) + `FakeAiClient` determinista + UI efímera en el wizard (Sugerir/Usar/Agregar/Ignorar) + wiring de `aiClient` en `App`/roots. Sin persistencia, Notas, esquema ni IA real. `:core` 28 suites/87 tests/0 failures en Android e iOS (post-rebase), `assembleDebug` OK, `./init.sh` exit 0 e iOS link OK; smoke Android con evidencia.
 - **En vuelo (no integradas en `develop`; no tocar ni duplicar):**
   - `brainstorming-note-per-step` — `in_progress` en `worktree/brainstorming-note-per-step` (rama homónima, base `a00c72d`): spec `docs/specs/brainstorming-note-per-step.md` y código en curso, sin commit; pendiente revisión del spec y luego implementer → validator.
-  - `brainstorming-ai-suggestions` — `in_progress` en `worktree/brainstorming-ai-suggestions` (rama homónima, base `a0d556f`): spec `docs/specs/brainstorming-ai-suggestions.md` y código en curso, sin commit; pendiente revisión del spec y luego implementer → validator.
-- Current state: **35 `accepted`, 2 en vuelo, 11 `not_started` sin iniciar y 1 `blocked`** (49 total). En vuelo: `brainstorming-note-per-step` y `brainstorming-ai-suggestions` (ambas `in_progress`, con spec y cambios sin commit). Siguiente ready sin dependencias abiertas y sin worktree: `first-run-project-onboarding` (`not_started`, sin spec; arranca con planner). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
+- Current state: **36 `accepted`, 12 `not_started` (una de ellas, `brainstorming-note-per-step`, en vuelo en su worktree) y 1 `blocked`** (49 total). Siguiente ready sin dependencias abiertas y sin worktree: `first-run-project-onboarding` (`not_started`, sin spec; arranca con planner). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-19.
 
@@ -1524,3 +1524,49 @@
 - Files or artifacts updated: `PROGRESS.md`, `AGENTS.md`.
 - Known risk or unresolved issue: ambas ramas parten de bases anteriores a `82ef4ec` (`a00c72d` y `a0d556f`) y tienen cambios sin commit; deben rebasear sobre `develop` al integrarse. `first-run-project-onboarding` aún no tiene spec.
 - Next best step: revisar los specs en vuelo; validar/implementar según corresponda y planificar `first-run-project-onboarding` cuando haya slot libre.
+
+### Session 069 (brainstorming-ai-suggestions — implementación)
+
+- Date: 2026-10-19
+- Goal: implementar `brainstorming-ai-suggestions` (spec `docs/specs/brainstorming-ai-suggestions.md`) en el worktree `worktree/brainstorming-ai-suggestions`, rama `feature/brainstorming-ai-suggestions`, desde `origin/develop` `a0d556f` (rebasada a `6db4d38` en el cierre).
+- Completed:
+  - `:core`: nuevo `BrainstormingSuggestions.kt` con `BrainstormingStep`, `BrainstormingSuggestion`, `Success/Failed/InvalidResponse` y `BrainstormingSuggestionService` (prompt con marcador + `STEP=`, contexto acotado del `GameProjectDraft`, parsing con dedupe/filtro contra el borrador, parcial y límite 2).
+  - `FakeAiClient.generate`: rama determinista que devuelve 2 líneas parseables ante el marcador (mecánicas con categoría); el resto conserva `[fake] ...`.
+  - `:composeApp`: `BrainstormingWizardScreen` recibe `suggestionService`, con estados idle/loading/loaded/error, botón `Sugerir`, tarjetas con `Usar`/`Agregar`/`Ignorar`, parcial, dedupe, cancelación y limpieza al navegar. `App` recibe `aiClient`; `MainActivity`/`MainViewController` pasan el runtime (iOS fake).
+  - Tests `:core` (`BrainstormingSuggestionCheck` + runners Android/iOS): feliz, fake, parcial/inválida, fallo, dedupe/filtro, mecánicas/truncado y contexto (7 tests en Android).
+  - Docs: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `DESIGN.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json` y este bloque.
+- Verification run:
+  - `:core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → **27 suites / 86 tests / 0 failures / 0 errors / 0 skipped** (7 nuevos).
+  - `:core:iosSimulatorArm64Test --rerun-tasks` → **27 suites / 86 tests / 0 failures** (7 nuevos iOS).
+  - `:composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL.
+  - `CI=true ./init.sh` → exit 0 (Android-only, fake, sin red ni dev servers).
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL (no bloqueante).
+  - Esquema v8 (`PRAGMA user_version=8`); sin `.sqm` nuevos ni cambios en `GameProjectRepository`/`init.sh`/build files/`iosApp`.
+  - Smoke Android (API 35, fake; evidencia en `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/`): 2 tarjetas en Título, Usar/Ignorar, parcial por dedupe (1 idea), Género (chip), Inspiraciones (2/3), Mecánicas (categoría + descripción), limpieza al navegar y guardado en `game_project` + `game_project_genre` + `game_project_key_mechanic`; sin tablas nuevas.
+  - Controles negativos restaurados byte-idénticos: (a) quitar dedupe/filtro → falla `deduplicatesAndFiltersDraftValues`; (b) aplicar al pedir → el Título se auto-rellena; (c) quitar `resetSuggestions` de `goToStep` → las tarjetas persisten en el paso siguiente.
+- Evidence captured: arreglo `evidence` de `brainstorming-ai-suggestions` en `feature_list.json`; UI dumps/capturas y DB en `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/`.
+- Files or artifacts updated: `core/.../ai/BrainstormingSuggestions.kt` (nuevo), `core/.../ai/FakeAiClient.kt`, `core/src/commonTest/.../BrainstormingSuggestionCheck.kt` (nuevo), `core/src/{androidUnitTest,iosTest}/.../BrainstormingSuggestion*Test.kt` (nuevos), `composeApp/.../BrainstormingWizardScreen.kt`, `App.kt`, `MainActivity.kt`, `MainViewController.kt`, `docs/specs/brainstorming-ai-suggestions.md`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `DESIGN.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: la calidad/formato real del proveedor no se verifica con fake (queda para `ai-real-chat`); no hay harness UI/E2E (smoke manual); el estado de error de UI se cubre por tests del core con cliente que falla, no por smoke.
+- Next best step: validación independiente de `brainstorming-ai-suggestions` con `$feature-validator` (spec `docs/specs/brainstorming-ai-suggestions.md`). Sin commit ni merge en esta sesión.
+
+### Session 070 (brainstorming-ai-suggestions — cierre e integración)
+
+- Date: 2026-10-19
+- Goal: persistir la validación independiente `accept`, rebasar sobre `origin/develop`, re-verificar, commitear, pushear y abrir el PR contra `develop`.
+- Completed:
+  - Rebase de `feature/brainstorming-ai-suggestions` sobre `origin/develop` `6db4d38` (incluye `sketch-thumbnails`). Conflictos sólo en `AGENTS.md` y `PROGRESS.md`, resueltos preservando la cola/estado de `sketch-thumbnails` y el cierre de `brainstorming-ai-suggestions`; sin merge commits.
+  - `feature_list.json`: `brainstorming-ai-suggestions` `passing` → `accepted`, con evidencia del veredicto independiente (`docs/validations/brainstorming-ai-suggestions.md`) y de la verificación post-rebase.
+  - `AGENTS.md`/`PROGRESS.md`: cola y estado actualizados (sólo `brainstorming-note-per-step` queda en vuelo; siguiente ready `first-run-project-onboarding`).
+  - Hallazgo Low del validador (el dedupe no colapsa espacios internos del borrador) documentado como follow-up; no se amplió el alcance en esta sesión.
+- Verification run (post-rebase `6db4d38`):
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; **28 suites / 87 tests / 0 failures / 0 errors / 0 skipped** (7 nuevos de la feature).
+  - `./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; **28 suites / 87 tests / 0 failures**.
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL.
+  - `CI=true ./init.sh` → exit 0 (Android-only, fake, sin red ni dev servers).
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.
+  - Smoke Android (emulator-5556, API 35, fake): Sugerir → 2 tarjetas; Usar/Ignorar; navegar y volver sin tarjetas; Guardar; `PRAGMA user_version=8`; `game_project` con `Idea de prueba A` y sin tablas de sugerencias. Evidencia en `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/postrebase-*`.
+  - Sin cambios en esquema/`.sqm`, `GameProjectRepository`, build files, `init.sh` ni `iosApp`; sin secrets en el diff.
+- Evidence captured: veredicto `accept`, entrada `accepted` en `feature_list.json` y este bloque.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/brainstorming-ai-suggestions.md` (más el diff validado de la feature).
+- Known risk or unresolved issue: el dedupe no colapsa espacios internos del borrador (Low, follow-up); no hay harness UI/E2E; la calidad/formato del proveedor real queda para `ai-real-chat`.
+- Next best step: abrir el PR contra `develop`; la integración la hace la sesión integradora. Luego `first-run-project-onboarding`.

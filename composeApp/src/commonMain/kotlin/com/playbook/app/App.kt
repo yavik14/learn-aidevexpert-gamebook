@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.playbook.app.voice.RecordedAudio
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
+import com.playbook.core.ai.AiClient
+import com.playbook.core.ai.BrainstormingSuggestionService
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
@@ -111,6 +113,7 @@ fun App(
     ragQueryService: RagQueryService,
     noteLinkRepository: NoteLinkRepository,
     semanticLinkingService: SemanticLinkingService,
+    aiClient: AiClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     MaterialTheme {
@@ -131,6 +134,9 @@ fun App(
         // Las llamadas de IA son asíncronas: `rememberCoroutineScope` permite
         // invocar los servicios `suspend` sin introducir `ViewModel`/Flow.
         val scope = rememberCoroutineScope()
+        val suggestionService = remember(aiClient) {
+            BrainstormingSuggestionService(aiClient)
+        }
 
         val imagePicker = rememberImagePicker(
             onResult = { picked -> destination = NotesDestination.CreateWithImage(picked) },
@@ -482,6 +488,7 @@ fun App(
             NotesDestination.Brainstorming -> BrainstormingWizardScreen(
                 initialProject = project,
                 owner = project?.owner ?: LOCAL_OWNER_ID,
+                suggestionService = suggestionService,
                 onSave = { draft ->
                     val saved = runCatching { gameProjectRepository.save(draft) }.isSuccess
                     if (saved) {

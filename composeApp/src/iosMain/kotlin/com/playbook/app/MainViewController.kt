@@ -139,6 +139,7 @@ fun MainViewController(): UIViewController {
             ragQueryService = rag,
             noteLinkRepository = links,
             semanticLinkingService = linking,
+            aiClient = ai,
             diagnostics = diag,
         )
     }

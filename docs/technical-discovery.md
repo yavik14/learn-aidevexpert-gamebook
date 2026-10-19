@@ -1252,6 +1252,38 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
   iteración/reemplazo y error de mecánica incompleta). Evidencia en
   `composeApp/build/smoke-evidence/brainstorming-wizard/`.
 
+## Brainstorming AI Suggestions Decisions (brainstorming-ai-suggestions)
+
+Implementado 2026-10-19. Detalles en `docs/specs/brainstorming-ai-suggestions.md`.
+
+- **Servicio en `:core`:** `BrainstormingSuggestionService.suggest(step, draft)`
+  arma el `GenerateRequest` (prompt con marcador
+  `PLAYBOOK_BRAINSTORMING_SUGGESTIONS_V1` + `STEP=<enum>`) y un contexto acotado
+  con campos no vacíos del `GameProjectDraft`; en Género incluye el catálogo. No
+  envía `owner`, ids ni timestamps.
+- **Parsing:** acepta líneas con numeración/viñetas, limpia y colapsa espacios,
+  deduplica case-insensitive, descarta valores ya presentes en el borrador y
+  trunca a 280 caracteres. Mecánicas exigen
+  `Movimiento|Interacción|Conflicto: descripción`; una línea sin categoría válida
+  se descarta. Máximo 2 ideas; 0 → `InvalidResponse`; 1 → `Success(partial)`.
+- **Fake determinista:** `FakeAiClient.generate` devuelve 2 líneas parseables
+  cuando el prompt contiene el marcador; el resto del fake (RAG/Q&A) conserva su
+  respuesta anterior. Sin red ni key.
+- **UI efímera:** `BrainstormingWizardScreen` recibe el servicio, muestra
+  "Sugerir"/"Sugiriendo…", hasta 2 tarjetas y Usar/Agregar/Ignorar. Aceptar aplica
+  al control existente (campo, chip, fila o mecánica); nunca auto-rellena ni
+  guarda. Las sugerencias se descartan al cambiar de paso, cancelar, guardar,
+  recargar el Proyecto o salir; los resultados tardíos se ignoran por paso.
+- **Sin persistencia:** no hay tabla/entidad/migración (esquema v8 intacto) ni
+  creación de Notas. `App` recibe `aiClient` y los roots pasan
+  `aiRuntime.aiClient` (iOS fake).
+- **Verificación:** `:core:testDebugUnitTest --rerun-tasks` 28 suites/87 tests/0
+  failures post-rebase (7 nuevos); `:core:iosSimulatorArm64Test --rerun-tasks`
+  28/87/0; `assembleDebug` OK; `CI=true ./init.sh` exit 0; link iOS OK; smoke Android con
+  2 tarjetas, parcial por dedupe, Género/Inspiraciones/Mecánicas, limpieza al
+  navegar y guardado v8. Evidencia en
+  `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/`.
+
 ## AI Real Embeddings Decisions (ai-real-embeddings)
 
 Implementado 2026-10-19. No duplica el flag/runtime/adaptadores/wiring de

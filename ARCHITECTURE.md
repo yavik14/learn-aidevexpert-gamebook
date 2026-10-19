@@ -376,6 +376,17 @@ composeApp (Android app / commonMain) ──▶ core
   Main; dispatcher inyectable) e iOS congelado usa `fakeAiRuntime()`. El
   adaptador de imagen usa 1024x1024 (el proveedor rechaza 512/256) y detecta el
   mime real (PNG/JPEG) por la firma de los bytes.
+- **Sugerencias de Brainstorming (`brainstorming-ai-suggestions`, 2026-10-19):**
+  `BrainstormingSuggestionService` (`:core`) arma un `GenerateRequest` por paso
+  (`BrainstormingStep`; prompt con marcador + `STEP=<enum>` y contexto acotado del
+  `GameProjectDraft`, incluidos Géneros), llama `AiClient.generate` y parsea hasta
+  **2 ideas únicas**, descartando las que ya están en el borrador. Mecánicas
+  exigen categoría (`Movimiento`/`Interacción`/`Conflicto`) + descripción; el
+  resultado es `Success(partial)` / `Failed` / `InvalidResponse`. No persiste ni
+  crea Notas. `FakeAiClient` devuelve 2 ideas parseables cuando el prompt contiene
+  el marcador (determinista, sin red). `BrainstormingWizardScreen` mantiene el
+  estado efímero por paso y sólo muta el borrador con Usar/Agregar; las
+  sugerencias se descartan al navegar.
 - **Reconciliación de dimensión de embeddings (`ai-fake-real-switch`):**
   `com.playbook.core.ai.EmbeddingDimensionReconciler` recibe la dimensión del
   runtime activo (1536 en real, 8 en fake). Si un embedding persistido no coincide,
@@ -596,7 +607,9 @@ composeApp (Android app / commonMain) ──▶ core
   `refreshKey`, `relatedNotes`, `dictation` (`DictationUiState`), `dictatedText`
   (texto final pendiente de anexar), `pendingAudio` (`RecordedAudio?`),
   `dictationJob`, `askState` (`AskUiState`) y el
-  estado de captura de imagen (`showImageSourceDialog`/`imageError`). La lectura
+  estado de captura de imagen (`showImageSourceDialog`/`imageError`). Recibe
+  `aiClient` y crea `BrainstormingSuggestionService` con `remember(aiClient)` para
+  el wizard. La lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
   sin `ViewModel`/`Lifecycle` y sin Flow ni librería de navegación; las llamadas
@@ -646,7 +659,11 @@ composeApp (Android app / commonMain) ──▶ core
   `GenrePicker`; Inspiraciones/Fuera de alcance topan en 3 y Mecánicas en 5 (con
   categoría + descripción). "Guardar" construye un `GameProjectDraft` **completo**
   (nunca parcial) y llama `GameProjectRepository.save`; si falla, muestra un
-  `AlertDialog` y no navega. La creación de Notas por paso queda en
+  `AlertDialog` y no navega. `brainstorming-ai-suggestions` agrega un botón
+  "Sugerir" por paso: pide 2 ideas a `BrainstormingSuggestionService`, las muestra
+  como tarjetas efímeras y el usuario decide con Usar/Agregar o Ignorar; nunca
+  auto-rellena ni guarda, y las sugerencias se descartan al cambiar de paso,
+  cancelar o guardar. La creación de Notas por paso queda en
   `brainstorming-note-per-step` (no implementada).
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
   (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de

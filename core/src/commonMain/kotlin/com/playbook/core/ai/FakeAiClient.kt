@@ -18,8 +18,16 @@ class FakeAiClient(private val dimension: Int = DEFAULT_DIMENSION) : AiClient {
     override suspend fun embed(texts: List<String>): List<Embedding> =
         texts.map(::embeddingFor)
 
-    override suspend fun generate(request: GenerateRequest): String =
-        "[fake] ${request.prompt} (context=${request.context.size})"
+    override suspend fun generate(request: GenerateRequest): String {
+        if (request.prompt.contains(BRAINSTORMING_PROMPT_MARKER)) {
+            return if (request.prompt.contains("STEP=${BrainstormingStep.KEY_MECHANICS.name}")) {
+                "1. Movimiento: Idea de prueba A\n2. Interacción: Idea de prueba B"
+            } else {
+                "1. Idea de prueba A\n2. Idea de prueba B"
+            }
+        }
+        return "[fake] ${request.prompt} (context=${request.context.size})"
+    }
 
     private fun embeddingFor(text: String): Embedding {
         var state = text.hashCode()

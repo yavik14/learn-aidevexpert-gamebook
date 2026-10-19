@@ -156,7 +156,8 @@ Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
 - **Dictado inline:** barra de progreso de **30s** con auto-stop.
 - **Badge de Estado:** `capturada`/`pendiente`/`indexada`/`fallida`.
 - **Wizard de Brainstorming:** stepper 9 pasos con progreso (Paso X/9) y 2
-  sugerencias por paso.
+  sugerencias por paso: botón "Sugerir", tarjetas con "Usar"/"Agregar" e
+  "Ignorar"; la IA sugiere y el usuario decide. Se descartan al navegar.
 - **Referencia de Nota (cita):** respuestas del Q&A.
 - **Superficies de IA:** control **play/pausa** (tts), acción **Generar imagen**,
   acción **Transcribir** (Adjunto AUDIO), **sugerencia de clasificación**
@@ -199,6 +200,5 @@ Teléfonos primero; tablets con ancho cómodo. Sin Desktop/Web en el MVP.
 - Logo/wordmark definitivo.
 - Representación visual de cada `Track` (color + forma).
 - "Pendiente/fallida/sin indexar" sin parecer error grave.
-- Presentación de las **2 sugerencias** de IA por paso del wizard.
 - Aspecto del **FAB desplegable** y su expansión/colapso.
 - Affordances de IA (play/pausa, generar imagen, transcribir) e indicador fake/real.
