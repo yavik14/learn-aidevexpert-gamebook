@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -24,10 +26,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -36,16 +41,26 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.playbook.core.ai.BrainstormingSuggestion
+import com.playbook.core.ai.BrainstormingSuggestionResult
+import com.playbook.core.ai.BrainstormingSuggestionService
+import com.playbook.core.ai.BrainstormingStep
 import com.playbook.core.model.GameProject
 import com.playbook.core.model.GameProjectDraft
 import com.playbook.core.model.KeyMechanic
 import com.playbook.core.model.MechanicCategory
 import com.playbook.core.model.normalizeGenres
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 private const val TOTAL_STEPS = 9
 private const val MAX_INSPIRATIONS = 3
 private const val MAX_OUT_OF_SCOPE = 3
 private const val MAX_KEY_MECHANICS = 5
+private const val SUGGESTION_ERROR = "No se pudieron obtener sugerencias. Probá de nuevo."
+private const val SUGGESTION_INVALID =
+    "La IA no devolvió sugerencias nuevas o válidas. Probá de nuevo."
 
 private val STEP_TITLES = listOf(
     "Título",
@@ -59,11 +74,35 @@ private val STEP_TITLES = listOf(
     "Fuera de alcance",
 )
 
+private val STEP_KINDS = listOf(
+    BrainstormingStep.TITLE,
+    BrainstormingStep.GENRE,
+    BrainstormingStep.CORE_LOOP,
+    BrainstormingStep.AUDIENCE,
+    BrainstormingStep.CONCEPT,
+    BrainstormingStep.INSPIRATIONS,
+    BrainstormingStep.FANTASY,
+    BrainstormingStep.KEY_MECHANICS,
+    BrainstormingStep.OUT_OF_SCOPE,
+)
+
 /** Borrador local de una mecánica; la categoría puede quedar sin elegir. */
 private data class MechanicForm(
     val category: MechanicCategory? = null,
     val description: String = "",
 )
+
+/** Estado efímero de las sugerencias del paso actual. */
+private sealed interface SuggestUiState {
+    data object Idle : SuggestUiState
+    data object Loading : SuggestUiState
+    data class Loaded(
+        val suggestions: List<BrainstormingSuggestion>,
+        val partial: Boolean,
+    ) : SuggestUiState
+
+    data class Error(val message: String) : SuggestUiState
+}
 
 /**
  * Wizard de 9 pasos para crear o iterar la ficha del Proyecto único.
@@ -82,6 +121,7 @@ private data class MechanicForm(
 fun BrainstormingWizardScreen(
     initialProject: GameProject?,
     owner: String,
+    suggestionService: BrainstormingSuggestionService,
     onSave: (GameProjectDraft) -> Boolean,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -114,6 +154,36 @@ fun BrainstormingWizardScreen(
         }
     }
     var saveError by remember { mutableStateOf<String?>(null) }
+    var suggestState by remember { mutableStateOf<SuggestUiState>(SuggestUiState.Idle) }
+    var suggestionJob by remember { mutableStateOf<Job?>(null) }
+    var suggestionRequestId by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    fun buildDraft(): GameProjectDraft = GameProjectDraft(
+        owner = owner,
+        title = title.trim().ifEmpty { null },
+        genres = normalizeGenres(genres),
+        coreLoop = coreLoop.trim().ifEmpty { null },
+        audience = audience.trim().ifEmpty { null },
+        concept = concept.trim().ifEmpty { null },
+        inspirations = inspirations.map { it.trim() }.filter { it.isNotEmpty() },
+        fantasy = fantasy.trim().ifEmpty { null },
+        keyMechanics = keyMechanics
+            .filter { it.description.isNotBlank() }
+            .mapNotNull { form ->
+                form.category?.let { category ->
+                    KeyMechanic(category = category, description = form.description.trim())
+                }
+            },
+        outOfScope = outOfScope.map { it.trim() }.filter { it.isNotEmpty() },
+    )
+
+    fun resetSuggestions() {
+        suggestionRequestId++
+        suggestionJob?.cancel()
+        suggestionJob = null
+        suggestState = SuggestUiState.Idle
+    }
 
     fun save() {
         val incompleteMechanic = keyMechanics.any {
@@ -124,27 +194,139 @@ fun BrainstormingWizardScreen(
             return
         }
 
-        val draft = GameProjectDraft(
-            owner = owner,
-            title = title.trim().ifEmpty { null },
-            genres = normalizeGenres(genres),
-            coreLoop = coreLoop.trim().ifEmpty { null },
-            audience = audience.trim().ifEmpty { null },
-            concept = concept.trim().ifEmpty { null },
-            inspirations = inspirations.map { it.trim() }.filter { it.isNotEmpty() },
-            fantasy = fantasy.trim().ifEmpty { null },
-            keyMechanics = keyMechanics
-                .filter { it.description.isNotBlank() }
-                .mapNotNull { form ->
-                    form.category?.let { category ->
-                        KeyMechanic(category = category, description = form.description.trim())
-                    }
-                },
-            outOfScope = outOfScope.map { it.trim() }.filter { it.isNotEmpty() },
-        )
-
-        if (!onSave(draft)) {
+        resetSuggestions()
+        if (!onSave(buildDraft())) {
             saveError = "No se pudo guardar el Proyecto. Intentá de nuevo."
+        }
+    }
+
+    fun goToStep(newStep: Int) {
+        resetSuggestions()
+        step = newStep
+    }
+
+    fun requestSuggestions() {
+        if (suggestState is SuggestUiState.Loading) return
+        suggestionJob?.cancel()
+        val requestId = ++suggestionRequestId
+        val requestedStep = step
+        val stepKind = STEP_KINDS[requestedStep]
+        val draftSnapshot = buildDraft()
+        suggestState = SuggestUiState.Loading
+        suggestionJob = scope.launch {
+            val result = try {
+                suggestionService.suggest(stepKind, draftSnapshot)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (requestId == suggestionRequestId && requestedStep == step) {
+                    suggestState = SuggestUiState.Error(SUGGESTION_ERROR)
+                }
+                return@launch
+            }
+            if (requestId != suggestionRequestId || requestedStep != step) return@launch
+            suggestState = when (result) {
+                is BrainstormingSuggestionResult.Success ->
+                    SuggestUiState.Loaded(result.suggestions, result.partial)
+
+                is BrainstormingSuggestionResult.Failed ->
+                    SuggestUiState.Error(SUGGESTION_ERROR)
+
+                BrainstormingSuggestionResult.InvalidResponse ->
+                    SuggestUiState.Error(SUGGESTION_INVALID)
+            }
+        }
+    }
+
+    fun fillStringList(values: SnapshotStateList<String>, value: String, max: Int) {
+        val blankIndex = values.indexOfFirst { it.isBlank() }
+        when {
+            blankIndex >= 0 -> values[blankIndex] = value
+            values.size < max -> values.add(value)
+        }
+    }
+
+    fun addMechanic(suggestion: BrainstormingSuggestion) {
+        val category = suggestion.category ?: return
+        val form = MechanicForm(category = category, description = suggestion.text)
+        val blankIndex = keyMechanics.indexOfFirst {
+            it.category == null && it.description.isBlank()
+        }
+        when {
+            blankIndex >= 0 -> keyMechanics[blankIndex] = form
+            keyMechanics.size < MAX_KEY_MECHANICS -> keyMechanics.add(form)
+        }
+    }
+
+    fun canAcceptSuggestion(suggestion: BrainstormingSuggestion): Boolean =
+        when (STEP_KINDS[step]) {
+            BrainstormingStep.TITLE -> !suggestion.text.equals(title.trim(), ignoreCase = true)
+            BrainstormingStep.GENRE -> genres.none { it.equals(suggestion.text, ignoreCase = true) }
+
+            BrainstormingStep.CORE_LOOP ->
+                !suggestion.text.equals(coreLoop.trim(), ignoreCase = true)
+
+            BrainstormingStep.AUDIENCE ->
+                !suggestion.text.equals(audience.trim(), ignoreCase = true)
+
+            BrainstormingStep.CONCEPT ->
+                !suggestion.text.equals(concept.trim(), ignoreCase = true)
+
+            BrainstormingStep.INSPIRATIONS ->
+                inspirations.none { it.equals(suggestion.text, ignoreCase = true) } &&
+                    (inspirations.size < MAX_INSPIRATIONS || inspirations.any { it.isBlank() })
+
+            BrainstormingStep.FANTASY ->
+                !suggestion.text.equals(fantasy.trim(), ignoreCase = true)
+
+            BrainstormingStep.KEY_MECHANICS -> suggestion.category != null &&
+                keyMechanics.none {
+                    it.category == suggestion.category &&
+                        it.description.equals(suggestion.text, ignoreCase = true)
+                } &&
+                (keyMechanics.size < MAX_KEY_MECHANICS ||
+                    keyMechanics.any { it.category == null && it.description.isBlank() })
+
+            BrainstormingStep.OUT_OF_SCOPE ->
+                outOfScope.none { it.equals(suggestion.text, ignoreCase = true) } &&
+                    (outOfScope.size < MAX_OUT_OF_SCOPE || outOfScope.any { it.isBlank() })
+        }
+
+    fun dismissSuggestion(suggestion: BrainstormingSuggestion) {
+        val current = suggestState as? SuggestUiState.Loaded ?: return
+        val remaining = current.suggestions.filterNot { it == suggestion }
+        suggestState = if (remaining.isEmpty()) {
+            SuggestUiState.Idle
+        } else {
+            current.copy(suggestions = remaining)
+        }
+    }
+
+    fun acceptSuggestion(suggestion: BrainstormingSuggestion) {
+        when (STEP_KINDS[step]) {
+            BrainstormingStep.TITLE -> title = suggestion.text
+            BrainstormingStep.GENRE -> genres = normalizeGenres(genres + suggestion.text)
+            BrainstormingStep.CORE_LOOP -> coreLoop = suggestion.text
+            BrainstormingStep.AUDIENCE -> audience = suggestion.text
+            BrainstormingStep.CONCEPT -> concept = suggestion.text
+            BrainstormingStep.INSPIRATIONS ->
+                fillStringList(inspirations, suggestion.text, MAX_INSPIRATIONS)
+
+            BrainstormingStep.FANTASY -> fantasy = suggestion.text
+            BrainstormingStep.KEY_MECHANICS -> addMechanic(suggestion)
+            BrainstormingStep.OUT_OF_SCOPE ->
+                fillStringList(outOfScope, suggestion.text, MAX_OUT_OF_SCOPE)
+        }
+        dismissSuggestion(suggestion)
+    }
+
+    LaunchedEffect(projectKey) {
+        resetSuggestions()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            suggestionJob?.cancel()
+            suggestionJob = null
         }
     }
 
@@ -160,7 +342,12 @@ fun BrainstormingWizardScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onCancel) {
+            TextButton(
+                onClick = {
+                    resetSuggestions()
+                    onCancel()
+                },
+            ) {
                 Text(text = "Cancelar")
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -241,6 +428,15 @@ fun BrainstormingWizardScreen(
                     max = MAX_OUT_OF_SCOPE,
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            SuggestionSection(
+                stepKind = STEP_KINDS[step],
+                state = suggestState,
+                canAccept = { canAcceptSuggestion(it) },
+                onSuggest = { requestSuggestions() },
+                onAccept = { acceptSuggestion(it) },
+                onIgnore = { dismissSuggestion(it) },
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -250,14 +446,14 @@ fun BrainstormingWizardScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(
-                onClick = { if (step > 0) step-- },
+                onClick = { if (step > 0) goToStep(step - 1) },
                 enabled = step > 0,
             ) {
                 Text(text = "Atrás")
             }
             Spacer(modifier = Modifier.weight(1f))
             if (step < TOTAL_STEPS - 1) {
-                Button(onClick = { step++ }) {
+                Button(onClick = { goToStep(step + 1) }) {
                     Text(text = "Siguiente")
                 }
             } else {
@@ -410,6 +606,128 @@ private fun MechanicsStep(
             style = MaterialTheme.typography.labelMedium,
         )
     }
+}
+
+@Composable
+private fun SuggestionSection(
+    stepKind: BrainstormingStep,
+    state: SuggestUiState,
+    canAccept: (BrainstormingSuggestion) -> Boolean,
+    onSuggest: () -> Unit,
+    onAccept: (BrainstormingSuggestion) -> Unit,
+    onIgnore: (BrainstormingSuggestion) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(onClick = onSuggest, enabled = state !is SuggestUiState.Loading) {
+                Text(text = if (state is SuggestUiState.Loading) "Sugiriendo…" else "Sugerir")
+            }
+            if (state is SuggestUiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+        }
+        when (state) {
+            SuggestUiState.Idle -> Unit
+            SuggestUiState.Loading -> {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "La IA está pensando ideas…",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            is SuggestUiState.Error -> {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = state.message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = onSuggest) {
+                    Text(text = "Reintentar")
+                }
+            }
+
+            is SuggestUiState.Loaded -> {
+                if (state.partial) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "La IA devolvió una sola idea. Podés pedir de nuevo.",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+                state.suggestions.forEach { suggestion ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SuggestionCard(
+                        stepKind = stepKind,
+                        suggestion = suggestion,
+                        enabled = canAccept(suggestion),
+                        onAccept = onAccept,
+                        onIgnore = onIgnore,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionCard(
+    stepKind: BrainstormingStep,
+    suggestion: BrainstormingSuggestion,
+    enabled: Boolean,
+    onAccept: (BrainstormingSuggestion) -> Unit,
+    onIgnore: (BrainstormingSuggestion) -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            suggestion.category?.let { category ->
+                Text(
+                    text = categoryLabel(category),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            Text(text = suggestion.text, style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { onAccept(suggestion) },
+                    enabled = enabled,
+                ) {
+                    Text(text = if (isScalarStep(stepKind)) "Usar" else "Agregar")
+                }
+                TextButton(onClick = { onIgnore(suggestion) }) {
+                    Text(text = "Ignorar")
+                }
+            }
+        }
+    }
+}
+
+private fun isScalarStep(step: BrainstormingStep): Boolean = when (step) {
+    BrainstormingStep.TITLE,
+    BrainstormingStep.CORE_LOOP,
+    BrainstormingStep.AUDIENCE,
+    BrainstormingStep.CONCEPT,
+    BrainstormingStep.FANTASY,
+    -> true
+
+    BrainstormingStep.GENRE,
+    BrainstormingStep.INSPIRATIONS,
+    BrainstormingStep.KEY_MECHANICS,
+    BrainstormingStep.OUT_OF_SCOPE,
+    -> false
 }
 
 @Composable

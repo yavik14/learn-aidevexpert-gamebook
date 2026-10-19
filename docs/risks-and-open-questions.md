@@ -138,8 +138,12 @@
 - **Catálogo de Géneros rígido:** si falta un género frecuente, el usuario recurre a
   personalizados que no se reutilizan; podría necesitar promoción al catálogo (no
   MVP).
-- **Sugerencias de IA con `FakeAiClient`:** la calidad real no es verificable hasta
-  elegir proveedor/modelo (ADR 0001).
+- **Sugerencias de Brainstorming:** **resueltas** en
+  `brainstorming-ai-suggestions` (2026-10-19) con IA fake determinista, parsing
+  de 2 ideas, dedupe y UI efímera (spec
+  `docs/specs/brainstorming-ai-suggestions.md`). La **calidad real** y el formato
+  del proveedor no se verifican hasta `ai-real-chat` (ADR 0004); el fake no
+  valida calidad semántica.
 - **Sin clasificación IA**, Notas mal clasificadas ensucian el GDD; la UI debe
   facilitar elegir/corregir `track` y Géneros.
 - **Verificación del STT no determinista** (audio real puede requerir dispositivo

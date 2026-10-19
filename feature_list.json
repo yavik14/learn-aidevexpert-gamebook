@@ -1004,11 +1004,19 @@
       "brainstorming-wizard",
       "ai-client-interface"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
       "Provisional: test del core con AiClient fake que devuelve 2 sugerencias; smoke Android."
     ],
-    "evidence": [],
+    "evidence": [
+      "2026-10-19: spec `docs/specs/brainstorming-ai-suggestions.md`; servicio `:core` (`BrainstormingSuggestionService`) con prompt/contexto por paso, parsing/dedupe, parcial/error y fake determinista.",
+      "2026-10-19: `:core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → **27 suites / 86 tests / 0 failures** (7 nuevos en `BrainstormingSuggestionAndroidTest`).",
+      "2026-10-19: `:core:iosSimulatorArm64Test --rerun-tasks` → **27 suites / 86 tests / 0 failures** (7 nuevos iOS); `:composeApp:assembleDebug --rerun-tasks` BUILD SUCCESSFUL; `CI=true ./init.sh` exit 0; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-19 smoke Android (API 35, IA fake; UI dumps/captura en `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/`): 2 tarjetas, Usar/Ignorar, parcial por dedupe, Género/Inspiraciones/Mecánicas, limpieza al navegar y guardado en `game_project` + hijas; esquema v8 sin tablas nuevas.",
+      "2026-10-19 controles negativos restaurados: (a) sin dedupe falla el test de core; (b) aplicar al pedir auto-rellena el Título; (c) sin `resetSuggestions` las tarjetas persisten al cambiar de paso.",
+      "2026-10-19: validación independiente `accept` (`docs/validations/brainstorming-ai-suggestions.md`); sin hallazgos Critical/High/Medium; el Low no bloqueante (dedupe no colapsa espacios internos del borrador) queda como follow-up.",
+      "2026-10-19 Session 070 (cierre/integración): rebase sobre `origin/develop` `6db4d38` (incluye `sketch-thumbnails`); gate post-rebase: `:core` 28 suites/87 tests/0 failures en Android e iOS, `assembleDebug` OK, `CI=true ./init.sh` exit 0 e iOS link OK; smoke Android post-rebase (2 tarjetas, Usar/Ignorar, navegación sin tarjetas, guardado) y esquema v8 sin tablas nuevas."
+    ],
     "notes": "Usa `AiClient` (chat); con el modo real lo cubre `ai-real-chat`. No bloquea: siempre se puede escribir a mano."
   },
   {

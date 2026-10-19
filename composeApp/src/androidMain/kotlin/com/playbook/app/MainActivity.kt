@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
                 ragQueryService = ragQueryService,
                 noteLinkRepository = noteLinkRepository,
                 semanticLinkingService = semanticLinkingService,
+                aiClient = aiClient,
                 diagnostics = diagnostics,
             )
         }
