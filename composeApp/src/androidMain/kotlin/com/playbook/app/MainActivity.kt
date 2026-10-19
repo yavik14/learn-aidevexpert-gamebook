@@ -3,8 +3,9 @@ package com.playbook.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.playbook.app.ai.createAndroidAiRuntime
 import com.playbook.app.voice.AndroidVoiceTranscriber
-import com.playbook.core.ai.FakeAiClient
+import com.playbook.core.ai.EmbeddingDimensionReconciler
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
 import com.playbook.core.ai.PendingIndexingRetry
@@ -53,9 +54,10 @@ class MainActivity : ComponentActivity() {
             database = database,
             clock = ::currentTimeMillis,
         )
-        // Runtime de IA por defecto: fake determinista y sin red (el adaptador real
-        // es follow-up del ADR 0001). `generate` materializa el RAG.
-        val aiClient = FakeAiClient()
+        // Runtime de IA elegido por build flag: fake determinista por defecto o
+        // real OpenAI-compatible con key (nunca versionada).
+        val aiRuntime = createAndroidAiRuntime()
+        val aiClient = aiRuntime.aiClient
         // Sink de diagnóstico local acotado (`filesDir/diagnostics.log`): registra
         // los fallos de IA y de las integraciones nativas sin telemetría remota.
         val diagnostics = FileDiagnostics(
@@ -67,7 +69,11 @@ class MainActivity : ComponentActivity() {
         val noteIndexingOrchestrator = NoteIndexingOrchestrator(noteIndexingService, noteRepository)
         // Reintento de indexado pendiente (`offline-pending-retry`): al arrancar la
         // app reintenta las Notas `PENDING` y promueve a `FAILED` las irrecuperables.
-        val pendingIndexingRetry = PendingIndexingRetry(noteIndexingOrchestrator, noteRepository)
+        val pendingIndexingRetry = PendingIndexingRetry(
+            orchestrator = noteIndexingOrchestrator,
+            noteRepository = noteRepository,
+            availability = aiRuntime.availability,
+        )
         val ragQueryService = RagQueryService(
             aiClient,
             noteRepository,
@@ -75,6 +81,10 @@ class MainActivity : ComponentActivity() {
             diagnostics = diagnostics,
         )
         val semanticLinkingService = SemanticLinkingService(embeddingRepository, noteLinkRepository)
+        // Alinea los embeddings persistidos con la dimensión del runtime activo;
+        // las Notas afectadas quedan PENDING para el reintento de arranque de App.
+        EmbeddingDimensionReconciler(embeddingRepository, noteRepository)
+            .reconcile(aiRuntime.embeddingDimension)
         // El adaptador registra el permission launcher, por eso se construye aquí
         // (onCreate) y no dentro del composable.
         val voiceTranscriber = AndroidVoiceTranscriber(this)

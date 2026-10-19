@@ -113,6 +113,27 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   en CI.
 - Proveedor del MVP: **propio, compatible con OpenAI** (`https://inference.devexpert.io/v1`),
   modelos chat/embedding/transcribe/tts/image/jev (ver `docs/adr/0004-ai-real-integration.md`).
+- El modo se elige con `playbook.ai.mode` (`PLAYBOOK_AI_MODE`), default `fake`;
+  `init.sh` **MUST** forzar `-Pplaybook.ai.mode=fake`. La key se toma de
+  `playbook.ai.apiKey` / `PLAYBOOK_AI_API_KEY` / `local.properties`
+  (`local.properties` está gitignored). En modo fake, `BuildConfig.AI_API_KEY`
+  **MUST** quedar vacío.
+- `real` **MUST** ser el default sólo en debug. Un release real **MUST** requerir
+  opt-in por propiedad Gradle (`-Pplaybook.ai.allowReleaseKey=true`); env/
+  `local.properties` **MUST NOT** habilitarlo. Deuda conocida: `findProperty`
+  también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*`; el hardening a
+  sólo `-P` queda pendiente. Un modo real sin key/base URL/modelos **MUST**
+  fallar el build con un mensaje accionable (sin imprimir la key).
+- El transporte HTTP de IA **MUST NOT** seguir redirects automáticos: un 3xx
+  **MUST** mapearse a `AiClientException` genérica sin reenviar key, headers ni
+  body a otro host. Razón: un 307 podría filtrar credenciales/datos.
+- El I/O de red de IA **MUST** ejecutarse fuera del hilo Main (`Dispatchers.IO`);
+  el transporte Android lo hace por defecto y permite inyectar el dispatcher en
+  tests. Razón: `NetworkOnMainThreadException`/ANR en indexado y RAG reales.
+- La dimensión del embedding real es **1536** (`playbook.ai.embeddingDimension`);
+  los embeddings de otra dimensión se reconcilian a `PENDING`/`index_attempts=0`
+  antes del reintento de arranque (`EmbeddingDimensionReconciler`). Razón:
+  `ai-fake-real-switch`.
 
 ## GDD
 

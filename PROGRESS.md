@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` (gate no bloqueante **Android-only**) corre `:composeApp:assembleDebug` + `:core:testDebugUnitTest`, sin levantar dev servers. iOS está congelado (ADR 0003).
-- Última feature `accepted`: `game-project-persistence` (2026-10-19; Session 054; Proyecto de Juego singleton, esquema v8; validación independiente `accept`); antes `genres-catalog-persistence` (Session 050).
+- Última feature `accepted`: `ai-fake-real-switch` (2026-10-19; Session 056; selección fake/real por build flag + adaptadores reales OpenAI-compatible de los 6 modelos + reconciliación de dimensión de embeddings; validación independiente `accept`); antes `game-project-persistence` (Session 054) y `genres-catalog-ui` (Sessions 052/053).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -30,11 +30,12 @@
 - **Revisión de alcance 2026-10-15 (Android-first):** iOS **congelado** (ADR 0003); Etiquetas→**Géneros** (catálogo fijo + personalizados); **Proyecto de Juego** (ficha singleton) + **Brainstorming**; GDD **documento híbrido** (ficha + secciones por Track); principal rediseñada (top bar "Playbook" + iconos + FAB desplegable), bocetos con miniatura, dictado inline 30s, Q&A "guardar como Nota"; e **IA real** con proveedor propio OpenAI-compatible (`https://inference.devexpert.io/v1`; modelos chat/embedding/transcribe/tts/image/jev; alternancia fake/real por build flag; la IA **sugiere** y el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png`). Esquema previsto **v7** (Géneros) y **v8** (Proyecto). Backlog re-derivado: **21 features `not_started`** (incluye `app-icon-configuration`).
 - `app-icon-configuration` `accepted` (2026-10-16; validación independiente `accept` en `docs/validations/app-icon-configuration.md`): icono de launcher Android desde `docs/design/icon.png` (**RGB sin alfa**, fondo `#F7EFE2`) — adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` = `@color/ic_launcher_background` + `@drawable/ic_launcher_foreground`) + PNG legacy por densidad (48/72/96/144/192) y `android:icon`/`android:roundIcon` en el manifest. Generado con `sips` (sin deps); foreground en `drawable-nodpi` (432 px, safe zone ~66 %), sin costura. Sin cambios en `:core`/`iosApp`/`init.sh`/build files/Kotlin/esquema. Ver `docs/technical-discovery.md`.
 - `ai-client-ports` `accepted` (2026-10-16; Session 049; validación independiente `accept` en `docs/validations/ai-client-ports.md`): puertos de IA `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + fakes deterministas en `:core`; chat/embedding siguen en `AiClient`; sin adaptadores reales ni build flag (feature posterior). Ver `docs/technical-discovery.md`.
+- `ai-fake-real-switch` `accepted` (2026-10-19; Sessions 055/056; validación independiente `accept`): build flag `playbook.ai.mode` (`fake` default / `real`), 6 adaptadores reales OpenAI-compatible en `:core` detrás de `HttpTransport`, `UrlConnectionHttpTransport` Android con I/O en `Dispatchers.IO` y sin redirects, `AiRuntime`/`ConfiguredAiAvailability`, reconciliación de dimensión de embeddings (`1536` real / `8` fake), smoke real key-gated de los 6 modelos (fuera del gate), guard release y key nunca versionada. ADR 0004 promovido a `accepted`. Ver `docs/specs/ai-fake-real-switch.md` y `docs/technical-discovery.md`.
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
 - `game-project-persistence` `accepted` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, persistida en Session 054): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
 - `genres-catalog-ui` `accepted` (2026-10-19; Sessions 052/053; validación independiente `accept` en `docs/validations/genres-catalog-ui.md`; rebasada sobre `develop` con `game-project-persistence` v8): picker de **Géneros** en `:composeApp` — 12 chips de catálogo en `FlowRow` con toggle, "Seleccionados" con `×`, alta de personalizado y toda alta/remoción vía `normalizeGenres`; `GenreLabelChip` distingue catálogo (`primaryContainer`) vs personalizado (`secondaryContainer`) en tarjetas, GDD y relacionadas. Incluye el **fix de layout** tras la validación `revise`: `NoteEditorScreen` con contenido scrollable y fila Borrar/Cancelar/Guardar fija (cuerpo `heightIn(200..320dp)`). No toca `:core`/esquema (el global es v8 por `game-project-persistence`)/`App.kt`/build files/deps. Gate en la base rebasada: `assembleDebug` OK, `:core:testDebugUnitTest` 23 suites/55 tests/0 failures, `./init.sh` exit 0 e iOS link OK. Smoke Android completo (toggle, canonización, dedupe, tarjeta, reapertura, edición, 13 Géneros, GDD con personalizado y persistencia tras relanzar). Ver `feature_list.json`, `docs/validations/genres-catalog-ui.md` y `composeApp/build/smoke-evidence/genres-catalog-ui/`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
-- Current next ready features: `genres-catalog-ui` y `game-project-persistence` quedan `accepted`; la siguiente ready es `ai-fake-real-switch` (spec pendiente). Ver `feature_list.json`.
+- Current state: `ai-fake-real-switch` quedó `accepted` (validación independiente `accept`, 2026-10-19); `game-project-persistence` y `genres-catalog-ui` también están `accepted`. Siguientes: las `not_started` de la Ola 2. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-19.
 
@@ -1167,3 +1168,119 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
 - Known risk or unresolved issue: `genres-catalog-ui` y `ai-fake-real-switch` están en validación en otras sesiones; hay que rebasearlas sobre este `develop` después de cada accept/merge.
 - Next best step: cerrar la validación de `genres-catalog-ui` y `ai-fake-real-switch`; al aceptarlas, integrarlas en ese orden y luego abrir `brainstorming-wizard`, `inline-dictation-30s` y `ai-real-embeddings` (Ola 2).
+
+### Session 055 (ai-fake-real-switch)
+
+- Date: 2026-10-19
+- Goal: implementar `ai-fake-real-switch` (spec `docs/specs/ai-fake-real-switch.md`): selección fake/real por build flag + adaptadores reales de los 6 modelos + reconciliación de dimensión de embeddings.
+- Completed:
+  - `:core`: `com.playbook.core.ai.openai` con `HttpTransport`/`HttpRequest`/`HttpResponse`, `AiRuntimeConfig` (key redactada), `OpenAiHttp`, adaptadores `OpenAiAiClient` (chat/embedding), `OpenAiTranscribeClient`, `OpenAiTtsClient`, `OpenAiImageClient`, `OpenAiJevClient`, `AiRuntime`/`fakeAiRuntime()`/`openAiAiRuntime()` y `ConfiguredAiAvailability`.
+  - `:core`: `EmbeddingDimensionReconciler` (borra embeddings de dimensión distinta, deja la Nota `PENDING` y `index_attempts=0`; `null` = no-op).
+  - `:core`: dependencia `kotlinx-serialization-json` 1.8.1 (runtime, sin plugin); Base64 con `kotlin.io.encoding.Base64`.
+  - `:composeApp`: flag/config por `-P` > env > `local.properties`, `BuildConfig`, guard debug/release (real sólo debug; release real con `allowReleaseKey`), key vacía en fake; `UrlConnectionHttpTransport`; `createAndroidAiRuntime()`; wiring en `MainActivity` y `MainViewController` (iOS fake); `init.sh` fuerza `-Pplaybook.ai.mode=fake`.
+  - Tests: `OpenAiAdaptersCheck` (requests/parseo/errores/seguridad), `EmbeddingDimensionReconcilerCheck`, `UrlConnectionHttpTransportTest` (servidor local), `AndroidAiRuntimeTest`, smoke key-gated `RealAiSmokeTest` (6 modelos; el transcribe usa el audio de tts).
+  - Docs: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md` (cola), `feature_list.json` (evidencia).
+- Verification run:
+  - `./init.sh` → exit 0 (fake, sin red).
+  - `:core:testDebugUnitTest` → BUILD SUCCESSFUL (adaptadores + reconciler incluidos).
+  - `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL (transporte + selección).
+  - Build real debug con dummy key → BUILD SUCCESSFUL (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key → exit 1 con "Modo IA real incompleto"; release real sin opt-in → exit 0 con `AI_MODE=fake` y key vacía.
+  - Gate con `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy` → exit 0; BuildConfig debug `AI_MODE=fake`, `AI_API_KEY` vacío.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.
+  - Controles negativos: romper `choices` → falla `chatParsesContentAndSendsContext`; incluir la key en el error → falla `httpErrorIsGenericAndSanitized`. Ambos restaurados y re-verificados en verde.
+  - Smoke real key-gated de los 6 modelos (`-Pplaybook.ai.mode=real -Pplaybook.ai.smoke=1`, key fuera del repo) → BUILD SUCCESSFUL: `embedding=1536`, `chat=2`, `tts=47232` bytes, `transcribe=26`, `image=601619` bytes (`image/jpeg`), `track=MECHANICS`, `genres=1`.
+  - Hallazgos del smoke: la dimensión real del embedding es **1536** (el valor inicial `3` era incorrecto, se ajustó el default); el proveedor de imagen **sólo acepta 1024x1024** (512/256 → HTTP 400) y devolvió **JPEG** aunque se pidió PNG transparente, por lo que el adaptador detecta el mime real por bytes.
+- Evidence captured: arreglo `evidence` de `ai-fake-real-switch` en `feature_list.json`; logs de verificación; resultado sanitizado del smoke.
+- Files or artifacts updated: `core/src/commonMain/kotlin/com/playbook/core/ai/{EmbeddingDimensionReconciler.kt,openai/*}`, `composeApp/src/androidMain/kotlin/com/playbook/app/{MainActivity.kt,ai/*}`, `composeApp/src/iosMain/kotlin/com/playbook/app/MainViewController.kt`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `composeApp/build.gradle.kts`, `init.sh`, tests de `:core`/`:composeApp`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `CONSTRAINTS.md`, `AGENTS.md`, `docs/specs/ai-fake-real-switch.md`, `feature_list.json`.
+- Known risk or unresolved issue: la key queda embebida en un APK real (no distribuir); iOS sigue fake. El proveedor de imagen limita el tamaño a 1024x1024 y puede devolver JPEG (sin transparencia), documentado en la spec y `docs/technical-discovery.md`. El smoke real usó la key desde `local.properties` fuera del repo; no se versionó. La feature queda `passing` (auto-verificada), pendiente de validación independiente.
+- Next best step: validación independiente de `ai-fake-real-switch` con `$feature-validator` (spec `docs/specs/ai-fake-real-switch.md`); tras el `accept`, promover ADR 0004 y seguir con la Ola 1.
+
+### Session 055 — reparación post-validación (revise) (ai-fake-real-switch)
+
+- Date: 2026-10-19
+- Goal: cerrar los hallazgos Medium/Low del validator (`revise`) sin ampliar el alcance ni promover ADR 0004.
+- Completed:
+  - `UrlConnectionHttpTransport`: `instanceFollowRedirects = false`; un 307/308 que `HttpURLConnection` reporta como `HttpRetryException` se devuelve como `HttpResponse(status=3xx)` sin seguir el redirect. Test nuevo con dos `HttpServer` locales: el destino no recibe la petición y el adaptador lanza `AiClientException("chat falló con HTTP 307")` sin key/body.
+  - `allowReleaseKey` ahora se lee **sólo** de `findProperty("playbook.ai.allowReleaseKey")`; `PLAYBOOK_AI_ALLOW_RELEASE_KEY` y `local.properties` ya no lo habilitan.
+  - Docs: `ARCHITECTURE.md`, `CONSTRAINTS.md`, `docs/technical-discovery.md` y la spec reflejan la política de redirects y el guard por `-P`; `PROGRESS.md` actualizado a 2026-10-19. ADR 0004 sigue `propuesto`.
+- Verification run:
+  - `./init.sh` → exit 0 (fake, sin red); `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy ./init.sh` → exit 0 con `AI_MODE=fake` y `AI_API_KEY` vacío.
+  - `:core:testDebugUnitTest --rerun-tasks` → 72 tests / 0 failures.
+  - `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → 5 tests / 0 failures (`UrlConnectionHttpTransportTest` 2, incluido el control de redirect).
+  - Build real debug con dummy key → OK (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key → exit 1 con "Modo IA real incompleto".
+  - Release: `PLAYBOOK_AI_ALLOW_RELEASE_KEY=true` + `-Pplaybook.ai.mode=real -Pplaybook.ai.apiKey=dummy-key` → `AI_MODE=fake`, key vacía; `-Pplaybook.ai.allowReleaseKey=true` → `AI_MODE=real`; sin allow → fake + warning + key vacía.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.
+  - Esquema v7 (`1.sqm`..`6.sqm`), sin `.sqm` nuevos; `AiClient`/`FakeAiClient`/`AiPorts`/`FakeAiPorts`/`AiAvailability`/`App.kt`/`iosApp` sin cambios; `json.load` y `git diff --check` OK.
+- Evidence captured: logs de reparación; `feature_list.json` evidence actualizada.
+- Known risk or unresolved issue: la feature sigue `passing`, pendiente de revalidación independiente. La key real no se copió al worktree ni se versionó; el smoke real ya estaba registrado. ADR 0004 sigue `propuesto`.
+- Next best step: revalidación independiente con `$feature-validator`.
+
+### Session 055 — reparación post-revalidación (High) (ai-fake-real-switch)
+
+- Date: 2026-10-19
+- Goal: corregir el hallazgo High del segundo validator (transporte HTTP bloqueante en Main) y el Low de cobertura de errores; el Low de `findProperty` queda diferido por decisión del autor.
+- Completed:
+  - `UrlConnectionHttpTransport` ejecuta todo el I/O bloqueante dentro de `withContext(dispatcher)` con `Dispatchers.IO` por defecto e **inyectable** en tests; conserva `instanceFollowRedirects=false` y el mapeo de 307/308 a `HttpResponse(3xx)`.
+  - Test `dispatchesBlockingIoOffTheCallerThread` con `RecordingDispatcher`: verifica que el trabajo se despacha fuera del hilo llamador.
+  - `OpenAiAdaptersCheck`: tests nuevos de HTTP 500 y fallo de red/timeout; ambos verifican mensaje genérico y ausencia de key/body.
+  - Docs: spec, `ARCHITECTURE.md`, `CONSTRAINTS.md` y `docs/technical-discovery.md` documentan el dispatch en `Dispatchers.IO`.
+  - Hallazgo Low de `findProperty` (`gradle.properties`/`ORG_GRADLE_PROJECT_*`) **diferido** por decisión del autor; no se cambió el código.
+- Verification run:
+  - `./init.sh` → exit 0 (fake, sin red).
+  - `:core:testDebugUnitTest --rerun-tasks` → **74 tests / 0 failures** (`OpenAiAdaptersCheck` 17).
+  - `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → **6 tests / 0 failures** (`UrlConnectionHttpTransportTest` 3).
+  - Build real debug con dummy key → OK (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key → exit 1 con "Modo IA real incompleto".
+  - Gate con `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy` → exit 0; debug `AI_MODE=fake`, `AI_API_KEY` vacío.
+  - Release: `PLAYBOOK_AI_ALLOW_RELEASE_KEY=true` + `-P...mode=real -P...apiKey=dummy-key` → `AI_MODE=fake`, key vacía; `-P...allowReleaseKey=true` → `AI_MODE=real`; sin allow → fake + warning + key vacía.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.
+- Evidence captured: logs de la reparación; `feature_list.json` evidence actualizada.
+- Known risk or unresolved issue: el smoke real no se re-ejecutó (sin key en el worktree; evidencia previa); el hardening estricto de `allowReleaseKey` a sólo `-P` queda diferido. La feature sigue `passing`, pendiente de revalidación.
+- Next best step: revalidación independiente con `$feature-validator`.
+
+### Session 056 (ai-fake-real-switch)
+
+- Date: 2026-10-19
+- Goal: validación independiente de `ai-fake-real-switch` y cierre de aceptación/integración.
+- Completed:
+  - Validación independiente con veredicto **`accept`**: se re-ejecutaron el gate, tests de `:core`/`:composeApp`, build real debug, fallo de real sin key, guard de release, iOS link, JSON/diff, esquema y archivos protegidos.
+  - `feature_list.json`: `ai-fake-real-switch` promovida de `passing` a `accepted` con evidencia de la validación (2026-10-19).
+  - `docs/adr/0004-ai-real-integration.md`: promovido de `propuesto` a `accepted`, según el Durable Documentation Impact de la spec.
+  - Documentación del residual: `allowReleaseKey` sigue usando `findProperty`, por lo que `gradle.properties`/`ORG_GRADLE_PROJECT_*` también podrían habilitarlo; el hardening estricto a sólo `-P` queda como deuda del autor. Se aclaró la redacción de debug/release en `CONSTRAINTS.md`, `ARCHITECTURE.md`, la spec y `docs/technical-discovery.md`.
+- Verification run (validator independiente):
+  - `./init.sh` → exit 0 (Android-only, sin dev servers).
+  - `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy ./init.sh` → exit 0; debug `AI_MODE=fake`, `AI_API_KEY=""`.
+  - `:core:testDebugUnitTest --rerun-tasks` → **74/74, 0 failures** (`OpenAiAdaptersCheck` 17).
+  - `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → **6/6, 0 failures** (`UrlConnectionHttpTransportTest` 3).
+  - Build real debug con dummy key → OK (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key → exit 1 con "Modo IA real incompleto".
+  - Release: env `ALLOW_RELEASE_KEY` no habilita → fake/key vacía; `-Pplaybook.ai.allowReleaseKey=true` → real; sin opt-in → fake + warning + key vacía.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.
+  - `feature_list.json` JSON válido; `git diff --check` OK; esquema v7 (`1.sqm`..`6.sqm`) sin `.sqm` nuevos; `AiClient`/`FakeAiClient`/`AiPorts`/`FakeAiPorts`/`AiAvailability`/`App.kt`/`iosApp` sin cambios.
+  - Reparación High verificada: `UrlConnectionHttpTransport` usa `withContext(dispatcher)` con `Dispatchers.IO` por defecto e inyectable; `instanceFollowRedirects=false`; test `dispatchesBlockingIoOffTheCallerThread` en verde.
+  - Smoke real **no re-ejecutado** (sin key en el worktree; red/costo). Evidencia registrada consistente: `embedding=1536`, `chat=2`, `tts=47232`, `transcribe=26`, `image=601619` (`image/jpeg`), `track=MECHANICS`, `genres=1`.
+- Evidence captured: veredicto `accept` y checks re-ejecutados; `feature_list.json`/`PROGRESS.md` actualizados; ADR 0004 `accepted`.
+- Known risk or unresolved issue (Low residual): `findProperty` también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*` (hardening a sólo `-P` diferido); el test de fallo de red usa `RuntimeException` en vez de `IOException`/`SocketTimeoutException` (cobertura equivalente por catch-all); el smoke real no se repitió en esta sesión. La clave sigue embebida en un APK real (no distribuir).
+- Next best step: integrar la rama (rebase sobre `origin/develop`, commit de la feature y merge a `develop` según la cola única) y continuar con las features de la Ola 1.
+
+### Session 057
+
+- Date: 2026-10-19
+- Goal: integrar `ai-fake-real-switch` en `develop` con la cola única: rebase, resolución de conflictos y verificación post-rebase.
+- Completed:
+  - Rebase de `feature/ai-fake-real-switch` sobre `develop` (`35c012a`, con `game-project-persistence` v8, `genres-catalog-ui` y el fix de harness).
+  - Conflictos resueltos en `AGENTS.md`, `PROGRESS.md` y `docs/technical-discovery.md`; se conservaron las secciones de las features integradas y la nueva sección de IA real. Sesiones de `ai-fake-real-switch` renumeradas a **055/056/057** para evitar colisión con las Sesiones 052–054 de `develop`.
+  - `feature_list.json`: `ai-fake-real-switch` `accepted` con evidencia de validación e integración; `feature_list.json` válido.
+  - `docs/adr/0004-ai-real-integration.md`: `accepted`.
+  - Commit de la feature: `feature: complete ai-fake-real-switch` (`1998a7f`). Merge **fast-forward** a `develop` (sin push).
+- Verification run (post-rebase):
+  - `./init.sh` → exit 0 (Android-only, sin red ni dev servers).
+  - `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy ./init.sh` → exit 0; debug `AI_MODE=fake`, `AI_API_KEY=""`.
+  - `:core:testDebugUnitTest --rerun-tasks` → **76 tests / 0 failures** (incluye `OpenAiAdaptersCheck` 17, `EmbeddingDimensionReconcilerCheck` 4 y los tests de `game-project-persistence`).
+  - `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → **6 tests / 0 failures** (`UrlConnectionHttpTransportTest` 3).
+  - Build real debug con dummy key → OK (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key → exit 1 con "Modo IA real incompleto".
+  - Release: env `ALLOW_RELEASE_KEY` no habilita → fake/key vacía; `-Pplaybook.ai.allowReleaseKey=true` → real; sin opt-in → fake + warning + key vacía.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL.
+  - Esquema global **v8** (`1.sqm`..`7.sqm`), sin `.sqm` nuevos de esta feature; diff de 28 archivos; sin secretos; `json.load` y `git diff --check` OK.
+  - Post-merge en `develop` (main repo): `CI=true ./init.sh` → exit 0; `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake` → **6/0**.
+- Evidence captured: verificación post-rebase y evidencia de integración en `feature_list.json`; este bloque.
+- Known risk or unresolved issue (Low residual): `findProperty` también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*` (hardening a sólo `-P` diferido); el smoke real no se repitió (sin key en el worktree); la clave sigue embebida en un APK real (no distribuir).
+- Next best step: `develop` local actualizado con la feature (sin push); las sesiones activas deben rebasear sobre `develop`. Continuar con las features de la Ola 2.

@@ -1132,12 +1132,35 @@
     "depends_on": [
       "ai-client-ports"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: `bash init.sh` usa fake (sin red); el build real no versiona la key; `AiAvailability` acorde."
+      "`./init.sh` exit 0 con fake (sin red); con `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy` sigue fake y `AI_API_KEY` vacío.",
+      "`:core:testDebugUnitTest` y `:composeApp:testDebugUnitTest` en verde (adaptadores, config, reconciler, transporte).",
+      "High: `UrlConnectionHttpTransport` ejecuta el I/O en `Dispatchers.IO` (dispatcher inyectable); test `dispatchesBlockingIoOffTheCallerThread`.",
+      "Low: tests de HTTP 500 y fallo de red/timeout con mensajes genéricos y sin key/body. Low de `findProperty` (`gradle.properties`/`ORG_GRADLE_PROJECT_*`) diferido por el autor.",
+      "Build real debug con key (`-Pplaybook.ai.mode=real -Pplaybook.ai.apiKey=... -Pplaybook.ai.embeddingDimension=1536`) OK; real sin key falla con mensaje accionable; release real sin opt-in usa fake con key vacía y `allowReleaseKey` sólo se acepta por `-P`.",
+      "iOS: `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL (fake).",
+      "Smoke real de los 6 modelos key-gated (`PLAYBOOK_AI_SMOKE=1`), fuera del gate: OK (embedding=1536, chat, tts, transcribe, image, jev)."
     ],
-    "evidence": [],
-    "notes": "Flag de build (env/gradle property), nunca versionado. Tests y gate siempre fake."
+    "evidence": [
+      "2026-10-19: `./init.sh` exit 0 (fake) en worktree/ai-fake-real-switch.",
+      "2026-10-19: `:core:testDebugUnitTest` BUILD SUCCESSFUL; incluye `OpenAiAdaptersCheck` y `EmbeddingDimensionReconcilerCheck`.",
+      "2026-10-19: `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake` BUILD SUCCESSFUL (`UrlConnectionHttpTransportTest`, `AndroidAiRuntimeTest`).",
+      "2026-10-19: build real debug con dummy key OK (`AI_MODE=real`, `AI_EMBEDDING_DIMENSION=1536`); real sin key exit 1 con 'Modo IA real incompleto'; release real sin opt-in exit 0 con `AI_MODE=fake` y key vacía.",
+      "2026-10-19: gate con `PLAYBOOK_AI_MODE=real PLAYBOOK_AI_API_KEY=dummy` exit 0; BuildConfig debug `AI_MODE=fake`, `AI_API_KEY` vacío.",
+      "2026-10-19: `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-19: controles negativos reproducidos y restaurados: romper `choices` → falla `chatParsesContentAndSendsContext`; incluir key en el error → falla `httpErrorIsGenericAndSanitized`.",
+      "2026-10-19: smoke real key-gated de los 6 modelos OK: embedding=1536, chat=2, tts=47232 bytes, transcribe=26, image=601619 bytes (image/jpeg), track=MECHANICS, genres=1. Descubrimientos: dimensión real 1536 (no 3); el proveedor de imagen sólo acepta 1024x1024 y devolvió JPEG aunque se pidió PNG transparente.",
+      "2026-10-19 (revise): `UrlConnectionHttpTransport` usa `instanceFollowRedirects=false`; test nuevo con dos `HttpServer` (307) confirma que el destino no recibe la petición y que el adaptador lanza `AiClientException(\"chat falló con HTTP 307\")` sin key/body.",
+      "2026-10-19 (revise): `allowReleaseKey` sólo por `-P`; `PLAYBOOK_AI_ALLOW_RELEASE_KEY=true` + `-Pplaybook.ai.mode=real -Pplaybook.ai.apiKey=dummy-key` → release `AI_MODE=fake`/key vacía; `-Pplaybook.ai.allowReleaseKey=true` → `AI_MODE=real`; sin allow → fake + warning + key vacía.",
+      "2026-10-19 (revise): `:core:testDebugUnitTest --rerun-tasks` 72/0; `:composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` 5/0; iOS link `--rerun-tasks` OK; esquema v7 sin `.sqm` nuevos; archivos protegidos sin cambios; `json.load` y `git diff --check` OK.",
+      "2026-10-19 (High): `UrlConnectionHttpTransport` ejecuta todo el I/O en `withContext(dispatcher)` con `Dispatchers.IO` por defecto e inyectable; `UrlConnectionHttpTransportTest` 3/3 con `dispatchesBlockingIoOffTheCallerThread`, redirect 307 y request/response. Mantiene `instanceFollowRedirects=false`.",
+      "2026-10-19 (Low tests): `OpenAiAdaptersCheck` suma HTTP 500 y fallo de red/timeout; ambos mensajes genéricos y sin key/body. `:core` 74/0; `:composeApp` 6/0.",
+      "2026-10-19 (Low diferido): `allowReleaseKey` sigue leyéndose con `findProperty`, por lo que `gradle.properties`/`ORG_GRADLE_PROJECT_*` también podrían habilitarlo; el hardening a sólo `-P` queda pendiente por decisión del autor.",
+      "2026-10-19: validación independiente (accept). `./init.sh` exit 0; gate con env real sigue fake/key vacía; `:core` 74/0; `:composeApp` 6/0; build real debug OK (1536); real sin key falla; release guard OK (env allow no habilita, `-PallowReleaseKey` real, sin opt-in fake); iOS link OK; JSON/diff OK; esquema v7 sin `.sqm` nuevos; protegidos sin cambios; reparación High del dispatcher verificada. Smoke real no re-ejecutado (key fuera del worktree); evidencia previa consistente.",
+      "2026-10-19 (integración): rebase sobre `develop` (`e5ff8b9`, con `game-project-persistence` v8 y `genres-catalog-ui`). Post-rebase: `./init.sh` exit 0; `:core` 76/0; `:composeApp` 6/0; debug real OK (1536); real sin key falla; gate env real fake/key vacía; release guard OK; iOS link OK; esquema global v8 (`1.sqm`..`7.sqm`), sin `.sqm` nuevos de esta feature; diff de 28 archivos; sin secretos. Commit `feature: complete ai-fake-real-switch`."
+    ],
+    "notes": "Flag de build (env/gradle property), nunca versionado. Tests y gate siempre fake. Adaptadores reales de los 6 modelos en `:core` detrás de `HttpTransport`; transporte Android en `:composeApp` sin seguir redirects (3xx → `AiClientException` genérica) y con I/O en `Dispatchers.IO` (dispatcher inyectable). Reconciliación de dimensión de embeddings (`1536` real observada / `8` fake). Smoke real de los 6 OK con la key fuera del repo: embedding=1536; imagen sólo 1024x1024 y el proveedor puede devolver JPEG (mime detectado por bytes). `allowReleaseKey` por propiedad Gradle (`-P`); hardening estricto diferido. Implementada, auto-verificada, reparada tras dos `revise`, aceptada por validación independiente e integrada sobre `develop` con esquema v8 (2026-10-19)."
   },
   {
     "id": "ai-real-chat",

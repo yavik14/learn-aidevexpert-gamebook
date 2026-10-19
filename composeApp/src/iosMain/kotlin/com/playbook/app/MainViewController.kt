@@ -2,11 +2,13 @@ package com.playbook.app
 
 import androidx.compose.ui.window.ComposeUIViewController
 import com.playbook.app.voice.IosVoiceTranscriber
-import com.playbook.core.ai.FakeAiClient
+import com.playbook.core.ai.EmbeddingDimensionReconciler
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.ai.openai.AiRuntime
+import com.playbook.core.ai.openai.fakeAiRuntime
 import com.playbook.core.db.IosDatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
@@ -36,7 +38,7 @@ private var noteRepository: NoteRepository? = null
 private var attachmentRepository: AttachmentRepository? = null
 private var embeddingRepository: EmbeddingRepository? = null
 private var noteLinkRepository: NoteLinkRepository? = null
-private var aiClient: FakeAiClient? = null
+private var aiRuntime: AiRuntime? = null
 private var noteIndexingService: NoteIndexingService? = null
 private var noteIndexingOrchestrator: NoteIndexingOrchestrator? = null
 private var pendingIndexingRetry: PendingIndexingRetry? = null
@@ -78,9 +80,9 @@ fun MainViewController(): UIViewController {
         database = database,
         clock = ::currentTimeMillis,
     ).also { noteLinkRepository = it }
-    // Runtime de IA por defecto: fake determinista y sin red (el adaptador real es
-    // follow-up del ADR 0001). `generate` materializa el RAG.
-    val ai = aiClient ?: FakeAiClient().also { aiClient = it }
+    // iOS está congelado (ADR 0003): siempre runtime fake, sin red ni key.
+    val runtime = aiRuntime ?: fakeAiRuntime().also { aiRuntime = it }
+    val ai = runtime.aiClient
     // Sink de diagnóstico local acotado en Application Support.
     val diag = diagnostics ?: FileDiagnostics(
         diagnosticStorage(diagnosticsFilePath()),
@@ -95,7 +97,11 @@ fun MainViewController(): UIViewController {
     }
     // Reintento de indexado pendiente (`offline-pending-retry`): al arrancar la
     // app reintenta las Notas `PENDING` y promueve a `FAILED` las irrecuperables.
-    val retry = pendingIndexingRetry ?: PendingIndexingRetry(orchestrator, notes).also {
+    val retry = pendingIndexingRetry ?: PendingIndexingRetry(
+        orchestrator = orchestrator,
+        noteRepository = notes,
+        availability = runtime.availability,
+    ).also {
         pendingIndexingRetry = it
     }
     val rag = ragQueryService ?: RagQueryService(
@@ -108,6 +114,8 @@ fun MainViewController(): UIViewController {
         semanticLinkingService = it
     }
     val transcriber = voiceTranscriber ?: IosVoiceTranscriber().also { voiceTranscriber = it }
+    // iOS fake usa 8 dimensiones; reconcilia por consistencia con el runtime activo.
+    EmbeddingDimensionReconciler(embeddings, notes).reconcile(runtime.embeddingDimension)
     return ComposeUIViewController {
         App(notes, attachments, transcriber, orchestrator, retry, rag, links, linking, diag)
     }

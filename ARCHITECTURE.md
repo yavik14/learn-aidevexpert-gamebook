@@ -313,9 +313,11 @@ composeApp (Android app / commonMain) ──▶ core
   modelo). `suspend` porque las llamadas de IA son asíncronas y cancelables.
 - **Dirección de dependencia (regla durable):** la lógica de dominio consume
   **sólo el puerto** `AiClient`; los adaptadores concretos se inyectan desde
-  afuera. `:core` expone el puerto y un adaptador fake por defecto; los
-  adaptadores reales (cloud/on-device) vivirán fuera de `:core` y se inyectarán
-  sin tocar la lógica de dominio.
+  afuera. `:core` expone el puerto y un adaptador fake por defecto. Excepción
+  decidida en `ai-fake-real-switch`: los adaptadores reales OpenAI-compatible
+  viven en `:core` (`com.playbook.core.ai.openai`) **detrás de `HttpTransport`**,
+  y el transporte de plataforma (Android) se inyecta desde `:composeApp`; así el
+  dominio no se acopla a red ni a un cliente HTTP y los tests corren offline.
 - **Runtime decidido (`ai-runtime-decision`, 2026-10-09):** estrategia
   **híbrida por fases, cloud-first**, detrás del puerto `AiClient` sin cambiarlo
   (ver `docs/adr/0001-ai-runtime-decision.md`). Orden: (1) primer adaptador real
@@ -324,8 +326,9 @@ composeApp (Android app / commonMain) ──▶ core
   (`capturada → pendiente → indexada/fallida`, `offline-pending-retry`); (2)
   adaptador **on-device** (empezando por embeddings) inyectado por el mismo
   puerto cuando se elija el runtime nativo; (3) `FakeAiClient` como default
-  offline/determinista. `:core` no gana dependencias de IA: los adaptadores
-  reales se inyectan desde afuera.
+  offline/determinista. `:core` no gana un SDK de IA: el adaptador real
+  OpenAI-compatible vive en `:core` detrás de `HttpTransport`, y la
+  implementación de red se inyecta desde `:composeApp`.
 - **Puertos por modelo (ADR 0004, `ai-client-ports`, 2026-10-16):** el core
   expone un contrato por modelo de IA. `chat` y `embedding` siguen en `AiClient`
   (`generate`/`embed`); los demás viven como interfaces independientes en
@@ -338,9 +341,36 @@ composeApp (Android app / commonMain) ──▶ core
   `data class`, porque contienen `ByteArray`). Todos `suspend` y con fallos vía
   `AiClientException`. Los fakes deterministas y sin red por defecto viven en
   `FakeAiPorts.kt` (`FakeTranscribeClient`/`FakeTtsClient`/`FakeImageClient`/
-  `FakeJevClient`). Sin agregado/bundle `AiRuntime`: la inyección conjunta, los
-  adaptadores reales y el build flag son de `ai-fake-real-switch` y de las
-  features de cada caso de uso.
+  `FakeJevClient`). El bundle `AiRuntime` y la selección fake/real son de
+  `ai-fake-real-switch`; las features de cada caso de uso consumen los puertos.
+- **Selección fake/real y runtime OpenAI-compatible (`ai-fake-real-switch`,
+  2026-10-19):** `AiRuntime` (`com.playbook.core.ai.openai`) agrupa `aiClient`
+  (`AiClient`), los 4 puertos, `AiAvailability` y `embeddingDimension`.
+  `fakeAiRuntime()` es el default (fakes + `AlwaysAvailableAiAvailability` +
+  8 dims); `openAiAiRuntime(config, transport)` construye los 6 adaptadores
+  reales y `ConfiguredAiAvailability`. El flag de build
+  `playbook.ai.mode` (`PLAYBOOK_AI_MODE`, default `fake`) se resuelve con
+  precedencia `-P` > env > `local.properties`; `init.sh` fuerza `fake`. La key
+  (`playbook.ai.apiKey` / `PLAYBOOK_AI_API_KEY` / `local.properties`) se inyecta
+  en `BuildConfig` **sólo** en modo real y **nunca** se versiona, loguea ni
+  muestra; `real` es el default sólo en debug (release real exige opt-in por
+  propiedad Gradle: `-Pplaybook.ai.allowReleaseKey=true`; env/local no cuentan;
+  `findProperty` también resuelve `gradle.properties`/`ORG_GRADLE_PROJECT_*`, por
+  lo que el hardening estricto a sólo `-P` queda pendiente) y un real incompleto
+  falla el build. `HttpTransport` es el borde de red:
+  `UrlConnectionHttpTransport` vive en `:composeApp/androidMain`, **no sigue
+  redirects** (`instanceFollowRedirects=false`; un 3xx se mapea a
+  `AiClientException` genérica), ejecuta el I/O en `Dispatchers.IO` (nunca en
+  Main; dispatcher inyectable) e iOS congelado usa `fakeAiRuntime()`. El
+  adaptador de imagen usa 1024x1024 (el proveedor rechaza 512/256) y detecta el
+  mime real (PNG/JPEG) por la firma de los bytes.
+- **Reconciliación de dimensión de embeddings (`ai-fake-real-switch`):**
+  `com.playbook.core.ai.EmbeddingDimensionReconciler` recibe la dimensión del
+  runtime activo (1536 en real, 8 en fake). Si un embedding persistido no coincide,
+  lo borra (`deleteByNoteId`), deja la Nota `PENDING` y resetea
+  `index_attempts=0`; el reintento de arranque la re-indexa. No cambia el
+  esquema ni llama a la IA. Se ejecuta en los composition roots antes de
+  `retryPending()`.
 - **Política de secrets (durable):** ninguna API key/token/secret se versiona ni
   se commitea; el adaptador cloud lee su credencial de configuración fuera del
   repo (p. ej. `local.properties` ignorado o variable de entorno de build). El

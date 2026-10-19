@@ -1,7 +1,7 @@
 # ADR 0004: Integración de IA real (proveedor propio OpenAI-compatible)
 
-- **Status:** propuesto (dirección aprobada por el autor el 2026-10-15; pendiente
-  de promoción a `accepted` si corresponde).
+- **Status:** accepted (dirección aprobada por el autor el 2026-10-15; validada
+  de forma independiente el 2026-10-19, ver `feature_list.json` y `PROGRESS.md`).
 - **Fecha:** 2026-10-15
 - **Contexto de origen:** revisión de alcance del MVP Android-first (discovery).
 - **Decisores:** autor del producto (game dev aficionado).
