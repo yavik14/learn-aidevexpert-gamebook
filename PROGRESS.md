@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` (gate no bloqueante **Android-only**) corre `:composeApp:assembleDebug` + `:core:testDebugUnitTest`, sin levantar dev servers. iOS está congelado (ADR 0003).
-- Última feature `accepted`: `gdd-export` (2026-10-15; Session 045; export del GDD a Markdown + puerto `GddSharer`; validación independiente `accept`); antes `offline-pending-retry` (Session 044).
+- Última feature `accepted`: `game-project-persistence` (2026-10-19; Session 054; Proyecto de Juego singleton, esquema v8; validación independiente `accept`); antes `genres-catalog-persistence` (Session 050).
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
 - `android-release-pipeline` `accepted`: signing de release Android condicional (precedencia env `PLAYBOOK_*` > `keystore.properties`, keystore fuera del repo) y runbook `docs/release/android.md`.
@@ -31,9 +31,9 @@
 - `app-icon-configuration` `accepted` (2026-10-16; validación independiente `accept` en `docs/validations/app-icon-configuration.md`): icono de launcher Android desde `docs/design/icon.png` (**RGB sin alfa**, fondo `#F7EFE2`) — adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` = `@color/ic_launcher_background` + `@drawable/ic_launcher_foreground`) + PNG legacy por densidad (48/72/96/144/192) y `android:icon`/`android:roundIcon` en el manifest. Generado con `sips` (sin deps); foreground en `drawable-nodpi` (432 px, safe zone ~66 %), sin costura. Sin cambios en `:core`/`iosApp`/`init.sh`/build files/Kotlin/esquema. Ver `docs/technical-discovery.md`.
 - `ai-client-ports` `accepted` (2026-10-16; Session 049; validación independiente `accept` en `docs/validations/ai-client-ports.md`): puertos de IA `TranscribeClient`/`TtsClient`/`ImageClient`/`JevClient` + fakes deterministas en `:core`; chat/embedding siguen en `AiClient`; sin adaptadores reales ni build flag (feature posterior). Ver `docs/technical-discovery.md`.
 - `genres-catalog-persistence` `accepted` (2026-10-16; Session 050; validación independiente `accept` en `docs/validations/genres-catalog-persistence.md`): Etiquetas→**Géneros** en `:core` — `GenreCatalog` (12 fijos) + `normalizeGenres` (canonización case-insensitive) y esquema **v7** (`6.sqm`: `note_tag`→`note_genre` con copia verbatim + `DROP TABLE note_tag`); `Note.tags`→`Note.genres`, `noteTagQueries`→`genreQueries`, `normalizeTags`→`normalizeGenres`, `replaceTags`→`replaceGenres`; GDD emite `Géneros:`; renombre mecánico + rótulos ("Géneros"/"Nuevo género") en `:composeApp` (sin picker de catálogo). `:core:testDebugUnitTest` 47/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante OK. Ver `feature_list.json`.
-- `game-project-persistence` `passing` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, pendiente persistir `accepted` por la sesión integradora): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
+- `game-project-persistence` `accepted` (2026-10-19; Session 052 + validación independiente `accept` el 2026-10-19, persistida en Session 054): Proyecto de Juego singleton en `:core` — esquema **v8** (`7.sqm` aditivo) con `game_project` (`id = 'singleton'` + CHECK) y `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert; preserva `owner`/`createdAt`, límites 3/3/5, Géneros con `normalizeGenres`). Repair de validación: orden de Géneros case-insensitive en `get()`, regresión mixed-case y Scenario 10 con Adjunto/Enlace/Embedding. `:core:testDebugUnitTest` 55/0, `:composeApp:assembleDebug` OK, `./init.sh` exit 0; iOS no bloqueante 55/0. Ver `docs/specs/game-project-persistence.md`, `docs/validations/game-project-persistence.md` y `feature_list.json`.
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
-- Current next ready features: `genres-catalog-ui` (picker de chips) y `ai-fake-real-switch`; `game-project-persistence` queda `passing` con validación independiente `accept` (la sesión integradora persiste `accepted`). Ver `feature_list.json`.
+- Current next ready features: `genres-catalog-ui` (picker de chips) y `ai-fake-real-switch` (ambas en validación). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-19.
 
@@ -1109,3 +1109,20 @@
 - Files or artifacts updated: `SqlDelightGameProjectRepository.kt`, `GameProjectCheck.kt`, `MigrationCheck.kt`, `docs/validations/game-project-persistence.md` (nuevo), `feature_list.json`, `PROGRESS.md`; eliminado `docs/specs/audio.mp3`.
 - Known risk or unresolved issue: sin emulador Android (`adb` ausente) no se ejecutó smoke real de la migración sobre `playbook.db`; cobertura por tests del core sobre el esquema real. La lectura fail-fast de categoría desconocida sólo se cubre por inserción directa (camino de corrupción).
 - Next best step: la sesión integradora persiste `accepted` para `game-project-persistence`; luego continuar con `genres-catalog-ui` (picker de chips) o `ai-fake-real-switch`.
+
+### Session 054
+
+- Date: 2026-10-19
+- Goal: persistir la aceptación de `game-project-persistence` y dejar `develop` sincronizado como base de la Ola 1/2.
+- Completed:
+  - `feature_list.json`: `game-project-persistence` `passing` → `accepted`; evidencia de validación independiente y de la integración; notas actualizadas.
+  - `PROGRESS.md`: estado actual y próxima cola actualizados; sesión de integración registrada.
+  - `AGENTS.md`: cola de features actualizada (Proyecto aceptado; siguientes `genres-catalog-ui` y `ai-fake-real-switch`).
+- Verification run:
+  - `CI=true ./init.sh` → exit 0 en `develop` (Android-only, sin red ni dev servers).
+  - Validación independiente `accept` registrada en `docs/validations/game-project-persistence.md` (55 tests/0 fallos en Android/JVM e iOS; migración v7→v8).
+  - `git diff` de esta sesión acotado a `feature_list.json`, `PROGRESS.md` y `AGENTS.md`; sin cambios de código ni de esquema.
+- Evidence captured: este bloque de sesión y la entrada `accepted` en `feature_list.json`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: `genres-catalog-ui` y `ai-fake-real-switch` están en validación en otras sesiones; hay que rebasearlas sobre este `develop` después de cada accept/merge.
+- Next best step: cerrar la validación de `genres-catalog-ui` y `ai-fake-real-switch`; al aceptarlas, integrarlas en ese orden y luego abrir `brainstorming-wizard`, `inline-dictation-30s` y `ai-real-embeddings` (Ola 2).

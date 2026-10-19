@@ -901,7 +901,7 @@
       "local-persistence-sqldelight",
       "genres-catalog-persistence"
     ],
-    "status": "passing",
+    "status": "accepted",
     "verification": [
       "`./gradlew :core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM 55 tests, 0 failures: `GameProjectAndroidTest` 1/1 (`projectRoundTrip`, escenarios 1–9), `MigrationAndroidTest` 4/4 (v1→v8, v5→v6, v6→v7, v7→v8), `DatabaseMigrationAndroidTest` 1/1, `NoteRepositoryAndroidTest` 4/4 (`migrationV1ToV8PreservesNotes`) + suite existente.",
       "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL (vía `CI=true ./init.sh`, exit 0; gate Android-only).",
@@ -921,9 +921,10 @@
       "2026-10-19: `git status` sólo con archivos de la feature; sin deps nuevas, secrets ni cambios en `composeApp`/`iosApp`/`init.sh`/build files; sin smoke real en emulador (no se invocó `adb`).",
       "2026-10-19 (validación independiente + repair): se corrigió el orden de Géneros en `get()` (`sortedBy { it.lowercase() }`, mismo criterio que `normalizeGenres`) y se agregó la regresión mixed-case (`[\"apple\", \"Banana\"]`) en `GameProjectCheck`; se reforzó `verifyMigrationV7ToV8` sembrando Adjunto, Enlace y Embedding; se eliminó `docs/specs/audio.mp3` (untracked ajeno). `:core:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL, 55/0; `CI=true ./init.sh` → exit 0; iOS 55/0 + link del framework OK.",
       "2026-10-19 (validación independiente): controles negativos propios con hashes post-fix y restauración byte-idéntica: (a) `7.sqm` con `game_project_inspiration` renombrada (`8fc76855…`) → falla `MigrationAndroidTest.migratesV7ToV8AddingProjectTables`; (b) `save` sin borrar inspiraciones (`a6c1c6ab…`) → falla `projectRoundTrip` con `SQLiteException` (PK); (c) sin `require(size <= max)` (`a577384c…`) → falla `projectRoundTrip` (CHECK de posición). Restaurados a `7.sqm` `006d68bc…`, repositorio `fe7265a7…` y `GameProject.kt` `efb29c94…`; suite completa verde después. Detalle en `docs/validations/game-project-persistence.md`.",
-      "2026-10-19: validación independiente con veredicto `accept` (tras el repair); DDL `.sq`/`7.sqm` espejado 5/5, `Schema.version` getter 8, `.sqm` 1..7, paths protegidos sin cambios."
+      "2026-10-19: validación independiente con veredicto `accept` (tras el repair); DDL `.sq`/`7.sqm` espejado 5/5, `Schema.version` getter 8, `.sqm` 1..7, paths protegidos sin cambios.",
+      "2026-10-19: sesión integradora persiste `accepted` tras la validación independiente `accept` (registro en `docs/validations/game-project-persistence.md`); merge en `develop` verificado con `CI=true ./init.sh` exit 0."
     ],
-    "notes": "Esquema v8 (`7.sqm`): `game_project` (singleton `id = 'singleton'` con CHECK) + `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert). Sólo `:core`; sin UI/wiring, sin estado persistido `vacío`/`esbozado` (derivado), sin FK Nota→Proyecto y sin `delete()`. `passing`; validación independiente `accept` el 2026-10-19 (pendiente persistir `accepted` por la sesión integradora). Ver docs/specs/game-project-persistence.md y docs/validations/game-project-persistence.md."
+    "notes": "Esquema v8 (`7.sqm`): `game_project` (singleton `id = 'singleton'` con CHECK) + `game_project_genre`/`_inspiration`/`_key_mechanic`/`_out_of_scope`; `GameProject`/`GameProjectDraft`/`KeyMechanic`/`MechanicCategory` + `GameProjectRepository`/`SqlDelightGameProjectRepository` (`get`/`save` upsert). Sólo `:core`; sin UI/wiring, sin estado persistido `vacío`/`esbozado` (derivado), sin FK Nota→Proyecto y sin `delete()`. `accepted` (validación independiente `accept`, 2026-10-19; persistido por la sesión integradora). Ver docs/specs/game-project-persistence.md y docs/validations/game-project-persistence.md."
   },
   {
     "id": "brainstorming-wizard",
