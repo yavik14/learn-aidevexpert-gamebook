@@ -5,10 +5,10 @@ import kotlin.test.Test
 
 class MigrationIosTest {
     @Test
-    fun migratesV1ToV7PreservingNotes() {
+    fun migratesV1ToV8PreservingNotes() {
         val driver = inMemoryDriver(BlankTestSchema)
         try {
-            verifyMigrationV1ToV7(driver)
+            verifyMigrationV1ToV8(driver)
         } finally {
             driver.close()
         }
@@ -29,6 +29,16 @@ class MigrationIosTest {
         val driver = inMemoryDriver(BlankTestSchema)
         try {
             verifyMigrationV6ToV7(driver)
+        } finally {
+            driver.close()
+        }
+    }
+
+    @Test
+    fun migratesV7ToV8AddingProjectTables() {
+        val driver = inMemoryDriver(BlankTestSchema)
+        try {
+            verifyMigrationV7ToV8(driver)
         } finally {
             driver.close()
         }

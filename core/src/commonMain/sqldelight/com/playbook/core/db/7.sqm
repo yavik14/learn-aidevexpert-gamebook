@@ -1,0 +1,46 @@
+-- Migración v7 -> v8: agrega el Proyecto de Juego singleton (ficha) y sus
+-- tablas hijas. Es aditiva: no copia ni crea datos; el Proyecto nace con el
+-- onboarding o con el primer `save`. El DDL replica exactamente el de
+-- `GameProject.sq`; la equivalencia se cubre con `DatabaseMigrationCheck`.
+CREATE TABLE game_project (
+  id TEXT NOT NULL PRIMARY KEY CHECK (id = 'singleton'),
+  owner TEXT NOT NULL,
+  title TEXT,
+  core_loop TEXT,
+  audience TEXT,
+  concept TEXT,
+  fantasy TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE game_project_genre (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  genre TEXT NOT NULL,
+  PRIMARY KEY (project_id, genre)
+);
+
+CREATE TABLE game_project_inspiration (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 3)
+);
+
+CREATE TABLE game_project_key_mechanic (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 5)
+);
+
+CREATE TABLE game_project_out_of_scope (
+  project_id TEXT NOT NULL REFERENCES game_project(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (project_id, position),
+  CHECK (position >= 0 AND position < 3)
+);

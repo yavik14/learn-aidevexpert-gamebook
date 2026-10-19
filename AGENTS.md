@@ -30,8 +30,10 @@ el usuario **confirma**). Diseño en `DESIGN.md` (paleta `docs/design/paleta.png
 Próximas features en cola: las `not_started` de `feature_list.json` (revisión
 2026-10-15); `app-icon-configuration`, `ai-client-ports` y
 `genres-catalog-persistence` (Géneros: dominio + persistencia v7) quedaron
-implementadas y aceptadas; la siguiente ready es `genres-catalog-ui` (picker de
-chips), luego `game-project-persistence` (v8). Para iOS: el upload firmado
+implementadas y aceptadas; `game-project-persistence` (Proyecto, persistencia
+v8) quedó implementada y auto-verificada (`passing`), pendiente validación
+independiente. La siguiente ready es `genres-catalog-ui` (picker de chips). Para
+iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
