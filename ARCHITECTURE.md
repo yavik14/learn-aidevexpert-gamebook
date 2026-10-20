@@ -797,6 +797,21 @@ composeApp (Android app / commonMain) ──▶ core
   Nota (abre `NotesDestination.Edit(noteId)`); un mensaje explícito si no hay Notas
   indexadas, y un error con "Reintentar"; "Volver" siempre vuelve a la lista. Todos
   los estados se comunican con texto (nunca sólo color).
+- **Guardar respuesta Q&A como Nota (`save-answer-as-note`, 2026-10-20):** en
+  `Answered`, debajo de "Respuesta" y antes de "Fuentes", aparece "Guardar como
+  Nota" (`enabled = text.isNotBlank()`); en el resto de los estados no existe. La
+  confirmación es un `AlertDialog` con preview truncado (5 líneas/200 caracteres +
+  `…`), `Track: Sin track` y `Géneros: Ninguno`; `Cancelar`/dismiss no crea. La UI
+  pre-chequea duplicados con `existingNotes` e `isDuplicateBrainstormingNote` y
+  `App.saveQaAnswer(answerText)` repite el chequeo de forma autoritativa con
+  `noteRepository.getAll()`: la Nota se crea con
+  `NoteDraft(owner = LOCAL_OWNER_ID, body = answerText.trim(), track = null,
+  genres = emptyList())`, `status` inicial `CAPTURED`, y sólo en el camino
+  exitoso corre `indexBestEffort(created)` + `reload()`. No se persisten citas,
+  fuentes, scores ni `RetrievedNote`; tras guardar se queda en Q&A con feedback
+  inline `Nota guardada.` (sin navegación). Es el mismo patrón de UI tonta +
+  callback que el wizard, reutilizando `NoteSaveResult`; no agrega modelos, tablas
+  ni migraciones.
 - **Orquestación de dictado (`App`):** "Dictar nota" en la lista abre
   `NotesDestination.Create` y llama `startDictation()`; el botón "Dictar" del
   editor hace lo mismo sin cambiar de destino. `startDictation()` cancela el job

@@ -324,6 +324,42 @@ fun App(
         }
 
         /**
+         * Crea una Nota desde una respuesta del Q&A. Sólo persiste la respuesta
+         * (`body`), sin Track ni Géneros y sin citas/fuentes: el retrieval es
+         * efímero. El chequeo de duplicado y la creación corren dentro de
+         * [runCatching]; un fallo de lectura/escritura devuelve
+         * [NoteSaveResult.FAILED] sin propagar. El indexado y el refresh sólo
+         * ocurren en el camino exitoso (best-effort: un fallo de indexado no
+         * revierte la Nota).
+         */
+        fun saveQaAnswer(answerText: String): NoteSaveResult {
+            val body = answerText.trim()
+            if (body.isBlank()) return NoteSaveResult.FAILED
+            val created = runCatching {
+                val duplicate = noteRepository.getAll().any { note ->
+                    isDuplicateBrainstormingNote(note, body, null, emptyList())
+                }
+                if (duplicate) {
+                    null
+                } else {
+                    noteRepository.create(
+                        NoteDraft(
+                            owner = LOCAL_OWNER_ID,
+                            body = body,
+                            track = null,
+                            genres = emptyList(),
+                        ),
+                    )
+                }
+            }.getOrElse { return NoteSaveResult.FAILED }
+
+            if (created == null) return NoteSaveResult.DUPLICATE
+            indexBestEffort(created)
+            reload()
+            return NoteSaveResult.SAVED
+        }
+
+        /**
          * Re-indexado **manual** disparado por el usuario desde el editor. Reusa
          * el mismo orquestador y refresca la UI; no agenda nada. El reintento
          * automático de las `PENDING` ocurre al arrancar ([PendingIndexingRetry]);
@@ -926,6 +962,8 @@ fun App(
 
             NotesDestination.Ask -> AskNotesScreen(
                 state = askState,
+                existingNotes = notes,
+                onSaveNote = ::saveQaAnswer,
                 onAsk = ::ask,
                 onOpenSource = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
