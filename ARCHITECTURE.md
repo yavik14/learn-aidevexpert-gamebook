@@ -410,6 +410,20 @@ composeApp (Android app / commonMain) ──▶ core
   texto al borrador y el Guardar existente (`update` + `indexBestEffort`) lo
   re-indexa. El wiring pasa `aiRuntime.transcribeClient` a `App(...)`; no cambia
   `AiRuntime`/`TranscribeClient` ni el esquema.
+- **Generación de imagen desde texto (`image-generation-from-text`, 2026-10-20):**
+  `TextImageGenerationService` (`:core`) recibe `ImageClient` y `Diagnostics`.
+  `generate(prompt)` normaliza el prompt (vacío → `EmptyPrompt` **sin** llamar al
+  puerto), llama `generateImage(trimmed)` una vez y valida el `GeneratedImage`
+  (bytes no vacíos, `mimeType` no vacío e `image/*`; inválido → `InvalidImage`).
+  `AiClientException` → `Failed` con diagnóstico `IMAGE`/`image_generation_failed`;
+  la imagen inválida registra `image_generation_invalid`. No persiste ni indexa.
+  La UI (`App` + `ImageGenerationDialog`) ofrece "Generar con IA" desde el
+  diálogo "Agregar imagen" de la lista, muestra carga/error/cancelación y al
+  éxito navega a `CreateWithImage(PickedImage)`; el Guardar existente
+  (`saveNoteWithImage`) persiste el Adjunto `IMAGE` con ruta relativa/mime real,
+  sin reindexar por la imagen. `FakeImageClient` devuelve un PNG 1×1 decodificable
+  con chunk `tEXt` determinista (Base64 + CRC32) antes de `IEND`, para que el
+  smoke fake muestre preview/miniatura sin red.
 - **Sugerencias de Brainstorming (`brainstorming-ai-suggestions`, 2026-10-19):**
   `BrainstormingSuggestionService` (`:core`) arma un `GenerateRequest` por paso
   (`BrainstormingStep`; prompt con marcador + `STEP=<enum>` y contexto acotado del

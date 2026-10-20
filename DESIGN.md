@@ -105,8 +105,12 @@ diseño de juegos para un único autor. Se organiza en tres `Track`
 
 ## Generated Concept Images
 
-Ninguna: no hay skill de generación de imágenes en el runtime actual. la
-dirección se describe en prosa/tokens.
+La app genera conceptos visuales desde texto con el modelo `image` (runtime
+fake/real del MVP) y los adjunta a una Nota. La superficie es la acción
+**"Generar con IA"** dentro del diálogo "Agregar imagen" de la pantalla
+principal: prompt → carga → previsualización en el editor → Guardar. La imagen
+resultante se ve con las miniaturas existentes (tarjeta de Nota). No hay
+historial de prompts, edición/retocado ni múltiples imágenes por Nota.
 
 ## Product Feel
 

@@ -50,6 +50,16 @@
     (normaliza `.`/`..` y separadores) y no resuelve symlinks. Se acepta porque
     las rutas las genera la propia app (UUID), el usuario es único y no hay
     entrada externa de paths; no se cambia el contrato de `read`/`delete`.
+- **Generación de imagen desde texto:** **implementada** en
+  `image-generation-from-text` (2026-10-20). `TextImageGenerationService`
+  (`:core`) valida prompt/`GeneratedImage`; la UI ofrece "Generar con IA" desde
+  la lista y reutiliza `CreateWithImage`/`saveNoteWithImage` para persistir el
+  Adjunto `IMAGE`. El fake devuelve un PNG decodificable con chunk `tEXt`
+  determinista, así el smoke fake muestra preview/miniatura sin red. El store
+  conserva la extensión `.jpg` fija (el mime real va en la columna) y el
+  proveedor real puede devolver JPEG; ambos comportamientos están aceptados.
+  **Sigue abierto** el smoke real key-gated y el cacheo de miniaturas. Sin
+  esquema, deps ni cambios de `init.sh`.
 - **Migración de Etiquetas → Géneros:** **resuelto** en
   `genres-catalog-persistence` (2026-10-16): las etiquetas libres existentes se
   copian **verbatim** como **Géneros personalizados** de cada Nota mediante el
