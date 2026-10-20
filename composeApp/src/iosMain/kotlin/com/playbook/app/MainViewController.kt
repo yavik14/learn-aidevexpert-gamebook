@@ -141,6 +141,7 @@ fun MainViewController(): UIViewController {
             semanticLinkingService = linking,
             aiClient = ai,
             transcribeClient = runtime.transcribeClient,
+            jevClient = runtime.jevClient,
             diagnostics = diag,
         )
     }

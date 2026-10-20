@@ -122,8 +122,9 @@
 - La captura nunca debe bloquearse por la IA.
 - SQLDelight + similitud en memoria alcanza sin una vector DB dedicada.
 - Los criterios de éxito son de aprendizaje, no de escala.
-- Sin clasificación IA, el usuario organiza cada Nota eligiendo `track` y Géneros;
-  la auto-organización no es un requisito del MVP.
+- La IA **sugiere** `track` y Géneros y el usuario **confirma o edita**
+  (`ai-suggest-classification`); la auto-asignación y la clasificación automática
+  al indexar no son requisitos del MVP.
 
 ## Risks
 - **IA real (red/costo/clave):** la integración con el proveedor real depende de
@@ -145,8 +146,12 @@
   `docs/specs/brainstorming-ai-suggestions.md`). La **calidad real** y el formato
   del proveedor no se verifican hasta `ai-real-chat` (ADR 0004); el fake no
   valida calidad semántica.
-- **Sin clasificación IA**, Notas mal clasificadas ensucian el GDD; la UI debe
-  facilitar elegir/corregir `track` y Géneros.
+- **Calidad real de `jev` pendiente de smoke key-gated:** la sugerencia de
+  clasificación ya existe con confirmación explícita y fake determinista
+  (`ai-suggest-classification`, 2026-10-20), pero la semántica del modelo real
+  (aciertos de `Track`/Género, formato/`none`) no se verifica en el gate. La UI
+  facilita confirmar/descartar y corregir `track` y Géneros; la prueba real queda
+  como follow-up fuera del gate (sin red ni API key en tests).
 - **Verificación del STT no determinista** (audio real puede requerir dispositivo
   físico) y **doble cliente de micrófono en Android** (`MediaRecorder` +
   `SpeechRecognizer`): mitigación por degradación tolerante; persistente desde

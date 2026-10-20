@@ -1559,3 +1559,48 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y
   OK, `./init.sh` exit 0 y link iOS OK. Controles negativos (a/b/c)
   reproducidos y restaurados. Smoke Android manual no ejecutado (sin
   `adb`/emulador en el entorno).
+
+## Classification Suggestion Decisions (ai-suggest-classification)
+
+Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
+`docs/specs/ai-suggest-classification.md`.
+
+- **Caso de uso puro en `:core`.** `ClassificationSuggestionService(jevClient,
+  timeoutMillis = 20_000)` envuelve `JevClient.suggest`: recorta el texto, no
+  llama al puerto si queda vacío, aplica `withTimeout` y normaliza los Géneros
+  con `normalizeGenres`. Devuelve `Success`/`Empty`/`Failed`; `AiClientException`
+  y `TimeoutCancellationException` se mapean a `Failed` sin lanzar hacia la UI,
+  mientras que una cancelación del llamador se propaga.
+- **Aplicación explícita, no auto-asignación.** `applyClassificationSuggestion`
+  reemplaza el `Track` sólo si la sugerencia trae uno (un `null` conserva el
+  actual) y **fusiona** los Géneros normalizados (unión) con los del usuario:
+  sin duplicados, sin pérdidas y idempotente. La propuesta no se persiste ni
+  modifica `Note`/`NoteDraft`/`NoteStatus`/indexado ni el esquema (sigue v8).
+- **Timeout best-effort.** Los 20 s son un tope de espera de la UI; como el
+  transporte Android es bloqueante, la cancelación del I/O puede demorar hasta
+  su `readTimeout`. Guardar nunca espera a la sugerencia.
+- **`FakeJevClient` alineado al catálogo.** Devuelve `Track` y un Género de
+  `GenreCatalog.GENRES` deterministas por el mismo `text.hashCode()` (sin
+  `Random` ni red). El camino de Género personalizado se cubre con un stub
+  test-only, no con el fake de producción.
+- **UI efímera en el editor.** `NoteEditorScreen` (Nueva nota, Nueva nota con
+  imagen y Edición) muestra "Sugerir clasificación" debajo del cuerpo/dictado y
+  antes de `Track`, habilitado sólo con `body` no vacío y fuera de carga. Los
+  estados `Idle`/`Loading`/`Ready`/`Empty`/`Error` viven en Compose
+  (`rememberCoroutineScope` + `Job`, sin ViewModel/Flow); un contador de request
+  descarta resultados tardíos y los cambios manuales de body/track/Géneros
+  cancelan y vuelven a `Idle`. La tarjeta usa `LabelChip` para el `Track` y
+  `GenreLabelChip` para los Géneros.
+- **Wiring.** `App` recibe `jevClient: JevClient`, crea el servicio recordado y
+  lo pasa a los tres editores; `MainActivity` pasa `aiRuntime.jevClient` y
+  `MainViewController` `runtime.jevClient` (iOS congelado, runtime fake). No
+  cambian `AiRuntime`, `AiPorts.kt`, el adaptador real, build files ni
+  dependencias.
+- **Verificación.** `:core:testDebugUnitTest` 31 suites/96 tests/0 failures y
+  `:core:iosSimulatorArm64Test` 31/96/0 (6 checks nuevos en
+  `ClassificationSuggestion*Test`), `:composeApp:assembleDebug` y link iOS OK,
+  `CI=true ./init.sh` exit 0, controles negativos (a/b/c) reproducidos y
+  restaurados, y smoke Android con DB intacta antes de Guardar y persistencia
+  tras relanzar. `Empty`/`Error` no son alcanzables con el fake de producción
+  (cubiertos por tests del core); con el fake la carga es instantánea y no se
+  pudo capturar "Sugiriendo…" en el smoke.

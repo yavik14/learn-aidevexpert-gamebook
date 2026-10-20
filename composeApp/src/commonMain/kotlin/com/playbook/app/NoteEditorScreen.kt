@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,16 +32,32 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.playbook.core.ai.ClassificationSuggestion
+import com.playbook.core.ai.ClassificationSuggestionResult
+import com.playbook.core.ai.ClassificationSuggestionService
+import com.playbook.core.ai.applyClassificationSuggestion
 import com.playbook.core.model.Attachment
 import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
 import com.playbook.core.model.normalizeGenres
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+/** Estado efímero de la sugerencia de clasificación en el editor. */
+private sealed interface SuggestionUiState {
+    data object Idle : SuggestionUiState
+    data object Loading : SuggestionUiState
+    data class Ready(val suggestion: ClassificationSuggestion) : SuggestionUiState
+    data object Empty : SuggestionUiState
+    data object Error : SuggestionUiState
+}
 
 /**
  * Editor de nota de texto. Sirve para crear (modo `isEditing = false`) y editar
@@ -79,6 +97,13 @@ import com.playbook.core.model.normalizeGenres
  *   consumen una sola vez con [onTranscribedTextConsumed]. Con `body` vacío el
  *   texto se aplica directo; con texto existente se abre un diálogo con vista
  *   previa y "Anexar"/"Reemplazar"/"Cancelar". Nunca hay auto-guardado.
+ * - "Sugerir clasificación" (debajo del cuerpo/dictado y antes de `Track`) pide
+ *   una propuesta efímera a [classificationSuggestionService]: sólo acción
+ *   explícita, deshabilitada con `body` en blanco o mientras carga. "Confirmar"
+ *   aplica al borrador local (`Track` sugerido reemplaza, Géneros se fusionan
+ *   normalizados) y "Descartar" no toca nada; ninguno persiste. Cambiar a mano
+ *   el `body`, el `Track` o los Géneros cancela/descarta la propuesta, y Guardar
+ *   nunca espera a la IA.
  *
  * La pantalla es "tonta": mantiene el borrador local y emite `onSave`/`onDelete`/
  * `onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`/`onTranscribe`; la
@@ -108,6 +133,7 @@ fun NoteEditorScreen(
     transcribedText: String? = null,
     onTranscribe: ((String) -> Unit)? = null,
     onTranscribedTextConsumed: ((String) -> Unit)? = null,
+    classificationSuggestionService: ClassificationSuggestionService,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
@@ -122,11 +148,54 @@ fun NoteEditorScreen(
     var pendingTranscription by remember { mutableStateOf<String?>(null) }
     var transcriptionNotice by remember { mutableStateOf<String?>(null) }
 
+    // La sugerencia es estado de UI efímero: no se persiste. El contador de
+    // request descarta resultados tardíos aunque la cancelación del `Job` llegue
+    // después de que el servicio ya respondió.
+    val suggestionScope = rememberCoroutineScope()
+    var suggestionState by remember { mutableStateOf<SuggestionUiState>(SuggestionUiState.Idle) }
+    var suggestionJob by remember { mutableStateOf<Job?>(null) }
+    var suggestionRequest by remember { mutableStateOf(0) }
+
+    fun discardSuggestion() {
+        suggestionRequest++
+        suggestionJob?.cancel()
+        suggestionJob = null
+        suggestionState = SuggestionUiState.Idle
+    }
+
+    fun requestSuggestion() {
+        val text = body.trim()
+        if (text.isEmpty()) return
+        suggestionJob?.cancel()
+        val request = ++suggestionRequest
+        suggestionState = SuggestionUiState.Loading
+        suggestionJob = suggestionScope.launch {
+            val result = classificationSuggestionService.suggest(text)
+            if (request != suggestionRequest) return@launch
+            suggestionState = when (result) {
+                is ClassificationSuggestionResult.Success ->
+                    SuggestionUiState.Ready(result.suggestion)
+
+                ClassificationSuggestionResult.Empty -> SuggestionUiState.Empty
+                is ClassificationSuggestionResult.Failed -> SuggestionUiState.Error
+            }
+            suggestionJob = null
+        }
+    }
+
+    fun confirmSuggestion(suggestion: ClassificationSuggestion) {
+        val applied = applyClassificationSuggestion(selectedTrack, genres, suggestion)
+        selectedTrack = applied.track
+        genres = applied.genres
+        discardSuggestion()
+    }
+
     // El texto final del dictado se anexa una sola vez. Mientras esté pendiente,
     // Guardar queda deshabilitado para no persistir el audio sin su texto.
     LaunchedEffect(dictatedText) {
         val dictated = dictatedText
         if (!dictated.isNullOrBlank()) {
+            discardSuggestion()
             body = appendDictation(body, dictated)
             onDictatedTextConsumed?.invoke(dictated)
         }
@@ -243,7 +312,12 @@ fun NoteEditorScreen(
             }
             OutlinedTextField(
                 value = body,
-                onValueChange = { body = it },
+                onValueChange = {
+                    if (it != body) {
+                        body = it
+                        discardSuggestion()
+                    }
+                },
                 label = { Text(text = "Cuerpo") },
                 placeholder = { Text(text = "Escribí tu idea…") },
                 modifier = Modifier
@@ -259,6 +333,14 @@ fun NoteEditorScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            ClassificationSuggestionSection(
+                state = suggestionState,
+                enabled = body.isNotBlank(),
+                onSuggest = ::requestSuggestion,
+                onConfirm = ::confirmSuggestion,
+                onDiscard = ::discardSuggestion,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             Text(text = "Track", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -268,18 +350,30 @@ fun NoteEditorScreen(
                 TrackOption(
                     label = "Sin track",
                     selected = selectedTrack == null,
-                    onClick = { selectedTrack = null },
+                    onClick = {
+                        selectedTrack = null
+                        discardSuggestion()
+                    },
                 )
                 Track.entries.forEach { track ->
                     TrackOption(
                         label = track.code,
                         selected = selectedTrack == track,
-                        onClick = { selectedTrack = track },
+                        onClick = {
+                            selectedTrack = track
+                            discardSuggestion()
+                        },
                     )
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            GenrePicker(selected = genres, onChange = { genres = it })
+            GenrePicker(
+                selected = genres,
+                onChange = {
+                    genres = it
+                    discardSuggestion()
+                },
+            )
             Spacer(modifier = Modifier.height(24.dp))
             if (isEditing && onOpenRelated != null) {
                 // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
@@ -448,6 +542,147 @@ private fun AudioAttachmentSection(
         }
     }
 }
+
+
+/**
+ * Sección de sugerencia de clasificación. `Idle`/`Loading` muestran la acción
+ * explícita (con "Sugiriendo…" deshabilitado mientras corre); `Ready` muestra la
+ * tarjeta con `Track` y chips de Género; `Empty`/`Error` explican sin detalles
+ * técnicos. Confirmar/Descartar/Reintentar son las únicas acciones; la IA nunca
+ * guarda ni auto-asigna.
+ */
+@Composable
+private fun ClassificationSuggestionSection(
+    state: SuggestionUiState,
+    enabled: Boolean,
+    onSuggest: () -> Unit,
+    onConfirm: (ClassificationSuggestion) -> Unit,
+    onDiscard: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        when (state) {
+            SuggestionUiState.Idle -> {
+                OutlinedButton(
+                    onClick = onSuggest,
+                    enabled = enabled,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Sugerir clasificación")
+                }
+            }
+
+            SuggestionUiState.Loading -> {
+                OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Sugiriendo…")
+                }
+            }
+
+            is SuggestionUiState.Ready -> {
+                val suggestion = state.suggestion
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Sugerencia de la IA",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Track:",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            LabelChip(text = suggestion.track?.code ?: "Sin track")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (suggestion.genres.isEmpty()) {
+                            Text(
+                                text = "Sin géneros sugeridos",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                suggestion.genres.forEach { genre ->
+                                    GenreLabelChip(text = genre)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { onConfirm(suggestion) },
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                            ) {
+                                Text(text = "Confirmar")
+                            }
+                            OutlinedButton(
+                                onClick = onDiscard,
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                            ) {
+                                Text(text = "Descartar")
+                            }
+                        }
+                    }
+                }
+            }
+
+            SuggestionUiState.Empty -> {
+                Text(
+                    text = "La IA no propuso una clasificación.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onDiscard,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Descartar")
+                }
+            }
+
+            SuggestionUiState.Error -> {
+                Text(
+                    text = "No se pudo obtener la sugerencia.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onSuggest,
+                        enabled = enabled,
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                    ) {
+                        Text(text = "Reintentar")
+                    }
+                    OutlinedButton(
+                        onClick = onDiscard,
+                        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                    ) {
+                        Text(text = "Descartar")
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 /**
  * Panel de dictado inline de Nueva nota: `Idle` invita a dictar; `Listening`

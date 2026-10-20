@@ -363,6 +363,21 @@ composeApp (Android app / commonMain) ──▶ core
   `FakeAiPorts.kt` (`FakeTranscribeClient`/`FakeTtsClient`/`FakeImageClient`/
   `FakeJevClient`). El bundle `AiRuntime` y la selección fake/real son de
   `ai-fake-real-switch`; las features de cada caso de uso consumen los puertos.
+- **Sugerencia de clasificación (`ai-suggest-classification`, 2026-10-20):**
+  `ClassificationSuggestionService(jevClient, timeoutMillis = 20_000)` en
+  `ClassificationSuggestions.kt`. `suggest(text)` recorta el texto y, si queda
+  vacío, devuelve `Empty` **sin** llamar al puerto; si no, usa
+  `withTimeout` + `JevClient.suggest`, normaliza los Géneros con
+  `normalizeGenres` y devuelve `Success`/`Empty` (`Failed` para
+  `AiClientException` o timeout; la cancelación del llamador se propaga). La
+  función pura `applyClassificationSuggestion` reemplaza el `Track` sólo si la
+  sugerencia lo trae (un `null` conserva el actual) y **fusiona** los Géneros
+  normalizados sin duplicados ni pérdidas. Nada se persiste, ni se toca
+  `NoteStatus`/indexado/esquema; el usuario confirma o descarta en el editor.
+  `FakeJevClient` devuelve un Género de `GenreCatalog.GENRES` determinista por
+  hash. `App` recibe `jevClient` por separado de `aiClient` y crea el servicio
+  recordado para los tres editores (`Create`, `CreateWithImage`, `Edit`); los
+  roots pasan `aiRuntime.jevClient` (iOS sigue fake).
 - **Selección fake/real y runtime OpenAI-compatible (`ai-fake-real-switch`,
   2026-10-19):** `AiRuntime` (`com.playbook.core.ai.openai`) agrupa `aiClient`
   (`AiClient`), los 4 puertos, `AiAvailability` y `embeddingDimension`.
@@ -726,6 +741,13 @@ composeApp (Android app / commonMain) ──▶ core
   texto → `AlertDialog` con vista previa y "Anexar" (misma semántica que
   `appendDictation`)/"Reemplazar" (sólo el texto)/"Cancelar" (sin cambios).
   `onTranscribedTextConsumed` limpia el texto de `App`; nunca hay auto-guardado.
+  Entre el cuerpo/dictado y `Track` ofrece "Sugerir clasificación" (sólo con
+  `body` no vacío y fuera de carga); la propuesta es estado local efímero
+  (`Idle`/`Loading`/`Ready`/`Empty`/`Error`) con una tarjeta de `Track` + chips
+  `GenreLabelChip`, y acciones Confirmar/Descartar/Reintentar. Confirmar aplica
+  con `applyClassificationSuggestion` al borrador (sin guardar); cambiar a mano
+  `body`/`track`/Géneros cancela el `Job`, ignora resultados tardíos y vuelve a
+  `Idle`. `Guardar` nunca espera ni se bloquea por la IA.
   Mantiene el borrador local
   (`body`/`track`/`genres`) y emite
   `onSave(body, track, genres)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`/`onTranscribe`;

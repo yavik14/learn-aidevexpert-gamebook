@@ -22,6 +22,8 @@ import com.playbook.core.ai.AiClient
 import com.playbook.core.ai.AudioAttachmentTranscriptionService
 import com.playbook.core.ai.AudioTranscriptionResult
 import com.playbook.core.ai.BrainstormingSuggestionService
+import com.playbook.core.ai.ClassificationSuggestionService
+import com.playbook.core.ai.JevClient
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
@@ -129,6 +131,7 @@ fun App(
     semanticLinkingService: SemanticLinkingService,
     aiClient: AiClient,
     transcribeClient: TranscribeClient,
+    jevClient: JevClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     MaterialTheme {
@@ -161,6 +164,11 @@ fun App(
         val scope = rememberCoroutineScope()
         val suggestionService = remember(aiClient) {
             BrainstormingSuggestionService(aiClient)
+        }
+        // Sugerencia de clasificación (Track/Géneros) con `jev`: efímera y sólo
+        // por acción explícita del editor; nunca persiste ni auto-asigna.
+        val classificationSuggestionService = remember(jevClient) {
+            ClassificationSuggestionService(jevClient)
         }
 
         val imagePicker = rememberImagePicker(
@@ -746,6 +754,7 @@ fun App(
                 onStartDictation = ::startDictation,
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
+                classificationSuggestionService = classificationSuggestionService,
             )
 
             is NotesDestination.CreateWithImage -> NoteEditorScreen(
@@ -766,6 +775,7 @@ fun App(
                 onStartDictation = ::startDictation,
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
+                classificationSuggestionService = classificationSuggestionService,
             )
 
             is NotesDestination.Edit -> {
@@ -830,6 +840,7 @@ fun App(
                                 transcribeAttachment(note.id, attachmentId)
                             },
                             onTranscribedTextConsumed = ::consumeTranscribedText,
+                            classificationSuggestionService = classificationSuggestionService,
                         )
                     }
                 }
