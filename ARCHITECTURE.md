@@ -424,6 +424,18 @@ composeApp (Android app / commonMain) ──▶ core
   sin reindexar por la imagen. `FakeImageClient` devuelve un PNG 1×1 decodificable
   con chunk `tEXt` determinista (Base64 + CRC32) antes de `IEND`, para que el
   smoke fake muestre preview/miniatura sin red.
+- **Lectura en voz alta (`tts-read-aloud`, 2026-10-20):**
+  `ReadAloudService` (`:core`) normaliza el texto (vacío → `EmptyText` sin llamar
+  al puerto; recorte exacto a 4096) y devuelve `Ready(audio)`/`Failed` desde
+  `TtsClient.synthesize`; `buildGddNarration` construye la narración determinista
+  del GDD (título, ficha y cuerpos no vacíos por sección). `App` posee un único
+  `ReadAloudUiState` (`Detenido`/`Preparando`/`Reproduciendo`/`Error`), un único
+  `ReadAloudPlayer` y un request-id que descarta resultados tardíos; detiene al
+  navegar/cerrar. El player es `expect`/`actual`: Android usa `MediaPlayer` +
+  `MediaDataSource` sobre bytes en memoria (sin archivos); iOS congelado aporta un
+  actual mínimo sin playback. `FakeTtsClient` devuelve un WAV PCM determinista
+  (`audio/wav`) para el smoke; el adaptador real (MP3) no cambia. Sin Adjuntos,
+  caché, audio focus, timeout propio ni cambios de esquema.
 - **Sugerencias de Brainstorming (`brainstorming-ai-suggestions`, 2026-10-19):**
   `BrainstormingSuggestionService` (`:core`) arma un `GenerateRequest` por paso
   (`BrainstormingStep`; prompt con marcador + `STEP=<enum>` y contexto acotado del
@@ -655,9 +667,10 @@ composeApp (Android app / commonMain) ──▶ core
   `Brainstorming`/`Related(noteId)`),
   `refreshKey`, `relatedNotes`, `dictation` (`DictationUiState`), `dictatedText`
   (texto final pendiente de anexar), `pendingAudio` (`RecordedAudio?`),
-  `dictationJob`, `askState` (`AskUiState`), el estado de captura de imagen
-  (`showImageSourceDialog`/`imageError`) y el estado del onboarding
-  (`onboardingBusy`/`onboardingError`). Recibe `aiClient` y crea
+  `dictationJob`, `askState` (`AskUiState`), `readAloudState`
+  (`ReadAloudUiState`) + player/request-id de lectura en voz alta, el estado de
+  captura de imagen (`showImageSourceDialog`/`imageError`) y el estado del
+  onboarding (`onboardingBusy`/`onboardingError`). Recibe `aiClient` y crea
   `BrainstormingSuggestionService` con `remember(aiClient)` para el wizard. La
   lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
