@@ -47,7 +47,9 @@ columna/relación `note_tag`→`note_genre` se migra **verbatim**.
 `game-project-persistence` agrega el **Proyecto de Juego** singleton (esquema v8
 con `7.sqm`): ficha estructurada en `game_project` + tablas hijas y
 `GameProjectRepository` (`get`/`save` upsert); `brainstorming-wizard` cablea ese
-repositorio a la UI mediante un wizard de 9 pasos.
+repositorio a la UI mediante un wizard de 9 pasos. `gdd-document-hybrid` convierte
+el GDD en documento del Proyecto (ficha + Notas por Track) y `gdd-export-hybrid`
+incluye esa ficha en el Markdown compartido reutilizando la misma proyección.
 
 ## Modules
 
@@ -856,7 +858,8 @@ composeApp (Android app / commonMain) ──▶ core
 - **Pantalla `GddScreen`** (`:composeApp/commonMain`): render fino sobre
   `buildGddDocument(project, notes)` con `remember(project, notes)`. Cabecera
   **fija** `GDD — <título>` (o "GDD") + total de Notas y los botones "Volver" y
-  **"Compartir"** (deshabilitado si `notes.isEmpty()`). Debajo, un `LazyColumn`
+  **"Compartir"** (habilitado con Notas o con ficha con título/campos; deshabilitado
+  sólo si no hay contenido exportable). Debajo, un `LazyColumn`
   con la ficha en una `Card` destacada (encabezado "Proyecto", label
   `labelMedium` arriba y valor `bodyMedium` debajo, multilínea) y las secciones
   de Notas, que scrollean juntas. Cada sección muestra título/conteo ("N
@@ -880,21 +883,25 @@ composeApp (Android app / commonMain) ──▶ core
   `loadThumbnail` ya hoisteados por `App` (recargados por `refreshKey`); no lee la
   base dentro del cuerpo de composición. No hay DI/`ViewModel`/Flow ni
   esquema/dependencias nuevos.
-- **Export a Markdown (`gdd-export`, proyección pura en `:core`):**
-  `com.playbook.core.gdd.buildGddMarkdown(notes, now): String` reusa `buildGdd`
-  para agrupar/ordenar y **omite** las secciones vacías. Documento determinista:
-  encabezado sin fecha (`# GDD — Playbook` + `Total: N notas`, singular
-  `Total: 1 nota`), secciones `## <track.code>`/`## Sin track` en orden fijo, por
-  Nota `### <título>` (primera línea del `body` trim, escapada; fallback
-  `Nota <now>` con `body` vacío), el **resto** del `body` (escapado, sin repetir
-  la primera línea) y `Géneros: a, b — Estado: <status.code>` (Géneros
-  escapados, `status.code` no; sin Géneros, sólo `Estado: ...`). Bloques
-  separados por una línea en blanco y documento terminado en `\n`. El escapado es
-  un backslash-escape del set `` \ ` * _ { } [ ] ( ) # + - . ! | > ``. `now` es un
-  `String` inyectado (lo formatea la plataforma) para que `:core` no dependa de
-  APIs de fecha. Sin tabla, query, migración ni dependencias. El export sigue
-  incluyendo **sólo Notas** (sin ficha) en `gdd-document-hybrid`; agregar la
-  ficha al Markdown es `gdd-export-hybrid`.
+- **Export híbrido a Markdown (`gdd-export-hybrid`; proyección pura en `:core`):**
+  `com.playbook.core.gdd.buildGddMarkdown(project, notes, now): String` reusa
+  `buildGddDocument`/`buildGdd` y **omite** secciones vacías sin duplicar Notas.
+  El overload `buildGddMarkdown(notes, now)` delega con `project = null` y queda
+  byte-idéntico al contrato de `gdd-export`. Documento determinista: cabecera
+  `# GDD — <título>` (título escapado) o `# GDD — Playbook`, `Total: N notas`
+  (singular `Total: 1 nota`) y, si la ficha tiene campos, `## Proyecto` con
+  `- **<Label>:** <valor escapado>` en el orden de `GddDocument` y mecánicas como
+  sub-viñetas `  - Categoría · descripción`. Debajo van las secciones
+  `## <title>` en orden fijo, por Nota `### <título>` (primera línea del `body`
+  trim, escapada; fallback `Nota <now>` con `body` vacío), el **resto** del
+  `body` (escapado, sin repetir la primera línea) y `Géneros: a, b — Estado:
+  <status.code>` (Géneros escapados, `status.code` no). Los valores de la ficha
+  se colapsan a una línea y se escapan con el set
+  `` \ ` * _ { } [ ] ( ) # + - . ! | > ``; labels/prefijos generados no se
+  escapan. Bloques separados por una línea en blanco y documento terminado en
+  `\n`. `now` es un `String` inyectado (lo formatea la plataforma) para que
+  `:core` no dependa de APIs de fecha. Sin tabla, query, migración ni
+  dependencias.
 - **Puerto de share `GddSharer` (`:composeApp`, expect/actual):** `interface
   GddSharer { fun share(markdown: String): Boolean }` +
   `@Composable expect fun rememberGddSharer()` y
@@ -906,8 +913,9 @@ composeApp (Android app / commonMain) ──▶ core
   `NSDateFormatter` en iOS. Todo **en memoria**: sin archivos, `FileProvider`,
   permisos, persistencia ni backend. "Compartir" construye el Markdown, llama
   `share` y muestra un **snackbar** ("Listo para compartir"/"No disponible") con un
-  `Scaffold`/`SnackbarHostState` local a la pantalla. El share no recibe la ficha:
-  `App` sólo pasa `project` a `GddScreen` para el render del documento.
+  `Scaffold`/`SnackbarHostState` local a la pantalla. `GddScreen` invoca el export
+  híbrido con `project`/`notes`; `App` sólo pasa `project` y el mecanismo de share
+  no cambia.
 
 ## Enlaces (notas relacionadas)
 
