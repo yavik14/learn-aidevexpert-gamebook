@@ -594,6 +594,7 @@ fun App(
 
             NotesDestination.Gdd -> GddScreen(
                 notes = notes,
+                project = project,
                 attachmentCounts = attachmentCounts,
                 imagePaths = imagePaths,
                 loadThumbnail = loadThumbnail,

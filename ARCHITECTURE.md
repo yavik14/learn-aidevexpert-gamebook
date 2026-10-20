@@ -804,7 +804,7 @@ composeApp (Android app / commonMain) ──▶ core
 
 ## GDD
 
-- **Proyección pura en `:core`** (`com.playbook.core.gdd`): `GddSection(track,
+- **Proyección pura de Notas en `:core`** (`com.playbook.core.gdd`): `GddSection(track,
   notes)` y `buildGdd(notes): List<GddSection>`. Agrupa por `track` en orden fijo
   (`Track.entries`: `mecánicas`, `personajes`, `historia`) y añade una sección
   "Sin track" (`track = null`) al final **sólo** si hay notas sin `track`. Las
@@ -814,18 +814,35 @@ composeApp (Android app / commonMain) ──▶ core
   SQLDelight ni de `AiClient`: el GDD **no es una entidad persistida**, es una
   vista agregada sobre las Notas (`docs/domain-model.md`), sin tabla, query ni
   migración propias.
+- **Documento híbrido (`gdd-document-hybrid`):** `buildGddDocument(project,
+  notes): GddDocument` vive en `:core` y es puro/determinista. Arriba proyecta la
+  ficha del `GameProject` (`GddProjectBlock`) con los campos actuales en orden
+  fijo (`Géneros`, `Core Loop`, `Audiencia`, `Concepto`, `Inspiraciones`,
+  `Fantasía`, `Mecánicas clave`, `Fuera de alcance`), omitiendo vacíos y
+  normalizando listas con `trim` (mecánicas como `Categoría · descripción` en
+  líneas). El `title` queda en la cabecera y **no** se repite como campo;
+  `project == null` produce `project = null`. Debajo mapea `buildGdd(notes)` a
+  `GddDocumentSection` con títulos `mecánicas`/`personajes`/`historia`/`Sin
+  track`, conservando orden, agrupación y Notas. Historia/Lore y Personajes son
+  las Notas de `Track.STORY`/`Track.CHARACTERS` (no hay campos fabricados).
 - **Pantalla `GddScreen`** (`:composeApp/commonMain`): render fino sobre
-  `buildGdd`. Encabezado "GDD" + resumen del total ("N notas"); los botones
-  "Volver" y **"Compartir"** (deshabilitado si `notes.isEmpty()`);
-  una sección por `track` (o "Sin track") con su conteo ("N notas") y el texto
-  "Sin notas en este track" cuando está vacía; y las notas en un `LazyColumn`
-  (`key = { it.id }`). Cada nota resume el `body` (máx. 2 líneas, ellipsis) y
-  muestra chips textuales de `status`, Géneros (si tiene) y "Imagen" (si tiene
-  adjuntos); si tiene un Adjunto `IMAGE`, suma la **miniatura** (`NoteThumbnail`,
-  misma degradación tolerante que la lista) sin alterar los chips. Todo se
-  comunica con texto, no sólo color (`DESIGN.md`).
-- **Estado vacío:** si `notes.isEmpty()`, mensaje explícito "Todavía no hay notas"
-  (con "0 notas" en el encabezado) sin secciones ni errores.
+  `buildGddDocument(project, notes)` con `remember(project, notes)`. Cabecera
+  **fija** `GDD — <título>` (o "GDD") + total de Notas y los botones "Volver" y
+  **"Compartir"** (deshabilitado si `notes.isEmpty()`). Debajo, un `LazyColumn`
+  con la ficha en una `Card` destacada (encabezado "Proyecto", label
+  `labelMedium` arriba y valor `bodyMedium` debajo, multilínea) y las secciones
+  de Notas, que scrollean juntas. Cada sección muestra título/conteo ("N
+  notas"/"1 nota") y "Sin notas en este track" cuando está vacía; las Notas
+  conservan cuerpo a 2 líneas, chips de `status`/Géneros/"Imagen", miniatura
+  (`NoteThumbnail`, misma degradación tolerante que la lista) y apertura de la
+  Nota. Todo se comunica con texto, no sólo color (`DESIGN.md`).
+- **Estados vacíos:** `project == null` → "Todavía no hay Proyecto" +
+  "Completalo desde Brainstorming." (sin CTA) y las Notas siguen visibles;
+  Proyecto sin datos → "Proyecto sin datos adicionales"; `notes.isEmpty()` →
+  ficha (si existe) + "Todavía no hay notas", sin secciones de Track vacías. Sin
+  Proyecto ni Notas ambos placeholders conviven sin crash. `App` pasa `project`
+  (ya cargado por `refreshKey`); no hay estado, repositorios ni navegación
+  nuevos.
 - **Navegación (sin librería):** `NotesListScreen` "Ver GDD" →
   `NotesDestination.Gdd`; tocar una nota → `NotesDestination.Edit(noteId)` (mismo
   editor que desde la lista); "Volver" desde el GDD → `List`. **Limitación
@@ -847,7 +864,9 @@ composeApp (Android app / commonMain) ──▶ core
   separados por una línea en blanco y documento terminado en `\n`. El escapado es
   un backslash-escape del set `` \ ` * _ { } [ ] ( ) # + - . ! | > ``. `now` es un
   `String` inyectado (lo formatea la plataforma) para que `:core` no dependa de
-  APIs de fecha. Sin tabla, query, migración ni dependencias.
+  APIs de fecha. Sin tabla, query, migración ni dependencias. El export sigue
+  incluyendo **sólo Notas** (sin ficha) en `gdd-document-hybrid`; agregar la
+  ficha al Markdown es `gdd-export-hybrid`.
 - **Puerto de share `GddSharer` (`:composeApp`, expect/actual):** `interface
   GddSharer { fun share(markdown: String): Boolean }` +
   `@Composable expect fun rememberGddSharer()` y
@@ -859,8 +878,8 @@ composeApp (Android app / commonMain) ──▶ core
   `NSDateFormatter` en iOS. Todo **en memoria**: sin archivos, `FileProvider`,
   permisos, persistencia ni backend. "Compartir" construye el Markdown, llama
   `share` y muestra un **snackbar** ("Listo para compartir"/"No disponible") con un
-  `Scaffold`/`SnackbarHostState` local a la pantalla (sin agregar parámetros a
-  `GddScreen`, por lo que `App` no cambia).
+  `Scaffold`/`SnackbarHostState` local a la pantalla. El share no recibe la ficha:
+  `App` sólo pasa `project` a `GddScreen` para el render del documento.
 
 ## Enlaces (notas relacionadas)
 

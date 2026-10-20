@@ -979,6 +979,37 @@ Implementado 2026-10-15. Detalle en `ARCHITECTURE.md`.
   `adb`/emulador Android para el smoke interactivo; la lógica del documento queda
   cubierta por tests del core en dos plataformas y la app compila/enlaza en ambas.
 
+## GDD Document Decisions (gdd-document-hybrid)
+
+Implementado 2026-10-20. Detalle en `ARCHITECTURE.md` y `docs/specs/gdd-document-hybrid.md`.
+
+- **Documento híbrido, sin entidad nueva:** `buildGddDocument(project, notes)` en
+  `:core` compone la ficha del `GameProject` (`GddProjectBlock`) y las secciones
+  de Notas (`GddDocumentSection`) reutilizando `buildGdd`. Sigue sin tabla,
+  query, migración ni duplicación de Notas: el esquema queda en **v8** con
+  `1.sqm`..`7.sqm` y sin `.sqm` nuevos.
+- **Ficha = campos actuales del Proyecto:** orden fijo `Géneros`, `Core Loop`,
+  `Audiencia`, `Concepto`, `Inspiraciones`, `Fantasía`, `Mecánicas clave`, `Fuera
+  de alcance`; sólo campos no vacíos, listas con `trim` y orden preservado, y
+  mecánicas `"Categoría · descripción"` (categoría capitalizada; el `code`
+  persistido no cambia). El `Título` se normaliza y vive en la cabecera `GDD —
+  <título>`, no como campo.
+- **Historia/Lore y Personajes salen de las Notas:** no hay campos dedicados en
+  `GameProject`; esas secciones son las Notas de `Track.STORY`/`Track.CHARACTERS`.
+  `concept`/`fantasy` quedan sólo en la ficha para no duplicar contenido.
+- **UI fina y estados explícitos:** `GddScreen` recibe `project` desde `App`,
+  calcula el documento con `remember(project, notes)` y renderiza la ficha en una
+  `Card` destacada + secciones en un único `LazyColumn`. `project == null` →
+  "Todavía no hay Proyecto"/"Completalo desde Brainstorming."; Proyecto vacío →
+  "Proyecto sin datos adicionales"; sin Notas → ficha + "Todavía no hay notas"
+  (sin secciones vacías). Sin DI, `ViewModel`, Flow ni navegación nuevos.
+- **Export intacto:** "Compartir" sigue usando `buildGddMarkdown(notes, now)` y
+  `GddSharer` **sólo con Notas** (deshabilitado sin Notas). Incluir la ficha en
+  el Markdown es `gdd-export-hybrid`, que depende de esta feature.
+- **Verificación:** `verifyGddDocument()` cubre escenarios 1–7 en Android/JVM e
+  iOS; smoke Android del documento completo, sin Proyecto con Notas, Proyecto
+  vacío y sin Notas. Sin dependencias nuevas.
+
 ## Observability Decisions (enrichment-observability-logging)
 
 Implementado 2026-10-14. Detalles en `ARCHITECTURE.md` y `CONSTRAINTS.md`.

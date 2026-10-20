@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -29,22 +30,29 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.playbook.core.gdd.GddSection
-import com.playbook.core.gdd.buildGdd
+import com.playbook.core.gdd.GddDocumentSection
+import com.playbook.core.gdd.GddProjectBlock
+import com.playbook.core.gdd.buildGddDocument
 import com.playbook.core.gdd.buildGddMarkdown
+import com.playbook.core.model.GameProject
 import com.playbook.core.model.Note
 import kotlinx.coroutines.launch
 
 /**
- * Vista de GDD: proyección agregada de las Notas agrupadas por `track`, sin
- * persistencia propia. Es render fino sobre [buildGdd] (la agrupación vive en
- * `:core`, cubierta por tests cross-platform).
+ * Vista del GDD como **documento híbrido** del Proyecto: ficha estructurada
+ * arriba y Notas agrupadas por `track` debajo, sin persistencia propia. Es render
+ * fino sobre [buildGddDocument] (la proyección vive en `:core`, cubierta por
+ * tests cross-platform).
  *
- * - Estado vacío explícito ("Todavía no hay notas") sin secciones.
- * - Encabezado con el total de notas y los botones "Volver" y **"Compartir"**
- *   (este último deshabilitado si no hay Notas).
+ * - Cabecera fija `GDD — <título>` (o sólo "GDD") con el total de Notas y los
+ *   botones "Volver" y **"Compartir"** (deshabilitado si no hay Notas).
+ * - Ficha en una `Card` destacada con encabezado "Proyecto": campos verticales
+ *   (label arriba, valor debajo) y estados explícitos "Proyecto sin datos
+ *   adicionales" / "Todavía no hay Proyecto".
  * - Una sección por `track` (`mecánicas`/`personajes`/`historia`) y, si hay
  *   notas sin `track`, "Sin track" al final; cada sección muestra su conteo.
+ * - Sin Notas: se muestra la ficha (si existe) y "Todavía no hay notas", sin
+ *   secciones de Track vacías.
  * - Cada nota resume el cuerpo (máx. 2 líneas) y muestra chips textuales de
  *   `status`, Géneros y "Imagen" (si tiene adjuntos). Toda la información se
  *   comunica con texto, no sólo color (`DESIGN.md`).
@@ -53,18 +61,20 @@ import kotlinx.coroutines.launch
  *   emite imagen y el resto de la tarjeta no cambia.
  * - Tocar una nota emite `onOpenNote(note.id)`: `App` la abre en el editor.
  *
- * "Compartir" construye el Markdown con [buildGddMarkdown] (timestamp de
- * plataforma) y lo entrega a [GddSharer]; el resultado se comunica con un
- * snackbar ("Listo para compartir"/"No disponible") sin salir de la pantalla.
+ * "Compartir" sigue construyendo el Markdown **sólo con las Notas** con
+ * [buildGddMarkdown] (timestamp de plataforma) y lo entrega a [GddSharer]; la
+ * ficha del Proyecto en el export es `gdd-export-hybrid`. El resultado se
+ * comunica con un snackbar ("Listo para compartir"/"No disponible") sin salir de
+ * la pantalla.
  *
- * La pantalla es "tonta": recibe `notes`/`attachmentCounts` y sólo emite
- * `onOpenNote`/`onBack`. El [GddSharer] se obtiene con [rememberGddSharer]
- * (sin parámetro nuevo, por lo que `App` no cambia). Sin DI, `ViewModel`, Flow ni
- * librería de navegación.
+ * La pantalla es "tonta": recibe `notes`/`project`/`attachmentCounts` y sólo
+ * emite `onOpenNote`/`onBack`. Sin DI, `ViewModel`, Flow ni librería de
+ * navegación.
  */
 @Composable
 fun GddScreen(
     notes: List<Note>,
+    project: GameProject?,
     attachmentCounts: Map<String, Int>,
     imagePaths: Map<String, String>,
     loadThumbnail: suspend (String) -> ImageBitmap?,
@@ -72,7 +82,7 @@ fun GddScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sections = remember(notes) { buildGdd(notes) }
+    val document = remember(project, notes) { buildGddDocument(project, notes) }
     val sharer = rememberGddSharer()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -110,21 +120,29 @@ fun GddScreen(
                     Text(text = "Compartir")
                 }
             }
-            Text(text = "GDD", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                text = gddTitle(document.project?.title),
+                style = MaterialTheme.typography.headlineMedium,
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = notesSummary(notes.size),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(16.dp))
-            if (notes.isEmpty()) {
-                EmptyGdd(modifier = Modifier.fillMaxWidth().weight(1f))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    sections.forEach { section ->
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "project") {
+                    ProjectCard(project = document.project)
+                }
+                if (notes.isEmpty()) {
+                    item(key = "empty-notes") {
+                        EmptyGdd()
+                    }
+                } else {
+                    document.sections.forEach { section ->
                         item(key = sectionKey(section)) {
                             SectionHeader(section = section)
                         }
@@ -154,9 +172,56 @@ fun GddScreen(
 }
 
 @Composable
+private fun ProjectCard(project: GddProjectBlock?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                text = "Proyecto",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            when {
+                project == null -> {
+                    Text(
+                        text = "Todavía no hay Proyecto",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Completalo desde Brainstorming.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                project.fields.isEmpty() -> Text(
+                    text = "Proyecto sin datos adicionales",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                else -> project.fields.forEachIndexed { index, field ->
+                    if (index > 0) Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = field.label,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = field.value,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyGdd(modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth().padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -173,10 +238,10 @@ private fun EmptyGdd(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SectionHeader(section: GddSection) {
+private fun SectionHeader(section: GddDocumentSection) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = section.track?.code ?: "Sin track",
+            text = section.title,
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
@@ -231,7 +296,11 @@ private fun GddNoteCard(
     }
 }
 
+private fun gddTitle(projectTitle: String?): String =
+    projectTitle?.let { "GDD — $it" } ?: "GDD"
+
 private fun notesSummary(count: Int): String =
     "$count ${if (count == 1) "nota" else "notas"}"
 
-private fun sectionKey(section: GddSection): String = section.track?.name ?: "no-track"
+private fun sectionKey(section: GddDocumentSection): String =
+    section.track?.name ?: "no-track"

@@ -1162,12 +1162,27 @@
       "gdd-view",
       "game-project-persistence"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: test del core de la proyección del documento + smoke Android del GDD."
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → `GddDocumentAndroidTest` (escenarios 1–7) + `GddProjectionAndroidTest`/`GddMarkdownAndroidTest` verdes; 29 suites / 88 tests / 0 failures.",
+      "`./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → `GddDocumentIosTest` + previos verdes; 29 suites / 88 tests / 0 failures.",
+      "`./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL; `CI=true ./init.sh` → exit 0; `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "Esquema v8 (`Schema.version == 8`, `1.sqm`..`7.sqm`, sin `.sqm` nuevos); sin cambios en `GddProjection.kt`/`GddMarkdown.kt`, repositorios, `GameProject.sq`/`Note.sq`, build files, `init.sh`, `iosApp` ni dependencias.",
+      "Controles negativos reproducidos y restaurados byte-idénticos (SHA-256): orden de campo, campo vacío incluido, Nota duplicada, título de sección cambiado y categoría de mecánica en minúsculas → `GddDocumentAndroidTest` falla en cada caso.",
+      "Smoke Android (emulator-5558, API 34, fake, APK SHA-256 `b7edfc61…`): documento completo (cabecera `GDD — Crónica de Ceniza` + 5 notas, ficha en orden, secciones/conteos/chips/`Imagen` y miniatura, apertura de Nota/Volver), sin Proyecto con Notas, Proyecto vacío sólo título y sin Notas; `Compartir` deshabilitado sin Notas. Evidencia en `composeApp/build/smoke-evidence/gdd-document-hybrid/`."
     ],
-    "evidence": [],
-    "notes": "Híbrido: ficha estructurada + proyección de Notas por Track (no duplica Notas en una tabla)."
+    "evidence": [
+      "2026-10-20 Session 071: `:core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; 29 suites / 88 tests / 0 failures / 0 errors / 0 skipped; `GddDocumentAndroidTest` 1/1, `GddProjectionAndroidTest` 1/1 y `GddMarkdownAndroidTest` 1/1.",
+      "2026-10-20: `:core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; 29 suites / 88 tests / 0 failures; `GddDocumentIosTest` 1/1 junto a `GddProjectionIosTest`/`GddMarkdownIosTest`.",
+      "2026-10-20: `:composeApp:assembleDebug` BUILD SUCCESSFUL; `ANDROID_HOME=… CI=true ./init.sh` exit 0 (Android-only, fake, sin red ni dev servers); `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL.",
+      "2026-10-20: `Schema.version == 8` confirmado en el código generado; `.sqm` `1.sqm`..`7.sqm`; `git diff --name-only` vacío para `sqldelight`, repositorios, `GddProjection.kt`, `GddMarkdown.kt`, build files, `gradle/`, `init.sh` e `iosApp`; sin dependencias nuevas.",
+      "2026-10-20: controles negativos (a) orden de campo, (b) campo vacío incluido, (c) Nota duplicada, (d) título de sección cambiado y (e) categoría de mecánica en minúsculas → `GddDocumentAndroidTest` FAILED en los cinco; archivo restaurado byte-idéntico (SHA-256 `938662c97af7feb36ef0351f2f88f5c0d48fefbd73a0a994411d8cce6a78aed1`) y suite final verde.",
+      "2026-10-20 smoke Android (emulator-5558, API 34, fake; evidencia en `composeApp/build/smoke-evidence/gdd-document-hybrid/`): `01-empty` (sin Proyecto ni Notas, Compartir deshabilitado), `03-document-top` (cabecera con título + 5 notas + ficha completa en orden), `04`/`05` (secciones/conteos/chips/miniatura y `Sin track`), `06-open-note` + `07`/`08` (abrir Nota y Volver), `09-empty-project` (sólo título → “Proyecto sin datos adicionales” + “Todavía no hay notas”) y `10-no-project-with-notes` (placeholder + secciones).",
+      "Límite honesto: el thumbnail se verificó por captura/chip “Imagen”, no por comparación pixel a pixel; el flujo iOS sólo se cubre por compilación/enlace y tests del core (iOS congelado).",
+      "2026-10-20: validación independiente (`feature-validator`) → `accept`, sin hallazgos bloqueantes. Re-ejecutados `:core:testDebugUnitTest` (29 suites/88 tests/0 failures), `:core:iosSimulatorArm64Test` (29/88/0), `:composeApp:assembleDebug`, `CI=true ./init.sh` (exit 0) y link iOS; esquema v8 y smoke Android revisado (GDD vacío, sin Proyecto con Notas, `Sin track`, Proyecto sólo con título, apertura de Nota y “Compartir” deshabilitado sin Notas). Sin secrets ni artefactos QA versionados.",
+      "2026-10-20: cierre post-rebase sobre `origin/develop` `739a87b`: `:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` → 30 suites/90 tests/0 failures en cada plataforma; `:composeApp:assembleDebug`, link iOS y `CI=true ./init.sh` (exit 0) verdes; esquema v8 sin `.sqm` nuevos."
+    ],
+    "notes": "Híbrido: ficha estructurada + proyección de Notas por Track (no duplica Notas en una tabla). Implementada y validada de forma independiente (`accept`, 2026-10-20); `accepted`. El export sigue sin ficha (`gdd-export-hybrid`)."
   },
   {
     "id": "gdd-export-hybrid",
