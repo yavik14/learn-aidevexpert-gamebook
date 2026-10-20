@@ -225,3 +225,11 @@ persistir `accepted` en `feature_list.json`/`PROGRESS.md`, rebasar sobre el
 resolver los conflictos esperables en `App.kt` y
 las pantallas. No se requiere reparación de la feature; los Lows 1–3 son
 mejoras de evidencia/documentación y el Low 4 es un riesgo residual aceptado.
+
+## Cierre e integración (Session 086)
+
+- **Rebase:** `origin/develop` `6a89317` (incluye `save-answer-as-note`). Conflictos resueltos conservando **ambas** features en `App.kt`, `AskNotesScreen.kt` y `PROGRESS.md`; el árbol quedó con `tts-read-aloud` en `accepted` y `save-answer-as-note` intacta.
+- **Post-rebase:** `:core` Android/JVM e iOS **36 suites/107 tests/0 failures** (`ReadAloud*` 5 + `GddNarration*` 3 por plataforma), `:composeApp` **4/10/0**, `assembleDebug` + link iOS y `CI=true ./init.sh` exit 0; esquema v8 sin `.sqm` nuevos.
+- **Low 3 corregido:** `docs/specs/ai-client-ports.md:206` documenta `FakeTtsClient` WAV/`audio/wav` y la supersesión de `audio/mpeg`. Lows 1/2/4 quedan documentados como no bloqueantes (no se recapturaron PNGs ni se cambió el request-id en `DisposableEffect` para no alterar el código validado).
+- **PR:** #55 `https://github.com/yavik14/learn-aidevexpert-gamebook/pull/55` contra `develop` (sin mergear).
+- **Estado:** `feature_list.json` → `tts-read-aloud` `accepted`; `PROGRESS.md`/`AGENTS.md` actualizados.
