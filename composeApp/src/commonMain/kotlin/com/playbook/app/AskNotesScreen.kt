@@ -78,6 +78,9 @@ fun AskNotesScreen(
     onAsk: (String) -> Unit,
     onOpenSource: (String) -> Unit,
     onBack: () -> Unit,
+    readAloudState: ReadAloudUiState = ReadAloudUiState.Detenido,
+    onReadAloud: (String) -> Unit = {},
+    onStopReadAloud: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var question by remember { mutableStateOf("") }
@@ -146,6 +149,9 @@ fun AskNotesScreen(
             onOpenSource = onOpenSource,
             onSaveClick = ::startSave,
             saveFeedback = saveFeedback,
+            readAloudState = readAloudState,
+            onReadAloud = onReadAloud,
+            onStopReadAloud = onStopReadAloud,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         Spacer(modifier = Modifier.height(24.dp))
@@ -235,6 +241,9 @@ private fun AskResult(
     onOpenSource: (String) -> Unit,
     onSaveClick: () -> Unit,
     saveFeedback: String?,
+    readAloudState: ReadAloudUiState,
+    onReadAloud: (String) -> Unit,
+    onStopReadAloud: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -257,6 +266,15 @@ private fun AskResult(
                         Text(text = "Respuesta", style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(text = state.text, style = MaterialTheme.typography.bodyLarge)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ReadAloudButton(
+                            surface = ReadAloudSurface.QA_ANSWER,
+                            surfaceLabel = "respuesta",
+                            state = readAloudState,
+                            enabled = state.text.isNotBlank(),
+                            onRead = { onReadAloud(state.text) },
+                            onStop = onStopReadAloud,
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))

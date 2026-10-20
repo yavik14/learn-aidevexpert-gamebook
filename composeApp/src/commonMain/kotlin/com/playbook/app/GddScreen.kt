@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.playbook.core.gdd.GddDocumentSection
 import com.playbook.core.gdd.GddProjectBlock
 import com.playbook.core.gdd.buildGddDocument
+import com.playbook.core.gdd.buildGddNarration
 import com.playbook.core.gdd.buildGddMarkdown
 import com.playbook.core.model.GameProject
 import com.playbook.core.model.Note
@@ -80,9 +82,13 @@ fun GddScreen(
     loadThumbnail: suspend (String) -> ImageBitmap?,
     onOpenNote: (String) -> Unit,
     onBack: () -> Unit,
+    readAloudState: ReadAloudUiState = ReadAloudUiState.Detenido,
+    onReadAloud: (String) -> Unit = {},
+    onStopReadAloud: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val document = remember(project, notes) { buildGddDocument(project, notes) }
+    val narration = remember(project, notes) { buildGddNarration(project, notes) }
     val sharer = rememberGddSharer()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -105,6 +111,15 @@ fun GddScreen(
                     Text(text = "Volver")
                 }
                 Spacer(modifier = Modifier.weight(1f))
+                ReadAloudButton(
+                    surface = ReadAloudSurface.GDD,
+                    surfaceLabel = "GDD",
+                    state = readAloudState,
+                    enabled = narration.isNotBlank(),
+                    onRead = { onReadAloud(narration) },
+                    onStop = onStopReadAloud,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 TextButton(
                     onClick = {
                         val markdown = buildGddMarkdown(

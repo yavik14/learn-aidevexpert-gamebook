@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 semanticLinkingService = semanticLinkingService,
                 aiClient = aiClient,
                 transcribeClient = aiRuntime.transcribeClient,
+                ttsClient = aiRuntime.ttsClient,
                 jevClient = aiRuntime.jevClient,
                 imageClient = aiRuntime.imageClient,
                 diagnostics = diagnostics,

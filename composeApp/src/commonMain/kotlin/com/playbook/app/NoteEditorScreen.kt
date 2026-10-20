@@ -134,6 +134,9 @@ fun NoteEditorScreen(
     onTranscribe: ((String) -> Unit)? = null,
     onTranscribedTextConsumed: ((String) -> Unit)? = null,
     classificationSuggestionService: ClassificationSuggestionService,
+    readAloudState: ReadAloudUiState = ReadAloudUiState.Detenido,
+    onReadAloud: ((String) -> Unit)? = null,
+    onStopReadAloud: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
@@ -325,6 +328,17 @@ fun NoteEditorScreen(
                     .heightIn(min = 200.dp, max = 320.dp),
             )
             Spacer(modifier = Modifier.height(16.dp))
+            if (onReadAloud != null && onStopReadAloud != null) {
+                ReadAloudButton(
+                    surface = ReadAloudSurface.NOTE,
+                    surfaceLabel = "nota",
+                    state = readAloudState,
+                    enabled = body.isNotBlank(),
+                    onRead = { onReadAloud(body) },
+                    onStop = onStopReadAloud,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             if (!isEditing && onStartDictation != null && onStopDictation != null) {
                 DictationPanel(
                     state = dictationState,

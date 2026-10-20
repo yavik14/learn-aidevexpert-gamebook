@@ -31,8 +31,12 @@ import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.ai.ReadAloudResult
+import com.playbook.core.ai.ReadAloudService
 import com.playbook.core.ai.TextImageGenerationService
 import com.playbook.core.ai.TranscribeClient
+import com.playbook.core.ai.TtsClient
+import com.playbook.core.ai.normalizeReadAloudText
 import com.playbook.core.diagnostics.DiagnosticSource
 import com.playbook.core.diagnostics.Diagnostics
 import com.playbook.core.diagnostics.NoOpDiagnostics
@@ -134,6 +138,7 @@ fun App(
     semanticLinkingService: SemanticLinkingService,
     aiClient: AiClient,
     transcribeClient: TranscribeClient,
+    ttsClient: TtsClient,
     jevClient: JevClient,
     imageClient: ImageClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
@@ -168,6 +173,11 @@ fun App(
         var transcribedText by remember { mutableStateOf<String?>(null) }
         var transcriptionNoteId by remember { mutableStateOf<String?>(null) }
         var transcriptionJob by remember { mutableStateOf<Job?>(null) }
+        // Lectura en voz alta: estado único y un solo reproductor para las 3
+        // superficies. El request-id descarta resultados viejos.
+        var readAloudState by remember { mutableStateOf<ReadAloudUiState>(ReadAloudUiState.Detenido) }
+        var readAloudJob by remember { mutableStateOf<Job?>(null) }
+        var readAloudRequest by remember { mutableStateOf(0) }
 
         // Las llamadas de IA son asíncronas: `rememberCoroutineScope` permite
         // invocar los servicios `suspend` sin introducir `ViewModel`/Flow.
@@ -180,6 +190,8 @@ fun App(
         val classificationSuggestionService = remember(jevClient) {
             ClassificationSuggestionService(jevClient)
         }
+        val readAloudService = remember(ttsClient) { ReadAloudService(ttsClient) }
+        val readAloudPlayer = rememberReadAloudPlayer()
 
         val imagePicker = rememberImagePicker(
             onResult = { picked -> destination = NotesDestination.CreateWithImage(picked) },
@@ -227,6 +239,77 @@ fun App(
             refreshKey++
         }
 
+        /** Corta la lectura actual y descarta cualquier resultado en vuelo. */
+        fun stopReadAloud() {
+            readAloudRequest++
+            readAloudJob?.cancel()
+            readAloudJob = null
+            readAloudPlayer.stop()
+            readAloudState = ReadAloudUiState.Detenido
+        }
+
+        /**
+         * Inicia la lectura de [surface]. Detiene la anterior, sintetiza con
+         * [ReadAloudService] y sólo arranca el player si el request sigue vigente.
+         */
+        fun readAloud(surface: ReadAloudSurface, rawText: String) {
+            val text = normalizeReadAloudText(rawText) ?: return
+            readAloudJob?.cancel()
+            readAloudPlayer.stop()
+            val request = ++readAloudRequest
+            readAloudState = ReadAloudUiState.Preparando(surface)
+            readAloudJob = scope.launch {
+                try {
+                    when (val result = readAloudService.synthesize(text)) {
+                        is ReadAloudResult.Ready -> {
+                            if (request != readAloudRequest) return@launch
+                            val started = readAloudPlayer.play(
+                                audio = result.audio,
+                                onCompleted = {
+                                    if (request == readAloudRequest) {
+                                        readAloudJob = null
+                                        readAloudState = ReadAloudUiState.Detenido
+                                    }
+                                },
+                                onError = {
+                                    if (request == readAloudRequest) {
+                                        readAloudJob = null
+                                        readAloudState = ReadAloudUiState.Error(surface)
+                                    }
+                                },
+                            )
+                            if (request == readAloudRequest) {
+                                readAloudState = when {
+                                    !started -> ReadAloudUiState.Error(surface)
+                                    readAloudState is ReadAloudUiState.Preparando ->
+                                        ReadAloudUiState.Reproduciendo(surface)
+                                    else -> readAloudState
+                                }
+                            }
+                        }
+
+                        ReadAloudResult.EmptyText ->
+                            if (request == readAloudRequest) {
+                                readAloudState = ReadAloudUiState.Detenido
+                            }
+
+                        is ReadAloudResult.Failed ->
+                            if (request == readAloudRequest) {
+                                readAloudState = ReadAloudUiState.Error(surface)
+                            }
+                    }
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (_: Throwable) {
+                    if (request == readAloudRequest) {
+                        readAloudState = ReadAloudUiState.Error(surface)
+                    }
+                } finally {
+                    if (request == readAloudRequest) readAloudJob = null
+                }
+            }
+        }
+
         // Al abrir/reabrir la app se reintentan las Notas `PENDING`
         // (`offline-pending-retry`): las exitosas quedan `INDEXED` y las
         // irrecuperables `FAILED`. Es un efecto de arranque (una vez), no
@@ -241,6 +324,7 @@ fun App(
         // resultado: nunca se aplica texto de una Nota a otra. La selección de
         // audio vive en el editor y se reinicia al entrar/salir de Edit.
         LaunchedEffect(destination) {
+            stopReadAloud()
             transcriptionJob?.cancel()
             transcriptionJob = null
             transcriptionState = AudioTranscriptionUiState.Idle
@@ -739,6 +823,11 @@ fun App(
                 transcriptionJob = null
                 generationJob?.cancel()
                 generationJob = null
+                readAloudJob?.cancel()
+                readAloudJob = null
+                readAloudPlayer.stop()
+                readAloudPlayer.release()
+                readAloudState = ReadAloudUiState.Detenido
                 voiceTranscriber.cancel()
                 discardPendingAudio()
             }
@@ -823,6 +912,9 @@ fun App(
                 loadThumbnail = loadThumbnail,
                 onOpenNote = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
+                readAloudState = readAloudState,
+                onReadAloud = { text -> readAloud(ReadAloudSurface.GDD, text) },
+                onStopReadAloud = ::stopReadAloud,
             )
 
             is NotesDestination.Related -> {
@@ -869,6 +961,9 @@ fun App(
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
                 classificationSuggestionService = classificationSuggestionService,
+                readAloudState = readAloudState,
+                onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
+                onStopReadAloud = ::stopReadAloud,
             )
 
             is NotesDestination.CreateWithImage -> NoteEditorScreen(
@@ -890,6 +985,9 @@ fun App(
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
                 classificationSuggestionService = classificationSuggestionService,
+                readAloudState = readAloudState,
+                onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
+                onStopReadAloud = ::stopReadAloud,
             )
 
             is NotesDestination.Edit -> {
@@ -955,6 +1053,9 @@ fun App(
                             },
                             onTranscribedTextConsumed = ::consumeTranscribedText,
                             classificationSuggestionService = classificationSuggestionService,
+                            readAloudState = readAloudState,
+                            onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
+                            onStopReadAloud = ::stopReadAloud,
                         )
                     }
                 }
@@ -967,6 +1068,9 @@ fun App(
                 onAsk = ::ask,
                 onOpenSource = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
+                readAloudState = readAloudState,
+                onReadAloud = { text -> readAloud(ReadAloudSurface.QA_ANSWER, text) },
+                onStopReadAloud = ::stopReadAloud,
             )
         }
 

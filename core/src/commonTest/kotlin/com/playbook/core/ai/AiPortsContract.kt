@@ -110,7 +110,17 @@ suspend fun verifyFakeAiPorts() {
     val audioOnce = tts.synthesize("leer en voz alta")
     val audioTwice = tts.synthesize("leer en voz alta")
     assertContentEquals(audioOnce.bytes, audioTwice.bytes, "FakeTtsClient debe ser determinista")
-    assertEquals("audio/mpeg", audioOnce.mimeType, "FakeTtsClient debe usar audio/mpeg")
+    assertEquals("audio/wav", audioOnce.mimeType, "FakeTtsClient debe usar audio/wav")
+    assertEquals(
+        "RIFF",
+        audioOnce.bytes.copyOfRange(0, 4).decodeToString(),
+        "FakeTtsClient debe devolver un contenedor RIFF",
+    )
+    assertEquals(
+        "WAVE",
+        audioOnce.bytes.copyOfRange(8, 12).decodeToString(),
+        "FakeTtsClient debe devolver un WAVE PCM",
+    )
 
     // image: mismo prompt → mismos bytes; prompts distintos → bytes distintos.
     val image = FakeImageClient()

@@ -1192,10 +1192,11 @@ Implementado 2026-10-16. Contratos en `AiPorts.kt`; fakes en `FakeAiPorts.kt`.
   confirma—; la canonización de Géneros contra el catálogo es del consumidor
   (`genres-catalog-persistence`), el fake sólo devuelve un género ilustrativo.
 - **Fakes deterministas y sin red** (`commonMain`, inyectables): texto derivado
-  de tamaño+mime (`FakeTranscribeClient`, tolera `audio` vacío), audio = bytes
-  UTF-8 del texto (`FakeTtsClient`, `audio/mpeg`), PNG simbólico derivado del
-  prompt (`FakeImageClient`, `image/png`), `Track` por hash sobre `Track.entries`
-  + género ilustrativo (`FakeJevClient`). Sin `Random`, sin red ni key.
+  de tamaño+mime (`FakeTranscribeClient`, tolera `audio` vacío), WAV PCM
+  reproducible (`FakeTtsClient`, `audio/wav`; ver `tts-read-aloud`), PNG simbólico
+  derivado del prompt (`FakeImageClient`, `image/png`), `Track` por hash sobre
+  `Track.entries` + género ilustrativo (`FakeJevClient`). Sin `Random`, sin red ni
+  key.
 - **Tests:** contratos `verify{Transcribe,Tts,Image,Jev}ClientContract` +
   comportamiento de fakes (`verifyFakeAiPorts`, Scenario 6) y una implementación
   test-only `ConstantTtsClient` que demuestra sustituibilidad sin tocar archivos
@@ -1298,6 +1299,44 @@ Implementado 2026-10-19. Proveedor propio OpenAI-compatible
   transporte Android (servidor HTTP local). El smoke de los 6 modelos es
   key-gated (`PLAYBOOK_AI_SMOKE=1`), fuera del gate.
 - **iOS:** congelado; usa `fakeAiRuntime()`, sin transporte real.
+
+## Read Aloud Decisions (tts-read-aloud)
+
+Implementado 2026-10-20. Detalles en `docs/specs/tts-read-aloud.md`.
+
+- **Caso de uso puro en `:core`:** `ReadAloudService(ttsClient)` normaliza con
+  `normalizeReadAloudText` (`trim`, vacío → `null`, recorte exacto a
+  `READ_ALOUD_MAX_CHARS = 4096`), no llama al puerto con texto vacío y devuelve
+  `Ready(audio)`/`EmptyText`/`Failed`. Valida bytes/mime no vacíos; propaga la
+  cancelación. No persiste ni conoce UI/plataforma.
+- **Narración del GDD:** `buildGddNarration(project, notes)` reusa
+  `buildGddDocument`; emite cabecera (`GDD — <título>` o `GDD`), campos de la
+  ficha (`label: value`, saltos colapsados) y cuerpos no vacíos por sección, en el
+  orden existente. Omite conteos/`status`/Géneros/Markdown y devuelve `""` si no
+  hay contenido narrable. Pura y determinista.
+- **Audio efímero:** `ReadAloudPlayer` (`expect`/`actual` en `:composeApp`) recibe
+  `SynthesizedAudio` en memoria. Android usa `MediaPlayer` + `MediaDataSource`
+  (sin archivos ni caché); iOS congelado usa un actual mínimo que devuelve
+  `false`/error (sin playback). `stop`/`release` son idempotentes.
+- **Estado único:** `App` posee `ReadAloudUiState`
+  (`Detenido`/`Preparando`/`Reproduciendo`/`Error`), un solo player y un
+  request-id monotónico. Iniciar otra lectura detiene la anterior; resultados
+  tardíos se descartan antes de `play` y en los callbacks. `stopReadAloud()` se
+  llama al tocar Detener, al cambiar `destination`, al completar/fallar y en
+  `DisposableEffect(Unit).onDispose`. No hay audio focus ni timeout propio.
+- **Fake reproducible:** `FakeTtsClient` devuelve un WAV PCM 16 kHz/mono/16-bit de
+  ~2 s con tono determinista y `audio/wav`; no simula voz, pero permite que el
+  gate y el smoke Android reproduzcan sin red/key. El adaptador real sigue
+  devolviendo MP3 y no se modificó.
+- **Superficies/botón:** `ReadAloudButton` compartido en Q&A (respuesta), editor
+  (body actual, Nueva y Edición) y GDD (fila superior). Detenido → "Leer en voz
+  alta"; preparando/reproduciendo → "Detener"; error → "Reintentar"; con
+  `contentDescription` por superficie y texto de estado.
+- **Verificación:** `:core` 36 suites/107 tests/0 failures en Android/JVM e iOS
+  (`ReadAloud{Android,Ios}Test` 5, `GddNarration{Android,Ios}Test` 3);
+  `assembleDebug` + link iOS y `CI=true ./init.sh` exit 0; controles negativos y
+  smoke Android en `composeApp/build/smoke-evidence/tts-read-aloud/` (Q&A, Nota,
+  GDD, stop por botón/navegación y Nota sólo-imagen deshabilitada).
 
 ## Audio Attachment Transcription Decisions (transcribe-audio-attachment)
 

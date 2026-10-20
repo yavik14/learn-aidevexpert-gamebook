@@ -4,6 +4,8 @@ import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.Track
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * Implementaciones deterministas y sin red de los puertos de IA por modelo
@@ -22,10 +24,62 @@ class FakeTranscribeClient : TranscribeClient {
         "[fake] transcripción (${audio.size} bytes, $mimeType)"
 }
 
-/** `tts` fake: devuelve los propios bytes UTF-8 del texto como audio MP3. */
+/**
+ * `tts` fake: devuelve un WAV PCM determinista y reproducible (16 kHz, mono,
+ * 16-bit, ~2 s) con un tono suave. No simula voz: existe para que el smoke
+ * Android pueda ejercitar la reproducción real sin red ni key.
+ */
 class FakeTtsClient : TtsClient {
     override suspend fun synthesize(text: String): SynthesizedAudio =
-        SynthesizedAudio(text.encodeToByteArray(), "audio/mpeg")
+        SynthesizedAudio(fakeTtsWave(), "audio/wav")
+}
+
+private const val FAKE_TTS_SAMPLE_RATE = 16_000
+private const val FAKE_TTS_DURATION_MILLIS = 2_000
+private const val FAKE_TTS_HEADER_BYTES = 44
+private const val FAKE_TTS_AMPLITUDE = 4_000
+private const val FAKE_TTS_FREQUENCY = 440.0
+
+/** Construye en memoria un WAV PCM 16-bit mono, sin entropía ni archivos. */
+private fun fakeTtsWave(): ByteArray {
+    val sampleCount = FAKE_TTS_SAMPLE_RATE * FAKE_TTS_DURATION_MILLIS / 1_000
+    val dataSize = sampleCount * 2
+    val wave = ByteArray(FAKE_TTS_HEADER_BYTES + dataSize)
+    wave.writeAscii(0, "RIFF")
+    wave.writeIntLittleEndian(4, 36 + dataSize)
+    wave.writeAscii(8, "WAVE")
+    wave.writeAscii(12, "fmt ")
+    wave.writeIntLittleEndian(16, 16)
+    wave.writeShortLittleEndian(20, 1)
+    wave.writeShortLittleEndian(22, 1)
+    wave.writeIntLittleEndian(24, FAKE_TTS_SAMPLE_RATE)
+    wave.writeIntLittleEndian(28, FAKE_TTS_SAMPLE_RATE * 2)
+    wave.writeShortLittleEndian(32, 2)
+    wave.writeShortLittleEndian(34, 16)
+    wave.writeAscii(36, "data")
+    wave.writeIntLittleEndian(40, dataSize)
+    for (index in 0 until sampleCount) {
+        val angle = 2 * PI * FAKE_TTS_FREQUENCY * index / FAKE_TTS_SAMPLE_RATE
+        val sample = (sin(angle) * FAKE_TTS_AMPLITUDE).toInt()
+        wave.writeShortLittleEndian(FAKE_TTS_HEADER_BYTES + index * 2, sample)
+    }
+    return wave
+}
+
+private fun ByteArray.writeAscii(offset: Int, value: String) {
+    value.encodeToByteArray().copyInto(this, destinationOffset = offset)
+}
+
+private fun ByteArray.writeIntLittleEndian(offset: Int, value: Int) {
+    this[offset] = (value and 0xFF).toByte()
+    this[offset + 1] = ((value ushr 8) and 0xFF).toByte()
+    this[offset + 2] = ((value ushr 16) and 0xFF).toByte()
+    this[offset + 3] = ((value ushr 24) and 0xFF).toByte()
+}
+
+private fun ByteArray.writeShortLittleEndian(offset: Int, value: Int) {
+    this[offset] = (value and 0xFF).toByte()
+    this[offset + 1] = ((value ushr 8) and 0xFF).toByte()
 }
 
 /**
