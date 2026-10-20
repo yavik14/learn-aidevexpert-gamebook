@@ -1193,7 +1193,7 @@
       "gdd-export",
       "gdd-document-hybrid"
     ],
-    "status": "passing",
+    "status": "accepted",
     "verification": [
       "`:core`: `verifyGddMarkdownHybrid()` (commonTest) + runners Android/JVM e iOS.",
       "UI Android: smoke del share con ficha + Notas (o salvedad honesta si no hay `adb`)."
@@ -1209,9 +1209,10 @@
       "Controles negativos reproducidos y restaurados byte-idénticos: (a) ignorar la ficha, (b) duplicar Notas, (c) omitir el título de cabecera, (d) no escapar valores de ficha → `GddMarkdownHybridAndroidTest` falla.",
       "Smoke Android del implementer NO ejecutado: no había `adb`/emulador en el entorno; no se fabricó evidencia. El control (e) se cubre por inspección de la expresión `enabled` (Notas o ficha con contenido).",
       "2026-10-20 smoke independiente (validator, emulator-5556/API 35): “Compartir” habilitado con Notas y Proyecto vacío; el chooser mostró exactamente: `# GDD — Playbook\\n\\nTotal: 1 nota\\n\\n## historia\\n\\n### rpg\\nGéneros: Zelda\\-like — Estado: indexada\\n`. No se cubrió por UI “Proyecto con campos sin Notas” ni “sin contenido → deshabilitado”; quedan por tests/inspección.",
-      "Hallazgo: el ejemplo de la spec tenía `Zelda-like` sin escapar; se corrigió porque `-` pertenece al set. Kotlin/Native exigió renombrar los helpers privados de test (`hybridNote`/`hybridProject`) para evitar colisión con `gddNote` de `GddMarkdownCheck`."
+      "Hallazgo: el ejemplo de la spec tenía `Zelda-like` sin escapar; se corrigió porque `-` pertenece al set. Kotlin/Native exigió renombrar los helpers privados de test (`hybridNote`/`hybridProject`) para evitar colisión con `gddNote` de `GddMarkdownCheck`.",
+      "2026-10-20 validación independiente `accept` (`docs/validations/gdd-export-hybrid.md`, base `0cffd1e`): tests 34 suites/99 tests/0 failures en Android/JVM e iOS, `assembleDebug` + link iOS OK, `CI=true ./init.sh` exit 0; esquema v8 sin `.sqm` nuevos; controles negativos (escapado de ficha y omisión de `## Proyecto`) reproducidos y restaurados byte-idénticos; probe byte a byte del overload compatible; smoke Android en `emulator-5558` (ficha sola, ficha+Notas, vacío deshabilitado, Notas sin ficha, sólo título)."
     ],
-    "notes": "Export Markdown híbrido (ficha del Proyecto + Notas) con overload compatible; implementado y auto-verificado en el worktree `worktree/gdd-export-hybrid`. Listo para validación independiente."
+    "notes": "Export Markdown híbrido (ficha del Proyecto + Notas) con overload compatible; implementado y validado de forma independiente (`accept`, 2026-10-20); `accepted`. Sin cambios de código en el cierre."
   },
   {
     "id": "save-answer-as-note",
