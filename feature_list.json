@@ -1349,12 +1349,25 @@
       "ai-fake-real-switch",
       "voice-attachment-storage"
     ],
-    "status": "not_started",
+    "status": "passing",
     "verification": [
-      "Provisional: test del core con fake; smoke Android del botón Transcribir."
+      "`CI=true ./init.sh` → exit 0 (gate Android-only, IA fake, sin red ni key).",
+      "`./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; 30 suites / 90 tests / 0 failures en Android/JVM y 30/90/0 en iOS, incluidos `TranscribeAudioAttachmentAndroidTest` e `TranscribeAudioAttachmentIosTest`.",
+      "`./gradlew :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL (Android compila y el framework iOS linkea).",
+      "`./gradlew :composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 10 tests / 0 failures (incluye `AudioTranscriptionTest` 3: etiqueta determinista, mensajes/acción por estado y semántica de Anexar; sin regresión).",
+      "Smoke Android en emulator-5558 con `adb run-as`: Nota/Adjunto sembrados en `playbook.db` (esquema `user_version=8`) y `files/audio/*.m4a`. Verificado: cuerpo vacío → transcripción directa + aviso; cuerpo con texto → preview + Anexar/Reemplazar/Cancelar (Cancelar no cambia el body); Guardar → body persistido, `status=indexada` y fila `embedding`; varios AUDIO → orden `Audio 1 · 15 B`/`Audio 2 · 17 B`, primero seleccionado, elegir el segundo transcribe sólo sus 17 bytes; archivo ausente → «No se pudo leer el audio adjunto» + «Reintentar» sin tocar body/DB. Antes de Guardar la DB no cambia (sin auto-save).",
+      "Controles de alcance: sin `.sqm` nuevos (`1.sqm`..`7.sqm`), esquema v8, sin cambios en `init.sh`, `AiRuntime`, `OpenAiTranscribeClient`, `AiClient`, `TranscribeClient`, `AiPorts`, `AttachmentRepository`, `AttachmentFileStore` ni flags fake/real; sin `.sqm`/`composeApp/build` en el diff."
     ],
-    "evidence": [],
-    "notes": "Transcripción diferida del Adjunto AUDIO; dispara re-indexado."
+    "evidence": [
+      "2026-10-20 (worktree/transcribe-audio-attachment, base origin/develop 739a87b): `CI=true ./init.sh` → exit 0 (JDK 21, Android SDK, IA fake).",
+      "2026-10-20: `:core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` → Android 30 suites/90 tests/0 failures/0 errors y iOS 30/90/0 (`TranscribeAudioAttachment{Android,Ios}Test` 1/1 cada uno).",
+      "2026-10-20: `:composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL; `:composeApp:testDebugUnitTest --rerun-tasks` → 10/0 (`AudioTranscriptionTest` 3/3).",
+      "2026-10-20: `TranscribeAudioAttachmentCheck` cubre Scenarios 1, 3–7 y 9: bytes/mime exactos y una sola llamada, no persistencia, `AudioNotFound` (otra Nota/inexistente/IMAGE) sin llamar al puerto, `AudioUnavailable` sin archivo, `EmptyTranscription` con `\"   \\n  \"`, `Failed` con `AiClientException` + diagnóstico `AI_TRANSCRIBE`/`transcription_failed` sin `detail` ni ids, orden de varios AUDIO y elección del segundo, determinismo y re-indexado (`INDEXED` + embedding) tras simular el guardado.",
+      "2026-10-20: smoke Android emulator-5558 (API 34) con `adb run-as`, `seed.sql` y dumps en `composeApp/build/smoke-evidence/transcribe-audio-attachment/`: escenario cuerpo vacío (notice `Transcripción aplicada. Guardá para conservarla.`), diálogo con preview/Anexar/Reemplazar/Cancelar, `Cancelar` deja `body` previo, Anexar concatena con `\\n`, Reemplazar deja sólo el texto (borrador; DB intacta sin Guardar), multi-audio con RadioButton default primero y transcripción sólo del elegido, archivo ausente → mensaje textual. Tras Guardar: `body` transcripto, `status=indexada`, `count(embedding)=1` y badge `indexada` en la lista.",
+      "2026-10-20: `pragma user_version` en la base del emulador → 8; `git diff --name-only` sin `init.sh`, `AiRuntime`, `OpenAiTranscribeClient`, `TranscribeClient`, `AttachmentRepository`, `AttachmentFileStore`, `.sqm` ni `composeApp/build`; sin secrets.",
+      "No verificado por UI con fake: transcripción vacía y error de red real (el `FakeTranscribeClient` siempre devuelve texto no vacío y no falla); ambos quedan cubiertos por tests del core con clientes stub (`EmptyTranscription`, `Failed` + diagnóstico). La cancelación durante una llamada en vuelo no se capturó visualmente porque el fake resuelve de inmediato; el job cancelable + guard por Nota/destino se verificó por revisión y compilación."
+    ],
+    "notes": "Transcripción diferida del Adjunto AUDIO implementada sobre los puertos/runtime existentes: `AudioAttachmentTranscriptionService` en `:core` (sin persistencia ni indexado), `AudioTranscriptionUiState` + sección \"Audio adjunto\" en el editor (selector determinista y confirmación Anexar/Reemplazar/Cancelar), job cancelable en `App` y wiring de `aiRuntime.transcribeClient` en ambas raíces. `DiagnosticSource.AI_TRANSCRIBE`/`transcription_failed` sin datos del usuario. Sin deps, `.sqm`, esquema (v8), `init.sh` ni cambios en `AiRuntime`/`TranscribeClient`. Riesgos: el fake no permite ejercitar vacío/red por UI; el smoke usa audio sembrado (el fake deriva el texto de tamaño+mime) y no hay playback."
   },
   {
     "id": "tts-read-aloud",

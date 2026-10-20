@@ -382,6 +382,17 @@ composeApp (Android app / commonMain) ──▶ core
   Main; dispatcher inyectable) e iOS congelado usa `fakeAiRuntime()`. El
   adaptador de imagen usa 1024x1024 (el proveedor rechaza 512/256) y detecta el
   mime real (PNG/JPEG) por la firma de los bytes.
+- **Transcripción diferida del audio (`transcribe-audio-attachment`, 2026-10-20):**
+  `AudioAttachmentTranscriptionService` (`:core`) recibe `TranscribeClient`,
+  `AttachmentRepository`, `AttachmentFileStore` y (opcional) `Diagnostics`.
+  `transcribe(noteId, attachmentId)` exige un Adjunto `AUDIO` **de** esa Nota
+  (si no → `AudioNotFound`, sin llamar al puerto), lee los bytes exactos con
+  `read` (si `null` → `AudioUnavailable`), llama `transcribe(bytes, mimeType)`
+  una vez y devuelve `Transcribed(text.trim())`, `EmptyTranscription` o
+  `Failed(AiClientException)`. **No persiste ni indexa**: el editor aplica el
+  texto al borrador y el Guardar existente (`update` + `indexBestEffort`) lo
+  re-indexa. El wiring pasa `aiRuntime.transcribeClient` a `App(...)`; no cambia
+  `AiRuntime`/`TranscribeClient` ni el esquema.
 - **Sugerencias de Brainstorming (`brainstorming-ai-suggestions`, 2026-10-19):**
   `BrainstormingSuggestionService` (`:core`) arma un `GenerateRequest` por paso
   (`BrainstormingStep`; prompt con marcador + `STEP=<enum>` y contexto acotado del
@@ -704,9 +715,18 @@ composeApp (Android app / commonMain) ──▶ core
   lectura y —si `onReindex` no es null— el botón "Re-indexar", habilitado sólo si
   el estado no es `INDEXED` y el `body` del borrador no está en blanco; re-indexar
   **no** reescribe `track`/`genres`/`body` (sólo dispara el enriquecimiento).
+  En edición, con Adjuntos `AUDIO`, muestra la sección **"Audio adjunto"**:
+  lista determinista `Audio 1 · <tamaño>`, `RadioButton` cuando hay más de uno
+  (default el primero), y `Transcribir`/`Transcribiendo…`/`Reintentar` con
+  mensajes textuales para vacío, archivo ilegible y fallo de IA. El texto llega
+  por `transcribedText` (job en `App`) y se aplica una sola vez: `body` vacío →
+  directo + aviso "Transcripción aplicada. Guardá para conservarla."; `body` con
+  texto → `AlertDialog` con vista previa y "Anexar" (misma semántica que
+  `appendDictation`)/"Reemplazar" (sólo el texto)/"Cancelar" (sin cambios).
+  `onTranscribedTextConsumed` limpia el texto de `App`; nunca hay auto-guardado.
   Mantiene el borrador local
   (`body`/`track`/`genres`) y emite
-  `onSave(body, track, genres)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`;
+  `onSave(body, track, genres)`/`onDelete`/`onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`/`onTranscribe`;
   la persistencia, el refresco y la navegación los maneja `App`. No hay control de
   Categoría/Tipo/Nivel: el `track` ya cubre la clasificación fija.
 - **`EnrichmentStatus`** (`commonMain`, `note-enrichment-status-ui`):
@@ -766,6 +786,14 @@ composeApp (Android app / commonMain) ──▶ core
   transcriber y borra el audio pendiente al salir de composición; **no** hay
   `DisposableEffect` por destino, por lo que alternar imagen
   (`Create ↔ CreateWithImage`) no corta el dictado.
+- **Transcripción de audio (`App`):** `App` recibe `transcribeClient`, construye
+  `AudioAttachmentTranscriptionService` y posee `transcriptionState`,
+  `transcribedText`, `transcriptionNoteId` y el `Job`. `onTranscribe(attachmentId)`
+  sólo corre en `Edit`; el resultado se descarta si el destino ya no es esa Nota
+  y un `LaunchedEffect(destination)` cancela el job y limpia el estado al cambiar
+  de pantalla. El editor consume el texto una sola vez
+  (`onTranscribedTextConsumed`) y el Guardar existente persiste + re-indexa. No
+  crea Adjuntos ni reproduce audio.
 - **Flujo de datos:** crear → `create(NoteDraft(LOCAL_OWNER_ID, body.trim(),
   track, genres = genres))` (status default `CAPTURED`); **crear con imagen** →
   `fileStore.saveImage(bytes, mime)` → `create(NoteDraft(...))` →
@@ -924,8 +952,9 @@ composeApp (Android app / commonMain) ──▶ core
   **best-effort**: **nunca** lanza ni bloquea al llamador (una implementación que
   falle al escribir se traga el error). No es un logger general: sólo registra
   **fallos**, no caminos de éxito. Sin telemetría remota ni librería de logging.
-- **Tipos:** `DiagnosticSource` (`AI_INDEXING`, `AI_QUERY`, `VOICE`, `IMAGE`,
-  `STORAGE`) y `DiagnosticEntry(timestampMillis, source, summary, detail?)`.
+- **Tipos:** `DiagnosticSource` (`AI_INDEXING`, `AI_QUERY`, `AI_TRANSCRIBE`,
+  `VOICE`, `IMAGE`, `STORAGE`) y `DiagnosticEntry(timestampMillis, source,
+  summary, detail?)`.
   `summary` es un **resumen estable** (sin datos del usuario).
 - **Implementaciones:** `NoOpDiagnostics` (**default inyectable**, no rompe a los
   callers que no cablean sink), `InMemoryDiagnostics(maxEntries = 100, clock)`
@@ -948,6 +977,10 @@ composeApp (Android app / commonMain) ──▶ core
   `NoIndexedNotes` **no** registra. `App` registra `VOICE`/`IMAGE` (los `onError`
   de las integraciones nativas, con el nombre del error como `detail`) y `STORAGE`
   (los `catch (Throwable)` de persistencia de adjuntos, sin `detail`).
+  `AudioAttachmentTranscriptionService` registra `AI_TRANSCRIBE` con el resumen
+  estable `transcription_failed` ante `AiClientException`, **sin `detail`**, para
+  no filtrar texto, bytes, rutas ni ids; un fallo inesperado se registra igual
+  desde `App` sin `detail`.
 - **Privacidad (durable):** el log sólo guarda fuente, resumen estable y mensaje
   de excepción recortado. **Nunca** `body`, preguntas, rutas de adjuntos, IDs ni
   secrets (ver `CONSTRAINTS.md`). El `detail` de `STORAGE` se omite a propósito
@@ -965,7 +998,7 @@ composeApp (Android app / commonMain) ──▶ core
   `NoteIndexingService`, `NoteIndexingOrchestrator`, `PendingIndexingRetry`,
   `RagQueryService` y `SemanticLinkingService`, y monta
   `App(..., AndroidVoiceTranscriber(this), noteLinkRepository,
-  semanticLinkingService, diagnostics)`.
+  semanticLinkingService, aiClient, aiRuntime.transcribeClient, diagnostics)`.
 - **iOS:** `MainViewController()` (Kotlin, `composeApp/src/iosMain`) crea la base
   local (singletons perezosos), construye los cuatro repositorios, el
   `FakeAiClient`, un `FileDiagnostics` sobre `Application Support/diagnostics.log`,
@@ -973,7 +1006,8 @@ composeApp (Android app / commonMain) ──▶ core
   `RagQueryService` y
   `SemanticLinkingService`, y envuelve
   `App(notes, attachments, transcriber, orchestrator, retry, rag, links, linking,
-  diag)`; lo llama `ComposeView` (SwiftUI) en `iosApp`.
+  ai, runtime.transcribeClient, diag)`; lo llama `ComposeView` (SwiftUI) en
+  `iosApp`. iOS sigue congelado y usa `fakeAiRuntime()`.
 
 ## Identifiers
 

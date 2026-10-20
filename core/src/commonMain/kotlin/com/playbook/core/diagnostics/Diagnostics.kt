@@ -7,7 +7,7 @@ import com.playbook.core.platform.currentTimeMillis
  * fallos de IA (indexado/consulta) y los de las integraciones nativas (voz,
  * imagen, persistencia de adjuntos).
  */
-enum class DiagnosticSource { AI_INDEXING, AI_QUERY, VOICE, IMAGE, STORAGE }
+enum class DiagnosticSource { AI_INDEXING, AI_QUERY, AI_TRANSCRIBE, VOICE, IMAGE, STORAGE }
 
 /**
  * Entrada de diagnóstico ya registrada. [summary] es un resumen **estable** (no

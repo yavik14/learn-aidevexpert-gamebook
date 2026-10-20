@@ -140,6 +140,7 @@ fun MainViewController(): UIViewController {
             noteLinkRepository = links,
             semanticLinkingService = linking,
             aiClient = ai,
+            transcribeClient = runtime.transcribeClient,
             diagnostics = diag,
         )
     }

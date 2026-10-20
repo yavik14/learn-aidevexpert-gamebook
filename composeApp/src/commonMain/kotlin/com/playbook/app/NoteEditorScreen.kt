@@ -2,6 +2,7 @@ package com.playbook.app
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.playbook.core.model.Attachment
 import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
@@ -69,10 +72,17 @@ import com.playbook.core.model.normalizeGenres
  *   "Re-indexar", habilitado sólo si el estado no es `INDEXED` y el `body` del
  *   borrador no está en blanco (sin texto no hay nada que embeber). Re-indexar
  *   **no** reescribe `track`/`genres`/`body`: sólo dispara el enriquecimiento.
+ * - En modo edición, si la Nota tiene Adjuntos `AUDIO` ([audioAttachments]) se
+ *   muestra "Audio adjunto": lista determinista (ordinal + tamaño) para elegir
+ *   uno y la acción "Transcribir" con su estado ([transcriptionState]). El job y
+ *   el texto transcripto viven en [App]; llegan por [transcribedText] y se
+ *   consumen una sola vez con [onTranscribedTextConsumed]. Con `body` vacío el
+ *   texto se aplica directo; con texto existente se abre un diálogo con vista
+ *   previa y "Anexar"/"Reemplazar"/"Cancelar". Nunca hay auto-guardado.
  *
  * La pantalla es "tonta": mantiene el borrador local y emite `onSave`/`onDelete`/
- * `onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`; la persistencia, el
- * refresco y la navegación los maneja [App].
+ * `onCancel`/`onRemoveImage`/`onOpenRelated`/`onReindex`/`onTranscribe`; la
+ * persistencia, el refresco y la navegación los maneja [App].
  */
 @Composable
 fun NoteEditorScreen(
@@ -93,12 +103,24 @@ fun NoteEditorScreen(
     onStartDictation: (() -> Unit)? = null,
     onStopDictation: (() -> Unit)? = null,
     onDictatedTextConsumed: ((String) -> Unit)? = null,
+    audioAttachments: List<Attachment> = emptyList(),
+    transcriptionState: AudioTranscriptionUiState = AudioTranscriptionUiState.Idle,
+    transcribedText: String? = null,
+    onTranscribe: ((String) -> Unit)? = null,
+    onTranscribedTextConsumed: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var body by remember { mutableStateOf(initialBody) }
     var selectedTrack by remember { mutableStateOf(initialTrack) }
     var genres by remember { mutableStateOf(normalizeGenres(initialGenres)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // Selección determinista: el primero del orden del repositorio queda elegido.
+    // Se conserva mientras los ids no cambien (un `refresh` no debe perderla).
+    val audioIds = audioAttachments.map { it.id }
+    var selectedAudioId by remember(audioIds) { mutableStateOf(audioIds.firstOrNull()) }
+    // Texto pendiente de confirmación ("Anexar"/"Reemplazar") y aviso tras aplicar.
+    var pendingTranscription by remember { mutableStateOf<String?>(null) }
+    var transcriptionNotice by remember { mutableStateOf<String?>(null) }
 
     // El texto final del dictado se anexa una sola vez. Mientras esté pendiente,
     // Guardar queda deshabilitado para no persistir el audio sin su texto.
@@ -110,8 +132,37 @@ fun NoteEditorScreen(
         }
     }
 
+    // La transcripción se aplica una sola vez: con `body` vacío directo y con
+    // texto existente mediante confirmación explícita (nunca en silencio).
+    LaunchedEffect(transcribedText) {
+        val incoming = transcribedText ?: return@LaunchedEffect
+        val trimmed = incoming.trim()
+        if (trimmed.isEmpty()) {
+            onTranscribedTextConsumed?.invoke(incoming)
+            return@LaunchedEffect
+        }
+        transcriptionNotice = null
+        if (body.isBlank()) {
+            body = trimmed
+            transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
+        } else {
+            pendingTranscription = trimmed
+        }
+        // Una sola notificación por resultado; el texto queda en estado local.
+        onTranscribedTextConsumed?.invoke(incoming)
+    }
+
     val canSave =
         (body.isNotBlank() || initialImage != null) && dictatedText == null
+    val dictationActive =
+        dictationState is DictationUiState.Listening ||
+            dictationState is DictationUiState.Processing
+    val canTranscribe = isEditing &&
+        onTranscribe != null &&
+        audioAttachments.isNotEmpty() &&
+        selectedAudioId != null &&
+        !dictationActive &&
+        transcriptionState != AudioTranscriptionUiState.Transcribing
 
     Column(
         modifier = modifier
@@ -172,6 +223,23 @@ fun NoteEditorScreen(
                     Text(text = "Quitar imagen")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (isEditing && audioAttachments.isNotEmpty() && onTranscribe != null) {
+                AudioAttachmentSection(
+                    attachments = audioAttachments,
+                    selectedId = selectedAudioId,
+                    state = transcriptionState,
+                    notice = transcriptionNotice,
+                    enabled = canTranscribe,
+                    onSelect = { selectedAudioId = it },
+                    onTranscribe = {
+                        selectedAudioId?.let { selected ->
+                            transcriptionNotice = null
+                            onTranscribe(selected)
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
             OutlinedTextField(
                 value = body,
@@ -247,6 +315,62 @@ fun NoteEditorScreen(
         }
     }
 
+    pendingTranscription?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { pendingTranscription = null },
+            title = { Text(text = "Aplicar transcripción") },
+            text = {
+                Column {
+                    Text(
+                        text = "El cuerpo ya tiene texto. Elegí cómo integrar la transcripción:",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Vista previa", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = preview,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            body = appendDictation(body, preview)
+                            transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
+                            pendingTranscription = null
+                        },
+                    ) {
+                        Text(text = "Anexar")
+                    }
+                    TextButton(
+                        onClick = {
+                            body = preview.trim()
+                            transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
+                            pendingTranscription = null
+                        },
+                    ) {
+                        Text(text = "Reemplazar")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTranscription = null }) {
+                    Text(text = "Cancelar")
+                }
+            },
+        )
+    }
+
     if (showDeleteDialog && onDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -268,6 +392,60 @@ fun NoteEditorScreen(
                 }
             },
         )
+    }
+}
+
+/**
+ * Sección "Audio adjunto" del modo edición: lista determinista de los Adjuntos
+ * `AUDIO` (ordinal + tamaño), selector cuando hay más de uno y la acción
+ * "Transcribir" con su estado textual y el aviso de aplicación. No hay playback:
+ * elegir un audio no lee el archivo ni llama al transcriptor.
+ */
+@Composable
+private fun AudioAttachmentSection(
+    attachments: List<Attachment>,
+    selectedId: String?,
+    state: AudioTranscriptionUiState,
+    notice: String?,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+    onTranscribe: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(text = "Audio adjunto", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        attachments.forEachIndexed { index, attachment ->
+            val label = audioAttachmentLabel(index, attachment.byteSize)
+            if (attachments.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(attachment.id) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = attachment.id == selectedId,
+                        onClick = { onSelect(attachment.id) },
+                    )
+                    Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = onTranscribe, enabled = enabled) {
+            Text(text = state.actionLabel())
+        }
+        state.message()?.let { message ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = message, style = MaterialTheme.typography.bodyMedium)
+        }
+        notice?.let { applied ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = applied, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
