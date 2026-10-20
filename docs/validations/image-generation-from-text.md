@@ -123,3 +123,27 @@ Ninguno.
 evidencia en `feature_list.json`/`PROGRESS.md`, rebasar sobre `origin/develop`
 (`42e6c60`); los conflictos en `App.kt`/docs se resolvieron conservando ambas
 features. No se requiere reparación de la feature para aceptarla.
+
+## Reverificación (2026-10-20, base `0cffd1e`)
+
+Reverificación independiente sobre `origin/develop` = `0cffd1e` (feature
+squasheada sobre `42e6c60`; árbol **idéntico** a
+`origin/feature/image-generation-from-text` `d9d8aec`, sin drift). Veredicto
+confirmado: **`accept`**.
+
+| Check re-ejecutado | Resultado |
+| --- | --- |
+| `ANDROID_HOME=… CI=true ./init.sh` | **exit 0**; `:composeApp:assembleDebug` + `:core:testDebugUnitTest` OK (IA fake, sin red). |
+| `:core:testDebugUnitTest :core:iosSimulatorArm64Test --rerun-tasks` | **BUILD SUCCESSFUL**; Android/JVM e iOS **34 suites/99 tests/0 failures/0 errores/0 skipped**; `TextImageGeneration{Android,Ios}Test` 1/1 y `AiPorts{Android,Ios}Test` 6/6. |
+| `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` | **BUILD SUCCESSFUL** (iOS no bloqueante). |
+| Controles negativos (a) prompt vacío y (b) validación de imagen | Reproducidos de forma independiente: ambos rompen `TextImageGenerationAndroidTest` (exit 1). El archivo se restauró byte-idéntico (sha256 `b2b92c5f…`) y la suite filtrada volvió a verde. |
+| PNG fake | Parseado con `zlib`/CRC32 propio: `IHDR`/`IDAT`/`tEXt`/`IEND` con CRC válido, 1×1 RGBA rojo opaco, 122 bytes para `un jefe final`; `sips` decodifica 1×1 PNG. |
+| Smoke Android | **Re-ejecutado** en `emulator-5556` (API 35, headless, fake): "Foto" → "Generar con IA" → prompt → preview → Guardar con `body` vacío → tercera Nota con chip "Imagen" + miniatura; tras force-stop/relanzar persisten **3 Notas/3 Adjuntos/3 miniaturas**. Adjunto nuevo: `kind=imagen`, `mime_type=image/png`, `file_path=images/<uuid>.jpg` relativa, `byte_size=130` = archivo real; `note.body=''`, `status=capturada`. "Quitar imagen" no creó fila ni archivo (3/3 antes y después). Con prompt vacío el botón "Generar" queda `enabled=false`. |
+| Alcance | `git diff 0cffd1e^..0cffd1e` sin `.sqm`/esquema v8, deps, `init.sh`, `AiRuntime`/`OpenAiAdapters` reales ni `iosApp/**`. |
+
+`composeApp/build/smoke-evidence/image-generation-from-text/` no existe en este
+checkout (artefactos de `build/` efímeros); se re-ejecutó el smoke en su lugar.
+No se detectaron cambios materiales respecto de la validación previa: los
+conteos 34/99 y el comportamiento coinciden. El hallazgo low de identidad de
+`generationJob` sigue vigente como mejora no bloqueante; la ausencia de smoke
+independiente quedó cubierta por esta corrida.

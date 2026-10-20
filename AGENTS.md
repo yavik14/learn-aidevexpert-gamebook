@@ -55,11 +55,14 @@ en `docs/validations/brainstorming-note-per-step.md` §11).
 en `docs/validations/transcribe-audio-attachment.md`, 2026-10-20).
 `ai-suggest-classification` quedó `accepted` (spec
 `docs/specs/ai-suggest-classification.md`; validación independiente `accept` en
-`docs/validations/ai-suggest-classification.md`, 2026-10-20). `gdd-export-hybrid`
-y `image-generation-from-text` quedaron implementadas y `passing` (specs
-`docs/specs/gdd-export-hybrid.md` y `docs/specs/image-generation-from-text.md`;
-validación independiente `accept`, pendiente de persistencia de `accepted` por
-el orquestador). Después siguen las demás `not_started` de las olas 4–6.
+`docs/validations/ai-suggest-classification.md`, 2026-10-20).
+`image-generation-from-text` también quedó `accepted` (spec
+`docs/specs/image-generation-from-text.md`; validación independiente `accept`
+en `docs/validations/image-generation-from-text.md`, reverificada sobre
+`0cffd1e`). `gdd-export-hybrid` sigue `passing` (spec
+`docs/specs/gdd-export-hybrid.md`; validación independiente `accept`, pendiente
+de persistencia de `accepted` por el orquestador). Después siguen las demás
+`not_started` de las olas 4–6.
 `readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
