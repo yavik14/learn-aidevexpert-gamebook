@@ -1997,4 +1997,4 @@
   - Controles negativos del implementer/validador conservados; `git diff origin/develop...HEAD` sin key ni paths protegidos; `local.properties` gitignored.
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/ai-real-chat.md`; código/docs de la feature ya en `309cd26` (más el commit de cierre de estado).
 - Known risk or unresolved issue: Lows no bloqueantes del validador (fences con preámbulo, heurísticas de ruido, `__` en código inline); parser heurístico, el smoke no prueba que el proveedor honre los parámetros, sin reintentos/streaming, iOS fake. Nada bloqueante.
-- Next best step: push de `feature/ai-real-chat` y PR contra `develop`; no mergear (lo hace la sesión integradora).
+- Next best step: PR #57 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/57`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
