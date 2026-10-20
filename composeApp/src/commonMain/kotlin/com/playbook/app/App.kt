@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -18,12 +19,15 @@ import com.playbook.app.voice.RecordedAudio
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.AiClient
+import com.playbook.core.ai.AudioAttachmentTranscriptionService
+import com.playbook.core.ai.AudioTranscriptionResult
 import com.playbook.core.ai.BrainstormingSuggestionService
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.ai.TranscribeClient
 import com.playbook.core.diagnostics.DiagnosticSource
 import com.playbook.core.diagnostics.Diagnostics
 import com.playbook.core.diagnostics.NoOpDiagnostics
@@ -43,6 +47,7 @@ import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.GameProjectRepository
 import com.playbook.core.repository.NoteLinkRepository
 import com.playbook.core.repository.NoteRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -123,6 +128,7 @@ fun App(
     noteLinkRepository: NoteLinkRepository,
     semanticLinkingService: SemanticLinkingService,
     aiClient: AiClient,
+    transcribeClient: TranscribeClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     MaterialTheme {
@@ -141,6 +147,14 @@ fun App(
         var askState by remember { mutableStateOf<AskUiState>(AskUiState.Idle) }
         var showImageSourceDialog by remember { mutableStateOf(false) }
         var imageError by remember { mutableStateOf<ImageCaptureError?>(null) }
+        // Transcripción diferida del Adjunto AUDIO: el job y el último texto
+        // viven acá; el editor sólo aplica/confirma y avisa que lo consumió.
+        var transcriptionState by remember {
+            mutableStateOf<AudioTranscriptionUiState>(AudioTranscriptionUiState.Idle)
+        }
+        var transcribedText by remember { mutableStateOf<String?>(null) }
+        var transcriptionNoteId by remember { mutableStateOf<String?>(null) }
+        var transcriptionJob by remember { mutableStateOf<Job?>(null) }
 
         // Las llamadas de IA son asíncronas: `rememberCoroutineScope` permite
         // invocar los servicios `suspend` sin introducir `ViewModel`/Flow.
@@ -158,6 +172,21 @@ fun App(
             },
         )
         val fileStore = rememberAttachmentFileStore()
+        // Caso de uso puro del core: valida Nota/AUDIO, lee bytes y transcribe.
+        // No persiste ni indexa; eso queda en el Guardar existente.
+        val audioTranscriptionService = remember(
+            transcribeClient,
+            attachmentRepository,
+            fileStore,
+            diagnostics,
+        ) {
+            AudioAttachmentTranscriptionService(
+                transcribeClient = transcribeClient,
+                attachmentRepository = attachmentRepository,
+                fileStore = fileStore,
+                diagnostics = diagnostics,
+            )
+        }
 
         LaunchedEffect(refreshKey) {
             notes = noteRepository.getAll()
@@ -184,6 +213,17 @@ fun App(
         LaunchedEffect(Unit) {
             pendingIndexingRetry.retryPending()
             reload()
+        }
+
+        // Cambiar de destino (Nota, lista, etc.) cancela el job y descarta el
+        // resultado: nunca se aplica texto de una Nota a otra. La selección de
+        // audio vive en el editor y se reinicia al entrar/salir de Edit.
+        LaunchedEffect(destination) {
+            transcriptionJob?.cancel()
+            transcriptionJob = null
+            transcriptionState = AudioTranscriptionUiState.Idle
+            transcribedText = null
+            transcriptionNoteId = null
         }
 
         fun goToList() {
@@ -272,6 +312,65 @@ fun App(
                 noteIndexingOrchestrator.index(note)
                 reload()
             }
+        }
+
+        /**
+         * Transcribe el Adjunto `AUDIO` elegido de [noteId]. El job es cancelable
+         * y su resultado se descarta si el destino ya no es esa Nota. El texto
+         * sólo se entrega al editor ([transcribedText]); no se guarda ni indexa
+         * hasta que el usuario toque "Guardar" (camino existente).
+         */
+        fun transcribeAttachment(noteId: String, attachmentId: String) {
+            val current = destination
+            if (current !is NotesDestination.Edit || current.noteId != noteId) return
+            transcriptionJob?.cancel()
+            transcriptionJob = scope.launch {
+                transcriptionNoteId = noteId
+                transcribedText = null
+                transcriptionState = AudioTranscriptionUiState.Transcribing
+                val result: AudioTranscriptionResult? = try {
+                    audioTranscriptionService.transcribe(noteId, attachmentId)
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (_: Throwable) {
+                    // Fallo inesperado (no del puerto): mismo mensaje/retry, sin
+                    // datos del usuario en el diagnóstico.
+                    diagnostics.recordFailure(
+                        DiagnosticSource.AI_TRANSCRIBE,
+                        AudioAttachmentTranscriptionService.SUMMARY_FAILED,
+                    )
+                    null
+                }
+
+                // La Nota pudo cambiar durante la llamada: descartar el texto.
+                if ((destination as? NotesDestination.Edit)?.noteId != noteId) {
+                    transcriptionJob = null
+                    return@launch
+                }
+
+                transcriptionState = when (result) {
+                    is AudioTranscriptionResult.Transcribed -> {
+                        transcribedText = result.text
+                        AudioTranscriptionUiState.Idle
+                    }
+
+                    AudioTranscriptionResult.EmptyTranscription -> AudioTranscriptionUiState.Empty
+                    // Incluye AudioNotFound: para la UI el Adjunto ya no está legible.
+                    AudioTranscriptionResult.AudioNotFound,
+                    AudioTranscriptionResult.AudioUnavailable,
+                    -> AudioTranscriptionUiState.Unavailable
+
+                    is AudioTranscriptionResult.Failed,
+                    null,
+                    -> AudioTranscriptionUiState.Failed
+                }
+                transcriptionJob = null
+            }
+        }
+
+        /** `onTranscribedTextConsumed` del editor: limpia sólo si coincide. */
+        fun consumeTranscribedText(text: String) {
+            if (transcribedText == text) transcribedText = null
         }
 
         /** Consulta RAG: pasa el estado visible por [AskUiState] mientras corre. */
@@ -516,6 +615,8 @@ fun App(
             onDispose {
                 dictationJob?.cancel()
                 dictationJob = null
+                transcriptionJob?.cancel()
+                transcriptionJob = null
                 voiceTranscriber.cancel()
                 discardPendingAudio()
             }
@@ -673,38 +774,64 @@ fun App(
                     // La nota ya no existe (p. ej. se borró): volver a la lista.
                     LaunchedEffect(current.noteId) { goToList() }
                 } else {
-                    NoteEditorScreen(
-                        initialBody = note.body,
-                        initialTrack = note.track,
-                        initialGenres = note.genres,
-                        initialImage = null,
-                        isEditing = true,
-                        onSave = { body, track, genres ->
-                            val edited = note.copy(
-                                body = body.trim(),
-                                track = track,
-                                genres = genres,
-                            )
-                            noteRepository.update(edited)
-                            indexBestEffort(edited)
-                            goToList()
-                            reload()
-                        },
-                        onDelete = {
-                            // Las filas `attachment` se borran dentro del
-                            // repositorio de notas; los archivos se borran acá.
-                            val noteAttachments = attachmentRepository.getByNoteId(note.id)
-                            noteRepository.delete(note.id)
-                            noteAttachments.forEach { fileStore.delete(it.filePath) }
-                            goToList()
-                            reload()
-                        },
-                        onCancel = ::goToList,
-                        onRemoveImage = null,
-                        onOpenRelated = { destination = NotesDestination.Related(note.id) },
-                        initialStatus = note.status,
-                        onReindex = { reindex(note) },
-                    )
+                    // Los Adjuntos llegan ordenados `created_at ASC, id ASC`; el
+                    // filtro conserva ese orden para el selector determinista.
+                    val noteAudio = attachments.filter {
+                        it.noteId == note.id && it.kind == AttachmentKind.AUDIO
+                    }
+                    // El estado/texto transcripto sólo es válido para esta Nota:
+                    // un resultado viejo nunca se aplica al cambiar de Nota.
+                    val noteTranscriptionState =
+                        if (transcriptionNoteId == note.id) {
+                            transcriptionState
+                        } else {
+                            AudioTranscriptionUiState.Idle
+                        }
+                    val noteTranscribedText =
+                        if (transcriptionNoteId == note.id) transcribedText else null
+                    // `key(note.id)` reinicia borrador y selección al cambiar de Nota.
+                    key(note.id) {
+                        NoteEditorScreen(
+                            initialBody = note.body,
+                            initialTrack = note.track,
+                            initialGenres = note.genres,
+                            initialImage = null,
+                            isEditing = true,
+                            onSave = { body, track, genres ->
+                                val edited = note.copy(
+                                    body = body.trim(),
+                                    track = track,
+                                    genres = genres,
+                                )
+                                noteRepository.update(edited)
+                                indexBestEffort(edited)
+                                goToList()
+                                reload()
+                            },
+                            onDelete = {
+                                // Las filas `attachment` se borran dentro del
+                                // repositorio de notas; los archivos se borran acá.
+                                val noteAttachments = attachmentRepository.getByNoteId(note.id)
+                                noteRepository.delete(note.id)
+                                noteAttachments.forEach { fileStore.delete(it.filePath) }
+                                goToList()
+                                reload()
+                            },
+                            onCancel = ::goToList,
+                            onRemoveImage = null,
+                            onOpenRelated = { destination = NotesDestination.Related(note.id) },
+                            initialStatus = note.status,
+                            onReindex = { reindex(note) },
+                            dictationState = dictation,
+                            audioAttachments = noteAudio,
+                            transcriptionState = noteTranscriptionState,
+                            transcribedText = noteTranscribedText,
+                            onTranscribe = { attachmentId ->
+                                transcribeAttachment(note.id, attachmentId)
+                            },
+                            onTranscribedTextConsumed = ::consumeTranscribedText,
+                        )
+                    }
                 }
             }
 

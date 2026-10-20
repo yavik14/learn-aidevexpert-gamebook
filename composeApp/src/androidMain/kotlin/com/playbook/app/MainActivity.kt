@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 noteLinkRepository = noteLinkRepository,
                 semanticLinkingService = semanticLinkingService,
                 aiClient = aiClient,
+                transcribeClient = aiRuntime.transcribeClient,
                 diagnostics = diagnostics,
             )
         }

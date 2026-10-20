@@ -1244,6 +1244,38 @@ Implementado 2026-10-19. Proveedor propio OpenAI-compatible
   key-gated (`PLAYBOOK_AI_SMOKE=1`), fuera del gate.
 - **iOS:** congelado; usa `fakeAiRuntime()`, sin transporte real.
 
+## Audio Attachment Transcription Decisions (transcribe-audio-attachment)
+
+Implementado 2026-10-20. Detalles en `docs/specs/transcribe-audio-attachment.md`.
+
+- **Caso de uso puro en `:core`:** `AudioAttachmentTranscriptionService` valida
+  que el Adjunto pertenezca a la Nota y sea `AUDIO`, lee bytes exactos con
+  `AttachmentFileStore.read` (`audio/<uuid>.m4a` ya soportado) y llama
+  `TranscribeClient.transcribe(bytes, mimeType)` **una vez**. Devuelve
+  `Transcribed`/`AudioNotFound`/`AudioUnavailable`/`EmptyTranscription`/
+  `Failed(AiClientException)`. No persiste ni indexa y no cambia
+  `AiRuntime`/`TranscribeClient`/esquema.
+- **Selección determinista:** la UI usa los Adjuntos `AUDIO` en orden
+  `created_at ASC, id ASC` (el repositorio ya ordena así), etiqueta
+  `Audio N · <tamaño>` y default el primero. Elegir otro audio no lee ni llama al
+  transcriptor; el botón usa sólo el id seleccionado.
+- **Aplicación controlada:** `App` posee el job cancelable, el estado y el último
+  texto; el editor consume el texto una sola vez. `body` vacío → se aplica
+  directo; `body` con texto → diálogo "Anexar" (misma semántica que
+  `appendDictation`)/"Reemplazar"/"Cancelar". Sin auto-guardado: el `body`, el
+  `status` y el embedding cambian sólo con "Guardar" (`update` +
+  `indexBestEffort`). Cambiar de Nota/destino cancela el job y descarta el
+  resultado.
+- **Diagnóstico:** nueva fuente `DiagnosticSource.AI_TRANSCRIBE` con resumen
+  estable `transcription_failed` y **sin `detail`**; sin texto, bytes, rutas ni
+  ids.
+- **Verificación:** `:core` 30 suites / 90 tests / 0 failures y
+  `:core:iosSimulatorArm64Test` 30/90/0; `assembleDebug` + link iOS OK;
+  `CI=true ./init.sh` exit 0; smoke Android con `adb run-as` (cuerpo vacío,
+  Anexar/Reemplazar/Cancelar, varios audios, archivo ausente y guardado
+  re-indexado) en `composeApp/build/smoke-evidence/transcribe-audio-attachment/`.
+  IA fake, sin red ni key.
+
 ## Brainstorming Wizard Decisions (brainstorming-wizard)
 
 Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
