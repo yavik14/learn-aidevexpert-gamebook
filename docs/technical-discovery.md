@@ -1306,6 +1306,28 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
   bloqueante y smoke Android real (oferta, saltar, aceptar+cancelar, relanzar sin
   oferta, aceptar+Guardar y error forzado) documentado en `PROGRESS.md`.
 
+## Brainstorming Note per Step Decisions (brainstorming-note-per-step)
+
+Implementado 2026-10-20. Detalles en `docs/specs/brainstorming-note-per-step.md`.
+
+- **Mapper puro en `:core`.** `buildBrainstormingStepNote(step, draft)` (índice
+  `0..8`) devuelve `BrainstormingStepNote(body, track, genres)`; usa el draft
+  actual, normaliza Géneros, trimea/descarta vacíos, une listas con `\n` y
+  formatea Mecánicas como `Categoría: descripción`. Track: Core Loop/Mecánicas →
+  `MECHANICS`; Concepto/Fantasía → `STORY`; el resto `null`.
+- **Duplicados.** `isDuplicateBrainstormingNote` normaliza **ambos** lados de los
+  Géneros (tolera el orden binario de SQLite y grafías migradas); UI y `App` lo
+  usan. Regresión con `["Zeta","omega"]`/`["omega","Zeta"]` y
+  `"jrpg"/"Platformer"`/`"JRPG"/"platformer"`.
+- **Nota final.** Acción explícita por paso, confirmación con preview, `status =
+  CAPTURED` + `indexBestEffort`; cancelar el wizard conserva las Notas creadas y
+  no toca `game_project`. El callback de `App` envuelve `getAll()` + `create` en
+  `runCatching` y devuelve `FAILED` ante error.
+- **Verificación:** `:core` 27 suites/81 tests/0 failures, `assembleDebug`,
+  `CI=true ./init.sh` exit 0, link/tests iOS y smoke/SQL con Géneros
+  personalizados; evidencia en
+  `composeApp/build/smoke-evidence/brainstorming-note-per-step/`.
+
 ## AI Real Embeddings Decisions (ai-real-embeddings)
 
 Implementado 2026-10-19. No duplica el flag/runtime/adaptadores/wiring de

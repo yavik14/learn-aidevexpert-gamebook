@@ -20,6 +20,7 @@ import com.playbook.app.voice.VoiceTranscriber
 import com.playbook.core.ai.AiClient
 import com.playbook.core.ai.BrainstormingSuggestionService
 import com.playbook.core.ai.NoteIndexingOrchestrator
+import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
@@ -36,6 +37,7 @@ import com.playbook.core.model.GameProjectDraft
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
+import com.playbook.core.model.normalizeGenres
 import com.playbook.core.platform.currentTimeMillis
 import com.playbook.core.repository.AttachmentRepository
 import com.playbook.core.repository.GameProjectRepository
@@ -221,6 +223,42 @@ fun App(
                 noteIndexingOrchestrator.index(note)
                 reload()
             }
+        }
+
+        /**
+         * Crea una Nota desde el wizard. El chequeo de duplicado y la creación
+         * corren dentro de [runCatching]: un fallo de lectura/escritura devuelve
+         * [NoteSaveResult.FAILED] sin propagar. El indexado y el refresh sólo
+         * ocurren en el camino exitoso.
+         */
+        fun saveBrainstormingNote(
+            body: String,
+            track: Track?,
+            genres: List<String>,
+        ): NoteSaveResult {
+            val normalized = normalizeGenres(genres)
+            val created = runCatching {
+                val duplicate = noteRepository.getAll().any { note ->
+                    isDuplicateBrainstormingNote(note, body, track, normalized)
+                }
+                if (duplicate) {
+                    null
+                } else {
+                    noteRepository.create(
+                        NoteDraft(
+                            owner = LOCAL_OWNER_ID,
+                            body = body,
+                            track = track,
+                            genres = normalized,
+                        ),
+                    )
+                }
+            }.getOrElse { return NoteSaveResult.FAILED }
+
+            if (created == null) return NoteSaveResult.DUPLICATE
+            indexBestEffort(created)
+            reload()
+            return NoteSaveResult.SAVED
         }
 
         /**
@@ -541,6 +579,7 @@ fun App(
                 initialProject = project,
                 owner = project?.owner ?: LOCAL_OWNER_ID,
                 suggestionService = suggestionService,
+                existingNotes = notes,
                 onSave = { draft ->
                     val saved = runCatching { gameProjectRepository.save(draft) }.isSuccess
                     if (saved) {
@@ -549,6 +588,7 @@ fun App(
                     }
                     saved
                 },
+                onSaveNote = ::saveBrainstormingNote,
                 onCancel = ::goToList,
             )
 
