@@ -50,9 +50,12 @@ en `docs/validations/brainstorming-note-per-step.md` §11).
 `docs/specs/first-run-project-onboarding.md`; validación independiente
 `accept`). `gdd-document-hybrid` también quedó `accepted` (spec
 `docs/specs/gdd-document-hybrid.md`; validación independiente `accept`,
-2026-10-20). No quedan features en vuelo. La siguiente ready es
-`gdd-export-hybrid` (dependencias `gdd-export` y `gdd-document-hybrid`
-satisfechas), seguida por las demás `not_started` de las olas 4–6.
+2026-10-20). `transcribe-audio-attachment` quedó `accepted` (spec
+`docs/specs/transcribe-audio-attachment.md`; validación independiente `accept`
+en `docs/validations/transcribe-audio-attachment.md`, 2026-10-20). No quedan
+features en vuelo. La siguiente ready es `gdd-export-hybrid` (dependencias
+`gdd-export` y `gdd-document-hybrid` satisfechas), seguida por las demás
+`not_started` de las olas 4–6.
 `readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
