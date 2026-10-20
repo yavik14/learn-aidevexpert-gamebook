@@ -45,7 +45,8 @@ import kotlinx.coroutines.launch
  * tests cross-platform).
  *
  * - Cabecera fija `GDD — <título>` (o sólo "GDD") con el total de Notas y los
- *   botones "Volver" y **"Compartir"** (deshabilitado si no hay Notas).
+ *   botones "Volver" y **"Compartir"** (habilitado con Notas o con ficha con
+ *   título/campos; deshabilitado sólo sin contenido exportable).
  * - Ficha en una `Card` destacada con encabezado "Proyecto": campos verticales
  *   (label arriba, valor debajo) y estados explícitos "Proyecto sin datos
  *   adicionales" / "Todavía no hay Proyecto".
@@ -61,11 +62,10 @@ import kotlinx.coroutines.launch
  *   emite imagen y el resto de la tarjeta no cambia.
  * - Tocar una nota emite `onOpenNote(note.id)`: `App` la abre en el editor.
  *
- * "Compartir" sigue construyendo el Markdown **sólo con las Notas** con
- * [buildGddMarkdown] (timestamp de plataforma) y lo entrega a [GddSharer]; la
- * ficha del Proyecto en el export es `gdd-export-hybrid`. El resultado se
- * comunica con un snackbar ("Listo para compartir"/"No disponible") sin salir de
- * la pantalla.
+ * "Compartir" construye el Markdown híbrido con [buildGddMarkdown] (ficha del
+ * Proyecto + Notas, timestamp de plataforma) y lo entrega a [GddSharer]; se
+ * habilita con Notas o con contenido en la ficha. El resultado se comunica con un
+ * snackbar ("Listo para compartir"/"No disponible") sin salir de la pantalla.
  *
  * La pantalla es "tonta": recibe `notes`/`project`/`attachmentCounts` y sólo
  * emite `onOpenNote`/`onBack`. Sin DI, `ViewModel`, Flow ni librería de
@@ -107,7 +107,11 @@ fun GddScreen(
                 Spacer(modifier = Modifier.weight(1f))
                 TextButton(
                     onClick = {
-                        val markdown = buildGddMarkdown(notes, currentTimestampLabel())
+                        val markdown = buildGddMarkdown(
+                            project = project,
+                            notes = notes,
+                            now = currentTimestampLabel(),
+                        )
                         val shared = sharer.share(markdown)
                         scope.launch {
                             snackbarHostState.showSnackbar(
@@ -115,7 +119,8 @@ fun GddScreen(
                             )
                         }
                     },
-                    enabled = notes.isNotEmpty(),
+                    enabled = notes.isNotEmpty() ||
+                        document.project?.let { it.title != null || it.fields.isNotEmpty() } == true,
                 ) {
                     Text(text = "Compartir")
                 }

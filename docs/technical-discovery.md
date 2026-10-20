@@ -1003,12 +1003,37 @@ Implementado 2026-10-20. Detalle en `ARCHITECTURE.md` y `docs/specs/gdd-document
   "Todavía no hay Proyecto"/"Completalo desde Brainstorming."; Proyecto vacío →
   "Proyecto sin datos adicionales"; sin Notas → ficha + "Todavía no hay notas"
   (sin secciones vacías). Sin DI, `ViewModel`, Flow ni navegación nuevos.
-- **Export intacto:** "Compartir" sigue usando `buildGddMarkdown(notes, now)` y
-  `GddSharer` **sólo con Notas** (deshabilitado sin Notas). Incluir la ficha en
-  el Markdown es `gdd-export-hybrid`, que depende de esta feature.
+- **Export intacto en esta feature:** "Compartir" siguió usando
+  `buildGddMarkdown(notes, now)` y `GddSharer` **sólo con Notas**. Incluir la
+  ficha en el Markdown quedó para `gdd-export-hybrid` (ver la sección de export
+  híbrido).
 - **Verificación:** `verifyGddDocument()` cubre escenarios 1–7 en Android/JVM e
   iOS; smoke Android del documento completo, sin Proyecto con Notas, Proyecto
   vacío y sin Notas. Sin dependencias nuevas.
+
+## GDD Hybrid Export Decisions (gdd-export-hybrid)
+
+Implementado 2026-10-20. Detalle en `ARCHITECTURE.md` y
+`docs/specs/gdd-export-hybrid.md`.
+
+- **Export = ficha + Notas, sin duplicar:** `buildGddMarkdown(project, notes,
+  now)` reusa `buildGddDocument`/`buildGdd`; el overload `(notes, now)` delega con
+  `project = null` y su salida queda byte-idéntica al contrato de `gdd-export`.
+  Cabecera `# GDD — <título>` (o `# GDD — Playbook`) y, si hay campos,
+  `## Proyecto` con los campos en el orden de `GddDocument`; sin Notas no se
+  emiten secciones.
+- **Formato de ficha:** `- **<Label>:** <valor escapado>` (listas unidas con
+  `, `) y mecánicas como sub-viñetas `  - Categoría · descripción`. Los valores
+  se colapsan a una línea y se escapan con el set existente (incluye `.`/`-`); los
+  labels, prefijos, `status.code` y títulos de sección son generados y no se
+  escapan. El título vive en la cabecera y no se repite como campo.
+- **“Compartir” con contenido exportable:** se habilita con Notas o con ficha con
+  título/campos; se deshabilita sólo sin contenido. No cambian `GddSharer`, el
+  snackbar (`"Listo para compartir"`/`"No disponible"`), `App.kt` ni el esquema
+  (v8, `.sqm` 1..7).
+- **Verificación:** `verifyGddMarkdownHybrid()` cubre escenarios 1–8 en
+  Android/JVM e iOS; el smoke Android del share queda limitado por la ausencia de
+  `adb`/emulador en el entorno, declarado honestamente.
 
 ## Observability Decisions (enrichment-observability-logging)
 
