@@ -85,11 +85,16 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   clasificación descriptiva múltiple son los **Géneros** (catálogo fijo constante
   de 12 + personalizados por Nota). Razón: `CONTEXT.md`; el catálogo fijo no debe
   "engordarse" globalmente con cada valor escrito.
-- La IA **MAY** **sugerir** `Track`/`Género` (vía `AiClient`, caso de uso `jev`)
+- La IA **MAY** **sugerir** `Track`/`Género` (vía `JevClient`, caso de uso `jev`)
   como una acción **explícita y separada** del indexado. La sugerencia **MUST**
   requerir confirmación del usuario (confirmar o editar) y **MUST NOT**
   auto-asignar ni persistir la clasificación sin confirmación. Razón: se revisó el
   non-goal "sin clasificación IA" (2026-10-15); el indexado sigue sin clasificar.
+- La sugerencia **MUST** ser estado efímero y **MUST NOT** bloquear Guardar.
+  Confirmar aplica al borrador local: el `Track` no nulo reemplaza y un `null`
+  conserva el actual; los Géneros se **fusionan** normalizados con los del usuario
+  (sin duplicados ni pérdidas). La propuesta no se persiste hasta Guardar. Razón:
+  el usuario conserva el control y la clasificación previa no se pierde.
 - Las secciones de clasificación del GDD **MUST** derivarse de `Track`/`Género`
   elegidos por el usuario; la sugerencia de IA no reemplaza esa decisión.
 

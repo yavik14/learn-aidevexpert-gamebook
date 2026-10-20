@@ -1,5 +1,6 @@
 package com.playbook.core.ai
 
+import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.Track
 
 /**
@@ -32,19 +33,17 @@ class FakeImageClient : ImageClient {
 }
 
 /**
- * `jev` fake: propone un `Track` determinista por hash sobre [Track.entries] y
- * un Género ilustrativo. La canonización contra el catálogo es del consumidor
- * (`genres-catalog-persistence`); esto es sólo una propuesta.
+ * `jev` fake: propone un `Track` y un Género de [GenreCatalog.GENRES]
+ * deterministas por hash del texto. El mismo `hashCode` elige ambos (sin
+ * `Random` ni red), de modo que el smoke ejercita los chips de catálogo. Sigue
+ * siendo sólo una propuesta: el consumidor normaliza y el usuario confirma.
  */
 class FakeJevClient : JevClient {
-    override suspend fun suggest(text: String): ClassificationSuggestion =
-        ClassificationSuggestion(
-            track = Track.entries[text.hashCode().mod(Track.entries.size)],
-            genres = listOf(GENRE_HINT),
+    override suspend fun suggest(text: String): ClassificationSuggestion {
+        val hash = text.hashCode()
+        return ClassificationSuggestion(
+            track = Track.entries[hash.mod(Track.entries.size)],
+            genres = listOf(GenreCatalog.GENRES[hash.mod(GenreCatalog.GENRES.size)]),
         )
-
-    private companion object {
-        /** Género ilustrativo; no pretende ser el catálogo real. */
-        const val GENRE_HINT = "RPG"
     }
 }
