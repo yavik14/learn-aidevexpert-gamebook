@@ -153,7 +153,12 @@ Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
 ## Components
 
 - **TopAppBar:** "Playbook" + acciones por **icono** (con `contentDescription`).
-- **FAB desplegable:** "Nueva nota" → Nota de texto / Galería / Cámara.
+  Implementado 2026-10-20 con fallback textual accesible `GDD`/`✦`/`?` (sin
+  `material-icons` en `commonMain`); si un glifo no renderiza, se usa `*`.
+- **FAB desplegable:** "Nueva nota" → Nota de texto / Galería / Cámara. Estado
+  local `+`/`×`, acciones apiladas, scrim y cierre por Back (Android). “Galería”
+  abre el diálogo “Agregar imagen” (conserva “Generar con IA”); “Cámara” lanza el
+  picker directo.
 - **Selector de Track**; **Chip de Track**, **Chip de Género** (catálogo + libre),
   **Chip de categoría de mecánica** (`Movimiento`/`Interacción`/`Conflicto`).
 - **Tarjeta de Nota:** cuerpo + track + géneros + estado; **miniatura** si es boceto.
@@ -207,5 +212,7 @@ Teléfonos primero; tablets con ancho cómodo. Sin Desktop/Web en el MVP.
 - Logo/wordmark definitivo.
 - Representación visual de cada `Track` (color + forma).
 - "Pendiente/fallida/sin indexar" sin parecer error grave.
-- Aspecto del **FAB desplegable** y su expansión/colapso.
+- ~~Aspecto del **FAB desplegable** y su expansión/colapso.~~ **Resuelto**
+  (2026-10-20): `+`/`×`, acciones Nota de texto/Galería/Cámara, scrim y Back;
+  ver Components.
 - Affordances de IA (play/pausa, generar imagen, transcribir) e indicador fake/real.

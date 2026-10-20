@@ -871,14 +871,9 @@ fun App(
                 imagePaths = imagePaths,
                 loadThumbnail = loadThumbnail,
                 onCreate = { destination = NotesDestination.Create },
-                onCaptureImage = { showImageSourceDialog = true },
+                onOpenImageSource = { showImageSourceDialog = true },
+                onCaptureCamera = { imagePicker.launch(ImageSource.CAMERA) },
                 onEdit = { noteId -> destination = NotesDestination.Edit(noteId) },
-                onDictate = {
-                    // El dictado ahora vive dentro de Nueva nota: abrir el editor
-                    // y arrancar la sesión (el cap espera al onStarted real).
-                    destination = NotesDestination.Create
-                    startDictation()
-                },
                 onOpenGdd = { destination = NotesDestination.Gdd },
                 onAsk = {
                     askState = AskUiState.Idle

@@ -1080,12 +1080,24 @@
       "rag-query",
       "brainstorming-wizard"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: build Android + smoke de la top bar, iconos y FAB desplegable."
+      "`CI=true ./init.sh` → exit 0 (Android build + tests del core, IA fake).",
+      "`./gradlew :composeApp:assembleDebug` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "Smoke Android de top bar, speed-dial, scrim/Back, Galería/Cámara, 'Generar con IA', lista con miniatura y estado vacío.",
+      "Validación independiente (`docs/validations/main-screen-playbook-shell.md`) → `accept`, sin Critical/High/Medium."
     ],
-    "evidence": [],
-    "notes": "Los iconos tienen `contentDescription` (accesibilidad). El FAB agrupa las capturas."
+    "evidence": [
+      "2026-10-20: `NotesListScreen` con `TopAppBar` \"Playbook\" + acciones GDD/Brainstorming/Preguntar (glifos `GDD`/`✦`/`?`, `contentDescription` único) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim, `PlaybookBackHandler` y sin `onDictate`; `App` cablea `onOpenImageSource`/`onCaptureCamera`.",
+      "`ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL (iOS congelado, sólo compila).",
+      "`CI=true ./init.sh` → exit 0; gate Android-only, sin dev servers.",
+      "Smoke Android (emulator dedicado Pixel_XL_API_31, API 31, 1440x2560/560dpi, fake): top bar con acciones y `contentDescription`; FAB abre/cierra por tap, Back y scrim; Nota de texto abre el editor sin dictado; Galería abre \"Agregar imagen\" (Cámara/Galería/\"Generar con IA\"); Cámara lanza el picker y permiso denegado muestra el error existente; \"Generar con IA\" → preview → Guardar deja chip \"Imagen\" y miniatura; estado vacío con \"Crear primera nota\"/\"Agregar imagen\" y FAB. Evidencia en `composeApp/build/smoke-evidence/main-screen-playbook-shell/` (capturas 01–14).",
+      "Hallazgo: `androidx.compose.ui.backhandler` no está en el classpath Android; se agregó `PlaybookBackHandler` expect/actual (Android usa `androidx.activity.compose.BackHandler`, iOS no-op). Sin deps, esquema, `init.sh` ni cambios en `:core`.",
+      "2026-10-20 validación independiente (`docs/validations/main-screen-playbook-shell.md`): `accept`, sin Critical/High/Medium; re-ejecutó `CI=true ./init.sh` (exit 0), `assembleDebug`, link iOS, `:core:testDebugUnitTest --rerun-tasks` (34 suites/99 tests/0 failures) y smoke Android en emulador dedicado API 31 (top bar, speed-dial/Back/scrim, Galería/Cámara, vacío/lista). Lows no bloqueantes: checkboxes de spec, semántica modal del scrim, glifos dependientes del font y rebase pendiente sobre `develop`.",
+      "2026-10-20 cierre post-rebase sobre `origin/develop` `f483bdf` (con `save-answer-as-note` y `tts-read-aloud`): `CI=true ./init.sh` exit 0, `assembleDebug` y link iOS OK, `:core:testDebugUnitTest --rerun-tasks` 36 suites/107 tests/0 failures y smoke Android API 31 (vacío/lista, speed-dial, Back/scrim, Galería/Cámara, Nota de texto y navegación GDD/Brainstorming/Preguntar). Sin conflictos en App.kt; conflictos de docs resueltos preservando ambos features."
+    ],
+    "notes": "Íconos con `contentDescription` (fallback textual sin material-icons); el speed-dial agrupa las capturas. Galería abre el diálogo para conservar 'Generar con IA'."
   },
   {
     "id": "sketch-thumbnails",

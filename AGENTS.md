@@ -65,10 +65,10 @@ en `docs/validations/image-generation-from-text.md`, reverificada sobre
 quedó `accepted` (spec `docs/specs/save-answer-as-note.md`; validación
 independiente `accept`, 2026-10-20). `tts-read-aloud` quedó `accepted` (spec
 `docs/specs/tts-read-aloud.md`; validación independiente `accept` en
-`docs/validations/tts-read-aloud.md`, 2026-10-20). Sigue
-`main-screen-playbook-shell` (primera ready por dependencias, **sin spec
-todavía**: requiere `$feature-spec`); luego `ai-real-chat`. Después siguen las
-demás `not_started` de las olas 4–6.
+`docs/validations/tts-read-aloud.md`, 2026-10-20). `main-screen-playbook-shell`
+quedó `accepted` (spec `docs/specs/main-screen-playbook-shell.md`; validación
+independiente `accept` en `docs/validations/main-screen-playbook-shell.md`).
+Siguen `ai-real-chat` y las demás `not_started` de las olas 4–6.
 `readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
