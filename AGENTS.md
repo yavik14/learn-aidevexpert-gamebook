@@ -45,12 +45,14 @@ en `docs/validations/brainstorming-ai-suggestions.md`).
 
 **En vuelo (no tocar ni duplicar):** `brainstorming-note-per-step` (`in_progress`
 en `worktree/brainstorming-note-per-step`, spec y código sin commit), pendiente
-de revisión y de implementer → validator. La siguiente ready sin dependencias
-abiertas y sin worktree es `first-run-project-onboarding` (`not_started`, sin
-spec; arranca con planner); luego `gdd-document-hybrid` y las demás `not_started`
-de las olas 3–6. `gdd-export-hybrid` espera `gdd-document-hybrid` y
-`readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
-(`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
+de revisión y de implementer → validator. `first-run-project-onboarding` quedó
+implementada y `accepted` (spec `docs/specs/first-run-project-onboarding.md`;
+validación independiente `accept`). La siguiente ready sin dependencias abiertas
+es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión);
+luego las demás `not_started` de las olas 3–6. `gdd-export-hybrid` espera
+`gdd-document-hybrid` y `readme-project-documentation` cierra el MVP. Para iOS:
+el upload firmado (`ios-release-pipeline-first-upload`) sigue
+`blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

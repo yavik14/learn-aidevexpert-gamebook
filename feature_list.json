@@ -1027,11 +1027,26 @@
     "depends_on": [
       "brainstorming-wizard"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: smoke Android del primer arranque (ofrecer/saltar) y creación del Proyecto."
+      "`./gradlew :composeApp:assembleDebug --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.",
+      "`./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 28 suites / 87 tests (post-rebase) / 0 failures / 0 errors / 0 skipped.",
+      "`CI=true ./init.sh` → exit 0 (Android-only, IA fake, sin red ni dev servers).",
+      "iOS no bloqueante: `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.",
+      "Smoke Android (emulator-5556): oferta, saltar, aceptar+cancelar, relanzar sin oferta, aceptar+Guardar, Notas sin Proyecto y error forzado.",
+      "Sin cambios en `:core`, esquema v8 (`.sqm` 1..7), build files, `init.sh` ni `iosApp/**`."
     ],
-    "evidence": [],
+    "evidence": [
+      "2026-10-19: pre-rebase `6db4d38`: `:composeApp:assembleDebug` BUILD SUCCESSFUL; `:core:testDebugUnitTest` 27 suites/80 tests/0 failures; `CI=true ./init.sh` exit 0; iOS link BUILD SUCCESSFUL.",
+      "Smoke Android emulator-5556: `game_project` con 0 filas al abrir; oferta con 'Iniciar Brainstorming'/'Saltar'; tras Saltar una fila `singleton|local|...` con `created_at == updated_at` y hijas 0/0/0; relanzar sin oferta.",
+      "Smoke aceptar: wizard `Paso 1/9`; la fila singleton se creó antes de navegar; Cancelar dejó la fila; relanzar sin oferta.",
+      "Smoke aceptar+Guardar: título 'SmokeProj' en la misma fila, `owner`/`created_at` preservados y `updated_at` avanzado.",
+      "Smoke Notas sin Proyecto: una nota sembrada siguió visible tras Saltar; Proyecto creado y nota intacta.",
+      "Control negativo (a): forzar el fallo de `save` mostró 'No se pudo crear el Proyecto' + 'Intentá de nuevo.', permaneció la oferta y `game_project` siguió en 0; código restaurado y re-verificado.",
+      "Pendiente: smoke de doble tap y captura visual del estado `Loading` (lectura local instantánea); guard `onboardingBusy` + upsert y contrato de `ProjectLoadState` cubiertos por revisión y `GameProjectCheck`.",
+      "2026-10-20: validación independiente `accept` ($feature-validator); sin bloqueantes. Hallazgos Low: doble tap puede abrir el editor tras navegar, estado `Loading` no capturado visualmente y sin UI/E2E persistente. Smoke Android de validación en emulator-5558: oferta, saltar, aceptar+cancelar, relanzar sin oferta, aceptar+Guardar, Notas sin Proyecto y error forzado.",
+      "2026-10-20: re-verificación post-rebase sobre `origin/develop` `66611ec`: `:composeApp:assembleDebug` BUILD SUCCESSFUL; `:core:testDebugUnitTest` 28 suites/87 tests/0 failures; `CI=true ./init.sh` exit 0; iOS link BUILD SUCCESSFUL."
+    ],
     "notes": "Saltable: se puede crear el Proyecto vacío y completarlo luego."
   },
   {
