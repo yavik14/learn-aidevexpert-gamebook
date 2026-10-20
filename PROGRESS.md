@@ -42,7 +42,8 @@
 - `brainstorming-ai-suggestions` `accepted` (2026-10-19; Session 069 implementación + Session 070 cierre/integración; validación independiente `accept` en `docs/validations/brainstorming-ai-suggestions.md`): `BrainstormingSuggestionService` en `:core` (prompt/contexto por paso, parsing/dedupe, parcial/error y máximo 2) + `FakeAiClient` determinista + UI efímera en el wizard (Sugerir/Usar/Agregar/Ignorar) + wiring de `aiClient` en `App`/roots. Sin persistencia, Notas, esquema ni IA real. `:core` 28 suites/87 tests/0 failures en Android e iOS (post-rebase), `assembleDebug` OK, `./init.sh` exit 0 e iOS link OK; smoke Android con evidencia.
 - `first-run-project-onboarding` `accepted` (2026-10-20; Session 071 implementación + Session 072 cierre; validación independiente `accept`): onboarding saltable del Proyecto en el primer arranque. `App` usa `ProjectLoadState` (`Loading`/`Missing`/`Loaded`) y, sin Proyecto, muestra `FirstRunOnboardingScreen` full-screen; “Iniciar Brainstorming” y “Saltar” crean primero el singleton vacío (`owner = "local"`, `id = "singleton"`, escalares `null`, listas/hijas vacías, `createdAt == updatedAt`, topes 3/3/5) y luego navegan al wizard o a la lista. Guard `onboardingBusy`, error con `AlertDialog` y sin flag persistido (la existencia del Proyecto evita reofrecer). Sin cambios en `:core`, esquema v8, raíces, build files, `init.sh` ni `iosApp`. Detalle en `docs/specs/first-run-project-onboarding.md`, `ARCHITECTURE.md` y `PROGRESS.md` (Sessions 071/072).
 - `brainstorming-note-per-step` `accepted` (2026-10-20; Sessions 063/064 implementación+repair y Session 065 cierre; re-validación independiente `accept` en `docs/validations/brainstorming-note-per-step.md` §11): mapper puro `buildBrainstormingStepNote` + predicado `isDuplicateBrainstormingNote` (normaliza ambos lados de los Géneros) en `:core`, con tests Android/iOS; acción `Guardar como Nota` en los 9 pasos con confirmación, bloqueo de duplicados exactos por contenido, feedback inline y errores; `App` crea con `LOCAL_OWNER_ID` + `indexBestEffort` + `reload` y envuelve el chequeo/creación en `runCatching`. Sin `note.project_id`, IA generativa, cambios de esquema/build files/`init.sh`/`iosApp`. Gate: `:core` 29 suites/89 tests/0 failures (post-rebase), `assembleDebug` OK, `./init.sh` exit 0, link y test iOS OK; smoke/SQL en `composeApp/build/smoke-evidence/brainstorming-note-per-step/`.
-- Current state: **38 `accepted`, 10 `not_started` y 1 `blocked`** (49 total). La siguiente ready sin dependencias abiertas es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
+- `gdd-document-hybrid` `accepted` (2026-10-20; Session 074 implementación + Session 075 cierre; validación independiente `accept`): GDD híbrido — `buildGddDocument(project, notes)` en `:core` (ficha con orden fijo, `Título` en cabecera, categorías capitalizadas y secciones `mecánicas`/`personajes`/`historia`/`Sin track` reutilizando `buildGdd`) + `GddScreen` con cabecera fija, ficha en `Card`, estados sin Proyecto/Proyecto vacío/sin Notas y `App` pasando `project`. Sin cambios de esquema (v8), repositorios, `GddProjection`/`GddMarkdown` ni export; “Compartir” sigue sólo Notas. Tests 29/88 pre-rebase y 30/90 post-rebase, 0 failures en Android e iOS; smoke Android y gate post-rebase. Ver `docs/specs/gdd-document-hybrid.md`.
+- Current state: **39 `accepted`, 9 `not_started`, 0 `passing` y 1 `blocked`** (49 total). Siguiente ready sin dependencias abiertas: `gdd-export-hybrid` (dependencias `gdd-export` y `gdd-document-hybrid` satisfechas); luego las demás `not_started` de las olas 4–6. `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-20.
 
@@ -1633,4 +1634,44 @@
 - Evidence captured: verificación post-rebase y PR https://github.com/yavik14/learn-aidevexpert-gamebook/pull/45 (no mergeado).
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
 - Known risk or unresolved issue: ninguno funcional; el merge a `develop` queda para la sesión integradora.
-- Next best step: PR contra `develop`; tras el merge, seguir con `gdd-document-hybrid`.
+- Next best step: PR contra `develop`; tras el merge, seguir con `gdd-export-hybrid`.
+
+### Session 074 (gdd-document-hybrid — implementación)
+
+- Date: 2026-10-20
+- Goal: implementar `gdd-document-hybrid` (spec `docs/specs/gdd-document-hybrid.md`) en el worktree `worktree/gdd-document-hybrid`, rama `feature/gdd-document-hybrid`, base `origin/develop` `66611ec`.
+- Completed:
+  - `:core`: nuevo `GddDocument.kt` con `GddProjectField`, `GddProjectBlock`, `GddDocumentSection`, `GddDocument` y `buildGddDocument(project, notes)`: ficha en orden fijo (`Géneros`, `Core Loop`, `Audiencia`, `Concepto`, `Inspiraciones`, `Fantasía`, `Mecánicas clave`, `Fuera de alcance`), sólo campos no vacíos, listas normalizadas con `trim` y orden preservado, mecánicas `Categoría · descripción` (capitalizadas), `Título` fuera de los campos y secciones reutilizando `buildGdd` (`mecánicas`/`personajes`/`historia`/`Sin track`).
+  - `:composeApp`: `GddScreen` recibe `project`, calcula `buildGddDocument` con `remember(project, notes)`, muestra cabecera fija `GDD — <título>` (o `GDD`) + total, ficha en `Card` destacada con labels/valores verticales, estados “Proyecto sin datos adicionales”/“Todavía no hay Proyecto”, secciones y Notas scrolleando juntas, y placeholders sin Notas; se conservan conteos, “Sin notas en este track”, chips, miniatura, apertura de Nota, “Volver” y snackbar. `App` pasa `project = project`.
+  - “Compartir”/`buildGddMarkdown(notes, now)` y `GddSharer` quedan **sólo con Notas** (sin ficha; eso es `gdd-export-hybrid`).
+  - Tests: `GddDocumentCheck.verifyGddDocument()` (escenarios 1–7) + `GddDocumentAndroidTest`/`GddDocumentIosTest`.
+  - Docs: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Verification run:
+  - `ANDROID_HOME=… ./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; **29 suites / 88 tests / 0 failures / 0 errors / 0 skipped** (`GddDocumentAndroidTest` 1/1; `GddProjectionAndroidTest`/`GddMarkdownAndroidTest` 1/1).
+  - `ANDROID_HOME=… ./gradlew :core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL; **29 suites / 88 tests / 0 failures** (`GddDocumentIosTest` 1/1).
+  - `ANDROID_HOME=… ./gradlew :composeApp:assembleDebug` → BUILD SUCCESSFUL; `ANDROID_HOME=… CI=true ./init.sh` → exit 0; `ANDROID_HOME=… ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64` → BUILD SUCCESSFUL.
+  - `Schema.version == 8`; `.sqm` `1.sqm`..`7.sqm`; `git diff --name-only` vacío para esquema, repositorios, `GddProjection.kt`/`GddMarkdown.kt`, build files, `gradle/`, `init.sh` e `iosApp`; sin dependencias nuevas.
+  - Controles negativos (reproducidos y restaurados byte-idénticos, SHA-256 `938662c9…`): (a) invertir el orden de un campo, (b) incluir un campo vacío, (c) duplicar una Nota, (d) cambiar un título de sección y (e) dejar la categoría de mecánica en minúsculas → `GddDocumentAndroidTest` falla en los cinco; suite final re-verificada en verde.
+  - Smoke Android (emulator-5558, API 34, fake, APK SHA-256 `b7edfc61…`; evidencia en `composeApp/build/smoke-evidence/gdd-document-hybrid/`): `01-empty` sin Proyecto ni Notas (Compartir deshabilitado), `03` documento completo con `GDD — Crónica de Ceniza`, 5 notas y ficha en orden, `04`/`05` secciones/conteos/chips/“Imagen”/miniatura/`Sin track`, `06`–`08` abrir Nota y Volver, `09` Proyecto vacío sólo título, `10` sin Proyecto con Notas. Datos QA limpiados con `pm clear`.
+- Evidence captured: entrada `passing` de `gdd-document-hybrid` en `feature_list.json` (con comandos/resultados y evidencia de smoke) y este bloque; UI dumps/capturas en `composeApp/build/smoke-evidence/gdd-document-hybrid/` (ignorado por git).
+- Files or artifacts updated: `core/.../gdd/GddDocument.kt` (nuevo), `core/src/commonTest/.../gdd/GddDocumentCheck.kt` (nuevo), `core/src/{androidUnitTest,iosTest}/.../gdd/GddDocument*Test.kt` (nuevos), `composeApp/.../GddScreen.kt`, `composeApp/.../App.kt`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: no hay harness UI/E2E persistente (la spec lo justifica); el smoke iOS no se automatizó (iOS congelado) y el thumbnail se validó visualmente, no pixel a pixel. `buildGddDocument` es puro y tiene tests cross-platform. La feature quedó `accepted` tras la validación independiente.
+- Next best step: cerrar la feature (commit, rebase, push y PR) sin mergear.
+
+### Session 075 (gdd-document-hybrid — cierre, rebase e integración)
+
+- Date: 2026-10-20
+- Goal: persistir la aceptación, sincronizar con `origin/develop`, re-verificar, commitear y abrir el PR sin mergear.
+- Completed:
+  - Validación independiente `accept` (`$feature-validator`), sin bloqueantes. Smoke Android revisado; iOS sin UI automatizada (congelado).
+  - `feature_list.json`: `gdd-document-hybrid` `passing` → `accepted`, con evidencia de la validación (`accept`, 2026-10-20) y de los checks pre/post-rebase.
+  - Commit `feature: complete gdd-document-hybrid`; rebase sobre `origin/develop` `739a87b` (incluye `first-run-project-onboarding` y `brainstorming-note-per-step`), conflictos resueltos conservando ambas features.
+  - `PROGRESS.md`/`AGENTS.md`: estado/cola actualizados (39 accepted, 9 not_started, 0 passing, 1 blocked); `gdd-export-hybrid` desbloqueada.
+- Verification run (post-rebase, `origin/develop` `739a87b`):
+  - `ANDROID_HOME=… ./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; **30 suites / 90 tests / 0 failures** en Android/JVM y en iOS (`GddDocument*Test`, `GddProjection*Test` y `GddMarkdown*Test` verdes).
+  - `ANDROID_HOME=… CI=true ./init.sh` → exit 0.
+  - `Schema.version == 8`; `.sqm` `1.sqm`..`7.sqm`; sin `.sqm` nuevos, sin dependencias nuevas y sin cambios en paths protegidos.
+- Evidence captured: veredicto `accept`, checks post-rebase, smoke Android y PR contra `develop` (no mergeado).
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: sin harness UI/E2E persistente; smoke iOS no automatizado; thumbnail validado visualmente. Nada bloqueante.
+- Next best step: PR contra `develop`; la integración la hace la sesión integradora. No mergear.
