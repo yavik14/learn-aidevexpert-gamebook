@@ -49,7 +49,9 @@
 - `image-generation-from-text` `accepted` (2026-10-20; Session 081 implementación + Session 082 cierre; validación independiente `accept` en `docs/validations/image-generation-from-text.md`, reverificada sobre `0cffd1e`; rebasada sobre `42e6c60`): generación de imagen desde texto con `ImageClient.generateImage` → preview → Nota nueva con Adjunto `IMAGE`. `TextImageGenerationService` en `:core` valida prompt y `GeneratedImage` (bytes/mime no vacíos e `image/*`), mapea `AiClientException` a `Failed` y diagnostica `image_generation_failed`/`image_generation_invalid` sin datos del usuario. UI: "Generar con IA" en el diálogo "Agregar imagen", `ImageGenerationDialog` (vacío/carga/error/cancelación) y navegación a `CreateWithImage`; Guardar reutiliza `saveNoteWithImage` (ruta relativa/mime real, limpieza, sin reindexar por imagen). `FakeImageClient` devuelve un PNG 1×1 decodificable con chunk `tEXt` determinista (Base64/CRC32) antes de `IEND`. Sin esquema (v8), deps, `init.sh`, adaptadores/runtime real ni `iosApp`. Ver `docs/specs/image-generation-from-text.md`.
 - `save-answer-as-note` `accepted` (2026-10-20; Session 084 implementación y cierre; validación independiente `accept`, sin hallazgos bloqueantes): "Guardar como Nota" en una respuesta del Q&A (`AskNotesScreen.Answered`). La Nota persiste sólo la respuesta (`body = text.trim()`, sin pregunta), con `track = null` ("Sin track") y `genres = emptyList()` ("Ninguno"); confirmación con preview truncado (5 líneas/200 chars + `…`), pre-chequeo de duplicado exacto en UI (`isDuplicateBrainstormingNote`) y chequeo autoritativo en `App.saveQaAnswer` (`noteRepository.getAll()`), creación con `NoteDraft(owner = "local", ...)` + `indexBestEffort` + `reload()`, feedback inline `Nota guardada.` y errores `Nota duplicada`/`No se pudo guardar la Nota.`. Sin cambios en `:core`, esquema v8, `.sqm`, deps, `init.sh`, `iosApp` ni wizard/editor/lista. Gate: `./init.sh` exit 0, `:core` 34 suites/99 tests/0 failures, `assembleDebug` y link iOS OK; smoke Android en emulador dedicado con SQL `track IS NULL`/sin `note_genre` y controles negativos (a)-(f). Ver `docs/specs/save-answer-as-note.md`.
 - `tts-read-aloud` `accepted` (2026-10-20; Session 085 implementación + Session 086 cierre; validación independiente `accept` en `docs/validations/tts-read-aloud.md`): lectura en voz alta de la respuesta Q&A, el `body` del editor (Nueva/Edición) y la narración del GDD. `ReadAloudService`/`normalizeReadAloudText` (vacío/4096) y `buildGddNarration` en `:core`; `ReadAloudPlayer` expect/actual (Android `MediaPlayer`+`MediaDataSource` en memoria; iOS mínimo sin playback) y estado único con request-id en `App`; `FakeTtsClient` devuelve WAV PCM determinista (`audio/wav`). Sin Adjuntos, archivos/caché, esquema (v8), deps, audio focus ni timeout propio. Post-rebase sobre `origin/develop` `6a89317` (con `save-answer-as-note`): `:core` 36 suites/107 tests/0 failures en Android/JVM e iOS, `:composeApp` 4/10/0, `assembleDebug`/link iOS y `CI=true ./init.sh` exit 0; controles negativos y smoke Android revisado. Ver `docs/specs/tts-read-aloud.md` y `docs/validations/tts-read-aloud.md`.
-- Current state: **45 `accepted`, 3 `not_started`, 0 `passing` y 1 `blocked`** (49 total). `gdd-export-hybrid`, `image-generation-from-text`, `save-answer-as-note` y `tts-read-aloud` quedaron `accepted`. Después siguen las demás `not_started` de las olas 4–6, empezando por `main-screen-playbook-shell` (primera ready por dependencias, **sin spec todavía**: requiere `$feature-spec`), luego `ai-real-chat`. `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
+
+- `main-screen-playbook-shell` `accepted` (2026-10-20; Session 087 implementación + Session 088 cierre; validación independiente `accept` en `docs/validations/main-screen-playbook-shell.md`): pantalla principal con `TopAppBar` “Playbook” + acciones GDD/Brainstorming/Preguntar (fallback textual `GDD`/`✦`/`?`, `contentDescription` único) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim y Back; “Galería” conserva el diálogo “Agregar imagen”/“Generar con IA” y “Cámara” lanza el picker directo. El dictado sale de la principal y queda sólo en el editor. Se agregó `PlaybookBackHandler` expect/actual porque `androidx.compose.ui.backhandler` no está en el classpath Android. Sin cambios de esquema, deps, `init.sh`, `:core` ni otros destinos. Gate Android + link iOS OK; smoke en emulador dedicado API 31 con capturas 01–14. Ver `docs/specs/main-screen-playbook-shell.md`.
+- Current state: **46 `accepted`, 2 `not_started`, 0 `passing` y 1 `blocked`** (49 total). `save-answer-as-note`, `tts-read-aloud` y `main-screen-playbook-shell` quedaron `accepted`. Siguen `ai-real-chat` y `readme-project-documentation` (cierre del MVP). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-20.
 
@@ -1912,3 +1914,45 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/specs/ai-client-ports.md`; commit de cierre posterior.
 - Known risk or unresolved issue: iOS no reproduce (congelado); sin smoke real key-gated de MP3; Lows no bloqueantes de evidencia PNG/request-id/concurrencia; smoke no re-ejecutado en la validación por emuladores compartidos. Nada bloqueante.
 - Next best step: PR #55 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/55`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
+
+### Session 087 (main-screen-playbook-shell — implementación)
+
+- Date: 2026-10-20
+- Goal: implementar `main-screen-playbook-shell` (spec `docs/specs/main-screen-playbook-shell.md`) sin tocar otros features.
+- Completed:
+  - `NotesListScreen`: `Scaffold` con `TopAppBar` "Playbook" + acciones GDD/Brainstorming/Preguntar (glifos `GDD`/`✦`/`?`, `contentDescription` único, `clearAndSetSemantics` en el texto) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim no accesible y cierre por tap/scrim/Back.
+  - "Galería" abre el diálogo "Agregar imagen" existente (conserva Cámara/Galería/"Generar con IA"); "Cámara" lanza `ImageSource.CAMERA` directo. Se eliminan "Notas", "Dictar nota", "Ver GDD", "Preguntar", "Brainstorming" y los FAB viejos; el dictado queda sólo en el editor.
+  - Estado vacío conserva "Crear primera nota" + "Agregar imagen"; lista/tarjetas/miniaturas/chips/badges sin cambios.
+  - `App`: wiring `onOpenImageSource`/`onCaptureCamera` y se quita `onDictate`; diálogo y persistencia intactos.
+  - Hallazgo: `androidx.compose.ui.backhandler` no está en el classpath Android; se agregó `PlaybookBackHandler` (`expect`/`actual`; Android usa `androidx.activity.compose.BackHandler`, iOS no-op). Sin deps nuevas.
+  - Docs durables: `ARCHITECTURE.md`, `docs/technical-discovery.md`, `DESIGN.md`; `feature_list.json` (`in_progress` → `passing`) y este log.
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `CI=true ./init.sh` → exit 0 (Android build + core tests, IA fake, sin dev servers).
+  - Smoke Android (emulador dedicado Pixel_XL_API_31, API 31, 1440x2560/560dpi): top bar y `contentDescription`; FAB abre/cierra por tap/Back/scrim; Nota de texto abre editor sin dictado; Galería → diálogo con Cámara/Galería/Generar con IA; Cámara → permiso y error existente; "Generar con IA" → preview → Guardar → chip "Imagen" + miniatura; estado vacío con ambas CTAs y FAB; navegación GDD/Brainstorming/Preguntar y vuelta. Capturas 01–14 en `composeApp/build/smoke-evidence/main-screen-playbook-shell/`.
+- Evidence captured: `feature_list.json` (status `passing` + evidencia), `composeApp/build/smoke-evidence/main-screen-playbook-shell/`.
+- Files or artifacts updated: `NotesListScreen.kt`, `App.kt`, `PlaybookBackHandler*.kt`, `docs/specs/main-screen-playbook-shell.md`, `ARCHITECTURE.md`, `docs/technical-discovery.md`, `DESIGN.md`, `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: "Galería" abre el diálogo (un tap extra) para preservar "Generar con IA" sin una cuarta acción; iOS sólo compila (Back no-op por congelamiento); no hay harness E2E.
+- Next best step: validación independiente con `$feature-validator` sobre la spec; luego integrar y seguir con `save-answer-as-note` cuando su sesión cierre.
+
+### Session 088 (main-screen-playbook-shell — cierre, rebase e integración)
+
+- Date: 2026-10-20
+- Goal: persistir el cierre de `main-screen-playbook-shell` (`passing` → `accepted`), rebasear sobre `origin/develop`, re-verificar y abrir el PR sin mergear.
+- Completed:
+  - `docs/validations/main-screen-playbook-shell.md`: incorporado el artefacto del validador independiente (`accept`, sin Critical/High/Medium; Lows no bloqueantes).
+  - `feature_list.json`: `main-screen-playbook-shell` `passing` → `accepted`, con evidencia de la validación independiente (gate, Android/iOS, 34 suites/99 tests/0 failures y smoke API 31).
+  - Spec: “Implementation Tasks” marcadas `[x]` (bookkeeping del Low 1).
+  - `PROGRESS.md`/`AGENTS.md`: estado y cola actualizados; la feature ya no figura “pendiente de validación”.
+  - Rebase sobre `origin/develop` `f483bdf` (incluye `save-answer-as-note` y `tts-read-aloud`), preservando ambos features y el shell; conflictos resueltos en `AGENTS.md`, `ARCHITECTURE.md` y `PROGRESS.md` (App.kt auto-mergeado).
+- Verification run:
+  - Pre-rebase (implementación): `CI=true ./init.sh` exit 0; `assembleDebug` + link iOS OK; smoke Android API 31 con capturas 01–14.
+  - Validación independiente: `accept` (ver artefacto).
+  - Post-rebase (`f483bdf`, fake): `CI=true ./init.sh` exit 0; `:composeApp:assembleDebug` BUILD SUCCESSFUL; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL; `:core:testDebugUnitTest --rerun-tasks` BUILD SUCCESSFUL (36 suites/107 tests/0 failures).
+  - Smoke Android post-rebase (emulador dedicado Pixel_XL_API_31, API 31, fake): vacío con CTAs/FAB; speed-dial abre/cierra por Back y scrim; Nota de texto crea y aparece en la lista; Galería abre “Agregar imagen” (Cámara/Galería/“Generar con IA”); Cámara lanza el picker y permiso denegado muestra el error; GDD/Brainstorming/Preguntar navegan y vuelven. Evidencia en `composeApp/build/smoke-evidence/main-screen-playbook-shell/postrebase/`.
+- Evidence captured: `docs/validations/main-screen-playbook-shell.md`, `feature_list.json` (`accepted`) y este log.
+- Files or artifacts updated: implementación (`NotesListScreen.kt`, `App.kt`, `PlaybookBackHandler*.kt`), spec, validación, `ARCHITECTURE.md`, `DESIGN.md`, `docs/technical-discovery.md`, `AGENTS.md`, `PROGRESS.md`, `feature_list.json`.
+- Known risk or unresolved issue: Lows no bloqueantes del validador (semántica modal del scrim, glifos dependientes del font, sin harness E2E); “Galería” abre el diálogo con un tap extra para conservar “Generar con IA”; iOS congelado (Back no-op).
+- Next best step: PR contra `develop`; la sesión integradora es la única que mergea.
+

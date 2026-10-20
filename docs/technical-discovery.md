@@ -1708,3 +1708,33 @@ Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
   `file_path` relativa). Controles negativos (a–d) reproducidos y restaurados.
 - **Límites:** sin smoke real (fuera del gate), sin edición/reemplazo/multi-imagen,
   sin historial de prompts ni caché de miniaturas; iOS congelado sólo compila.
+
+## Main Screen Shell Decisions (main-screen-playbook-shell)
+
+Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
+`docs/specs/main-screen-playbook-shell.md`.
+
+- **Shell sin navegación nueva.** `NotesListScreen` pasa a
+  `Scaffold(topBar = TopAppBar, floatingActionButton = speed-dial)` con título
+  “Playbook” y acciones GDD/Brainstorming/Preguntar. Se conservan
+  `NotesDestination`, `App` como dueño del estado y la lista/tarjetas existentes;
+  no se agregan capas, repositorios ni dependencias.
+- **Iconos sin dependency.** `material-icons-core` no está en el classpath
+  `commonMain` (sólo llega a Android vía `material3`). Se usa el fallback textual
+  accesible ya previsto: `GDD`, `✦`, `?` dentro de `IconButton`, con un único
+  `contentDescription` y el texto interno limpiado con `clearAndSetSemantics`.
+  Si un glifo no renderiza, se reemplaza por `*` sin cambiar la semántica.
+- **Speed-dial.** Estado local `remember`; acciones “Nota de texto”, “Galería” y
+  “Cámara” apiladas sobre un FAB `+`/`×`. Tocar una acción cierra el menú; el
+  scrim (dentro del contenido del `Scaffold`, oculto para accesibilidad) y Back
+  también lo cierran. “Galería” abre el diálogo “Agregar imagen” para conservar
+  “Generar con IA”; “Cámara” lanza el picker directo. El dictado se retira de la
+  principal y queda sólo en el editor.
+- **Hallazgo de plataforma (Back).** `androidx.compose.ui.backhandler` no está en
+  el classpath Android aunque sí en metadata/iOS. Se agregó el wrapper mínimo
+  `PlaybookBackHandler` (`expect`/`actual`): Android usa
+  `androidx.activity.compose.BackHandler`; iOS congela un no-op. Sin deps nuevas.
+- **Insets/accesibilidad.** `TopAppBar` y `Scaffold` usan sus insets por defecto
+  (sin paddings manuales); targets ≥48dp y nombres accesibles únicos. Verificado
+  en smoke Android (API 31) con top bar, speed-dial, scrim/Back, diálogo de
+  imagen, “Generar con IA”, lista con miniatura/chips y estado vacío.

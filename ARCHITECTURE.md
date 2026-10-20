@@ -694,13 +694,21 @@ composeApp (Android app / commonMain) ──▶ core
   reofrece cuando ya existe.
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
-- **`NotesListScreen`**: `Scaffold` con una fila de `ExtendedFloatingActionButton`
-  ("Nueva nota" + "Foto"); acciones secundarias `FilledTonalButton` "Dictar nota"
-  (`onDictate`), "Ver GDD" (`onOpenGdd`) y "Preguntar" (`onAsk`); una fila propia
-  con "Brainstorming" (`onOpenBrainstorming`, entrada temporal hasta
-  `main-screen-playbook-shell`); estado vacío ("Todavía no hay notas") con CTA "Crear primera nota"
-  + "Agregar foto"; y estado con notas (título "Notas" + `LazyColumn` de `Card`s
-  clickeables que llaman `onEdit(note.id)`). Cada tarjeta muestra
+- **`NotesListScreen` (`main-screen-playbook-shell`)**: shell principal con
+  `Scaffold(topBar = PlaybookTopBar, floatingActionButton = CaptureSpeedDial)`.
+  `PlaybookTopBar` usa `TopAppBar` con “Playbook” y tres acciones
+  (`GDD`/`✦`/`?` como fallback textual sin `material-icons`, cada una con un único
+  `contentDescription`: “Ver GDD”, “Brainstorming”, “Preguntar”). El speed-dial
+  alterna `+`/`×` y apila “Nota de texto”, “Galería” (`contentDescription`
+  “Galería y generar imagen con IA”) y “Cámara”; un scrim dentro del contenido
+  cierra al tocar y un `PlaybookBackHandler` (`expect`/`actual`; Android usa
+  `androidx.activity.compose.BackHandler`, iOS no-op) cierra con Back. “Galería”
+  abre el diálogo “Agregar imagen” existente (conserva Cámara/Galería/“Generar
+  con IA”); “Cámara” lanza `ImageSource.CAMERA` directo. Estado vacío (“Todavía
+  no hay notas”) con CTA “Crear primera nota” + “Agregar imagen”; y estado con
+  notas (`LazyColumn` de `Card`s clickeables que llaman `onEdit(note.id)`).
+  `App` cablea `onOpenImageSource`/`onCaptureCamera` y ya no pasa `onDictate`.
+  Cada tarjeta muestra
   `body.ifBlank { "Imagen adjunta" }` (máx. 2 líneas, ellipsis), un chip textual
   "Imagen" si la nota tiene adjuntos (`attachmentCounts`), chips de `track.code`
   (o "Sin track") y un `StatusBadge` con la etiqueta legible del `status`, y —si
@@ -825,9 +833,9 @@ composeApp (Android app / commonMain) ──▶ core
   inline `Nota guardada.` (sin navegación). Es el mismo patrón de UI tonta +
   callback que el wizard, reutilizando `NoteSaveResult`; no agrega modelos, tablas
   ni migraciones.
-- **Orquestación de dictado (`App`):** "Dictar nota" en la lista abre
-  `NotesDestination.Create` y llama `startDictation()`; el botón "Dictar" del
-  editor hace lo mismo sin cambiar de destino. `startDictation()` cancela el job
+- **Orquestación de dictado (`App`):** el dictado vive **sólo** en el editor de
+  Nueva nota (`main-screen-playbook-shell` retiró `onDictate` de la principal);
+  el botón "Dictar" llama `startDictation()`. `startDictation()` cancela el job
   y la sesión previa (descarta su audio parcial), **conserva** el `pendingAudio`
   finalizado y deja `Listening("", 0)`; el timer de 30s **no** arranca al tocar
   "Dictar" sino en `onStarted`, con `currentTimeMillis()` como base y tick de
