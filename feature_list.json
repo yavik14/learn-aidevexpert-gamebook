@@ -1407,22 +1407,21 @@
     "depends_on": [
       "ai-fake-real-switch"
     ],
-    "status": "passing",
+    "status": "accepted",
     "verification": [
-      "`:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` verdes con `ReadAloud*`/`GddNarration*` (36 suites/107 tests/0 failures).",
-      "`:composeApp:assembleDebug`, link iOS y `CI=true ./init.sh` exit 0; esquema v8 sin `.sqm` nuevos.",
+      "`:core:testDebugUnitTest` y `:core:iosSimulatorArm64Test` verdes con `ReadAloud*`/`GddNarration*` (36 suites/107 tests/0 failures post-rebase).",
+      "`:composeApp:assembleDebug`, `:composeApp:testDebugUnitTest`, link iOS y `CI=true ./init.sh` exit 0; esquema v8 sin `.sqm` nuevos.",
       "Smoke Android (fake) de Q&A, Nota y GDD: reproducción, stop por botón/navegación, completar y Nota sólo-imagen deshabilitada."
     ],
     "evidence": [
-      "ANDROID_HOME=\"$HOME/Library/Android/sdk\" ./gradlew :core:testDebugUnitTest :composeApp:assembleDebug --rerun-tasks → BUILD SUCCESSFUL; Android/JVM 36 suites/107 tests/0 failures (ReadAloudAndroidTest 5, GddNarrationAndroidTest 3).",
-      "./gradlew :core:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks → BUILD SUCCESSFUL; iOS 36 suites/107 tests/0 failures (ReadAloudIosTest 5, GddNarrationIosTest 3).",
-      "CI=true ./init.sh → exit 0 (Android-only, IA fake, sin red); esquema v8 sin .sqm nuevos, sin deps ni cambios en AiRuntime/OpenAiTtsClient/build files.",
-      "Controles negativos reproducidos y restaurados: (a) sin truncar a 4096 falla ReadAloudAndroidTest.normalizesTrimEmptyAndLimit; (b) narrar Notas con body vacío falla GddNarrationAndroidTest.completeNarrationIncludesProjectAndSections; (c) llamar al cliente con texto vacío falla emptyTextDoesNotCallClient; (d) fake sin cabecera RIFF falla fakeTtsIsPlayableAndDeterministic.",
-      "Smoke Android (emulator-5556, API 35, IA fake): Q&A, Nota y GDD muestran Preparando/Reproduciendo/Detener y reproducen el WAV del fake; stop por botón a 0.58 s y por navegación a 0.42 s (sin llegar al final); completar vuelve a Leer; Nota sólo-imagen deja el botón deshabilitado.",
-      "Evidencia en composeApp/build/smoke-evidence/tts-read-aloud/: note/gdd/qa-playing.png+xml, button-stop.log, navigation-stop.log y empty-note-disabled.xml.",
-      "Sin archivos/caché de audio: run-as com.playbook.app find files cache sólo muestra images/, diagnostics.log y la base; el audio TTS vive en memoria y no hay Adjuntos nuevos."
+      "Validación independiente `accept` (docs/validations/tts-read-aloud.md, 2026-10-20), sin hallazgos Critical/High/Medium; Lows 1–4 no bloqueantes.",
+      "Post-rebase sobre origin/develop 6a89317 (incluye save-answer-as-note): `:core:testDebugUnitTest :composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL; Android/JVM 36 suites/107 tests/0 failures (ReadAloudAndroidTest 5, GddNarrationAndroidTest 3).",
+      "Post-rebase: `:core:iosSimulatorArm64Test :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL; iOS 36/107/0 (ReadAloudIosTest 5, GddNarrationIosTest 3).",
+      "Post-rebase: `:composeApp:testDebugUnitTest --rerun-tasks` → BUILD SUCCESSFUL (4 suites/10 tests/0 failures) y `CI=true ./init.sh` → exit 0; esquema v8, `.sqm` 1..7, sin deps ni cambios en build files/init.sh/iosApp.",
+      "Conflictos del rebase resueltos conservando save-answer-as-note y tts-read-aloud en App.kt/AskNotesScreen.kt/PROGRESS.md; `docs/specs/ai-client-ports.md:206` corregido a `audio/wav` (Low 3).",
+      "Evidencia de smoke revisada en composeApp/build/smoke-evidence/tts-read-aloud/ (no re-ejecutada en la validación por emuladores compartidos); Lows: PNG vs XML inconsistente, request-id no invalidado en DisposableEffect, concurrencia/Error por revisión."
     ],
-    "notes": "Cubre 3 superficies (Q&A, Nota, GDD) con `ReadAloudService`/`normalizeReadAloudText`/`buildGddNarration` en `:core`, `ReadAloudPlayer` expect/actual (Android MediaPlayer+MediaDataSource; iOS mínimo sin playback) y estado único con request-id en `App`. `FakeTtsClient` devuelve WAV PCM determinista (`audio/wav`) para el smoke; el adaptador real MP3 no cambia. Sin Adjuntos, archivos/caché, esquema (v8), deps, audio focus ni timeout propio. Implementada y `passing`; pendiente validación independiente. Riesgos: iOS no reproduce (congelado); sin smoke real key-gated; UI de Error no capturada en smoke (cubierta por tests/revisión)."
+    "notes": "Cubre 3 superficies (Q&A, Nota, GDD) con `ReadAloudService`/`normalizeReadAloudText`/`buildGddNarration` en `:core`, `ReadAloudPlayer` expect/actual (Android MediaPlayer+MediaDataSource; iOS mínimo sin playback) y estado único con request-id en `App`. `FakeTtsClient` devuelve WAV PCM determinista (`audio/wav`) para el smoke; el adaptador real MP3 no cambia. Sin Adjuntos, archivos/caché, esquema (v8), deps, audio focus ni timeout propio. `accepted` tras validación independiente `accept` (docs/validations/tts-read-aloud.md), rebase sobre origin/develop 6a89317 (save-answer-as-note) y verificación/smoke revisado post-rebase. Riesgos: iOS no reproduce (congelado); sin smoke real key-gated; UI de Error y concurrencia por revisión; Lows de evidencia/request-id no bloqueantes."
   },
   {
     "id": "image-generation-from-text",

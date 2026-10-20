@@ -203,7 +203,7 @@ Deterministas, sin red, sin key:
 
 - `FakeTranscribeClient` → `"[fake] transcripción (${audio.size} bytes, $mimeType)"`
   (determinista por tamaño+mime; tolera `audio` vacío).
-- `FakeTtsClient` → `SynthesizedAudio(text.encodeToByteArray(), "audio/mpeg")`.
+- `FakeTtsClient` → WAV PCM determinista (`audio/wav`) desde `tts-read-aloud`; la nota histórica `audio/mpeg` quedó supersedida.
 - `FakeImageClient` → `GeneratedImage("[fake image] $prompt".encodeToByteArray(), "image/png")`.
 - `FakeJevClient` → `track` determinista por hash sobre `Track.entries`,
   `genres = listOf(GENRE_HINT)` con una constante **ilustrativa** privada (la
