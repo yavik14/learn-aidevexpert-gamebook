@@ -68,13 +68,14 @@
   comportamiento ante fallos de red/timeout por caso (chat/embedding/transcribe/
   tts/image/jev); límites de costo/cuota; y cómo se degrada cada superficie cuando
   no hay key (modo fake) o la API falla.
-- **Pre-clasificación por contexto** al "guardar como Nota": mapeo propuesto por
-  paso de Brainstorming (Título→sin Track; Género→Género; Core Loop→`mecánicas`;
-  Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin Track;
-  Fantasía→`historia`; Keys→`mecánicas`; Out→sin Track) y **sin Track único** para
-  respuestas del Q&A. El wizard actual **no** crea Notas; queda para
-  `brainstorming-note-per-step` (`not_started`, sin spec), que debe definir el
-  mapeo final y si la Nota se indexa.
+- **Pre-clasificación por contexto** al "guardar como Nota": **resuelta** en
+  `brainstorming-note-per-step` (implementada 2026-10-19; ver
+  `docs/specs/brainstorming-note-per-step.md`): los 9 pasos generan Nota con el
+  mapeo Título→sin Track; Género→sin Track (body = Géneros); Core Loop→
+  `mecánicas`; Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin
+  Track; Fantasía→`historia`; Keys→`mecánicas`; Out→sin Track. La Nota es final,
+  indexada best-effort y los duplicados exactos se bloquean por contenido. El
+  Q&A sigue **sin Track único** para sus respuestas.
 - **UI fina del wizard:** **resuelta** en `brainstorming-wizard` (2026-10-19;
   validación independiente `accept` en `docs/validations/brainstorming-wizard.md`): 9 pasos,
   progreso `Paso X/9`, guardado explícito, reapertura con precarga, topes 3/3/5,

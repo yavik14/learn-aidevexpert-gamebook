@@ -41,9 +41,8 @@
 - `inline-dictation-30s` `accepted` (2026-10-19; Session 063 implementación + Session 064 cierre/integración; validación independiente `accept` en `docs/validations/inline-dictation-30s.md`): el dictado pasa a ser **inline en Nueva nota** (panel con progreso de 30s + parcial + Detener/Processing/Error), el cap arranca con `onStarted` (no cuenta el diálogo de permiso), auto-stop a los 30s, audio pendiente adjuntado al guardar y limpieza sin huérfanos; se retira `VoiceCaptureScreen`/`VoiceUiState`/`NotesDestination.VoiceCapture`. Sin deps, esquema ni `:core`. Detalle en `docs/specs/inline-dictation-30s.md`, `ARCHITECTURE.md` y `docs/technical-discovery.md`.
 - `brainstorming-ai-suggestions` `accepted` (2026-10-19; Session 069 implementación + Session 070 cierre/integración; validación independiente `accept` en `docs/validations/brainstorming-ai-suggestions.md`): `BrainstormingSuggestionService` en `:core` (prompt/contexto por paso, parsing/dedupe, parcial/error y máximo 2) + `FakeAiClient` determinista + UI efímera en el wizard (Sugerir/Usar/Agregar/Ignorar) + wiring de `aiClient` en `App`/roots. Sin persistencia, Notas, esquema ni IA real. `:core` 28 suites/87 tests/0 failures en Android e iOS (post-rebase), `assembleDebug` OK, `./init.sh` exit 0 e iOS link OK; smoke Android con evidencia.
 - `first-run-project-onboarding` `accepted` (2026-10-20; Session 071 implementación + Session 072 cierre; validación independiente `accept`): onboarding saltable del Proyecto en el primer arranque. `App` usa `ProjectLoadState` (`Loading`/`Missing`/`Loaded`) y, sin Proyecto, muestra `FirstRunOnboardingScreen` full-screen; “Iniciar Brainstorming” y “Saltar” crean primero el singleton vacío (`owner = "local"`, `id = "singleton"`, escalares `null`, listas/hijas vacías, `createdAt == updatedAt`, topes 3/3/5) y luego navegan al wizard o a la lista. Guard `onboardingBusy`, error con `AlertDialog` y sin flag persistido (la existencia del Proyecto evita reofrecer). Sin cambios en `:core`, esquema v8, raíces, build files, `init.sh` ni `iosApp`. Detalle en `docs/specs/first-run-project-onboarding.md`, `ARCHITECTURE.md` y `PROGRESS.md` (Sessions 071/072).
-- **En vuelo (no integradas en `develop`; no tocar ni duplicar):**
-  - `brainstorming-note-per-step` — `in_progress` en `worktree/brainstorming-note-per-step` (rama homónima, base `a00c72d`): spec `docs/specs/brainstorming-note-per-step.md` y código en curso, sin commit; pendiente revisión del spec y luego implementer → validator.
-- Current state: **37 `accepted`, 11 `not_started` (una de ellas, `brainstorming-note-per-step`, en vuelo en su worktree) y 1 `blocked`** (49 total). La siguiente ready sin dependencias abiertas es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
+- `brainstorming-note-per-step` `accepted` (2026-10-20; Sessions 063/064 implementación+repair y Session 065 cierre; re-validación independiente `accept` en `docs/validations/brainstorming-note-per-step.md` §11): mapper puro `buildBrainstormingStepNote` + predicado `isDuplicateBrainstormingNote` (normaliza ambos lados de los Géneros) en `:core`, con tests Android/iOS; acción `Guardar como Nota` en los 9 pasos con confirmación, bloqueo de duplicados exactos por contenido, feedback inline y errores; `App` crea con `LOCAL_OWNER_ID` + `indexBestEffort` + `reload` y envuelve el chequeo/creación en `runCatching`. Sin `note.project_id`, IA generativa, cambios de esquema/build files/`init.sh`/`iosApp`. Gate: `:core` 29 suites/89 tests/0 failures (post-rebase), `assembleDebug` OK, `./init.sh` exit 0, link y test iOS OK; smoke/SQL en `composeApp/build/smoke-evidence/brainstorming-note-per-step/`.
+- Current state: **38 `accepted`, 10 `not_started` y 1 `blocked`** (49 total). La siguiente ready sin dependencias abiertas es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-20.
 
@@ -1618,3 +1617,20 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
 - Known risk or unresolved issue: los tres Low de la validación (doble tap, `Loading` no capturado, sin UI/E2E persistente); `get()` que lanza sigue fuera de alcance.
 - Next best step: push de la rama y PR contra `develop`; la integración la hace la sesión integradora. No mergear.
+### Session 073 (brainstorming-note-per-step — cierre e integración)
+
+- Date: 2026-10-20
+- Goal: persistir `accepted`, rebasar sobre `origin/develop`, re-verificar y abrir el PR.
+- Completed:
+  - `feature_list.json`: `brainstorming-note-per-step` `passing` → `accepted` con la evidencia de la re-validación independiente `accept` (§11 de `docs/validations/brainstorming-note-per-step.md`).
+  - `PROGRESS.md`/`AGENTS.md`: estado/cola actualizados (38 accepted, 10 not_started, 1 blocked); la feature ya no figura en vuelo ni pendiente.
+  - Commit `feature(brainstorming): guarda cada paso como Nota` y rebase final sobre `origin/develop` `0bcb487` (incluye `brainstorming-ai-suggestions` y `first-run-project-onboarding`); conflictos resueltos conservando las tres features.
+- Verification run (post-rebase):
+  - `:core:testDebugUnitTest --rerun-tasks` → 29 suites / 89 tests / 0 failures.
+  - `:composeApp:assembleDebug --rerun-tasks` → BUILD SUCCESSFUL; `CI=true ./init.sh` → exit 0.
+  - `:composeApp:linkDebugFrameworkIosSimulatorArm64` y `:core:iosSimulatorArm64Test --rerun-tasks` → BUILD SUCCESSFUL.
+  - Esquema v8 (`1.sqm`..`7.sqm`), sin `.sqm` nuevo; paths protegidos sin cambios.
+- Evidence captured: verificación post-rebase y PR https://github.com/yavik14/learn-aidevexpert-gamebook/pull/45 (no mergeado).
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: ninguno funcional; el merge a `develop` queda para la sesión integradora.
+- Next best step: PR contra `develop`; tras el merge, seguir con `gdd-document-hybrid`.

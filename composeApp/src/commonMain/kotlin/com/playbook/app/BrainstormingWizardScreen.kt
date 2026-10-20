@@ -45,10 +45,15 @@ import com.playbook.core.ai.BrainstormingSuggestion
 import com.playbook.core.ai.BrainstormingSuggestionResult
 import com.playbook.core.ai.BrainstormingSuggestionService
 import com.playbook.core.ai.BrainstormingStep
+import com.playbook.core.brainstorming.BrainstormingStepNote
+import com.playbook.core.brainstorming.buildBrainstormingStepNote
+import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.model.GameProject
 import com.playbook.core.model.GameProjectDraft
 import com.playbook.core.model.KeyMechanic
 import com.playbook.core.model.MechanicCategory
+import com.playbook.core.model.Note
+import com.playbook.core.model.Track
 import com.playbook.core.model.normalizeGenres
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -86,6 +91,13 @@ private val STEP_KINDS = listOf(
     BrainstormingStep.OUT_OF_SCOPE,
 )
 
+/** Resultado de intentar guardar una Nota desde el wizard. */
+enum class NoteSaveResult {
+    SAVED,
+    DUPLICATE,
+    FAILED,
+}
+
 /** Borrador local de una mecánica; la categoría puede quedar sin elegir. */
 private data class MechanicForm(
     val category: MechanicCategory? = null,
@@ -122,7 +134,9 @@ fun BrainstormingWizardScreen(
     initialProject: GameProject?,
     owner: String,
     suggestionService: BrainstormingSuggestionService,
+    existingNotes: List<Note>,
     onSave: (GameProjectDraft) -> Boolean,
+    onSaveNote: (body: String, track: Track?, genres: List<String>) -> NoteSaveResult,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -158,6 +172,14 @@ fun BrainstormingWizardScreen(
     var suggestionJob by remember { mutableStateOf<Job?>(null) }
     var suggestionRequestId by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
+    var noteFeedback by remember { mutableStateOf<String?>(null) }
+    var noteError by remember { mutableStateOf<String?>(null) }
+    var duplicateMessage by remember { mutableStateOf<String?>(null) }
+    var pendingNote by remember { mutableStateOf<BrainstormingStepNote?>(null) }
+
+    LaunchedEffect(step) {
+        noteFeedback = null
+    }
 
     fun buildDraft(): GameProjectDraft = GameProjectDraft(
         owner = owner,
@@ -178,6 +200,12 @@ fun BrainstormingWizardScreen(
         outOfScope = outOfScope.map { it.trim() }.filter { it.isNotEmpty() },
     )
 
+    val canSaveNote = if (step == 7) {
+        keyMechanics.any { it.description.isNotBlank() }
+    } else {
+        buildBrainstormingStepNote(step, buildDraft()).body.isNotBlank()
+    }
+
     fun resetSuggestions() {
         suggestionRequestId++
         suggestionJob?.cancel()
@@ -197,6 +225,53 @@ fun BrainstormingWizardScreen(
         resetSuggestions()
         if (!onSave(buildDraft())) {
             saveError = "No se pudo guardar el Proyecto. Intentá de nuevo."
+        }
+    }
+
+    fun startNoteSave() {
+        noteFeedback = null
+        val incompleteMechanic = step == 7 && keyMechanics.any {
+            it.description.isNotBlank() && it.category == null
+        }
+        if (incompleteMechanic) {
+            noteError = "Elegí una categoría para cada mecánica con descripción."
+            return
+        }
+
+        val payload = buildBrainstormingStepNote(step, buildDraft())
+        if (payload.body.isBlank()) return
+
+        val duplicate = existingNotes.any { note ->
+            isDuplicateBrainstormingNote(
+                note = note,
+                body = payload.body,
+                track = payload.track,
+                genres = payload.genres,
+            )
+        }
+        if (duplicate) {
+            duplicateMessage = "Ya existe una Nota con el mismo contenido, Track y Géneros."
+            return
+        }
+
+        pendingNote = payload
+    }
+
+    fun confirmNoteSave() {
+        val payload = pendingNote ?: return
+        when (onSaveNote(payload.body, payload.track, payload.genres)) {
+            NoteSaveResult.SAVED -> {
+                pendingNote = null
+                noteFeedback = "Nota guardada."
+            }
+            NoteSaveResult.DUPLICATE -> {
+                pendingNote = null
+                duplicateMessage = "Ya existe una Nota con el mismo contenido, Track y Géneros."
+            }
+            NoteSaveResult.FAILED -> {
+                pendingNote = null
+                noteError = "No se pudo guardar la Nota."
+            }
         }
     }
 
@@ -437,6 +512,22 @@ fun BrainstormingWizardScreen(
                 onAccept = { acceptSuggestion(it) },
                 onIgnore = { dismissSuggestion(it) },
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = { startNoteSave() },
+                enabled = canSaveNote,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "Guardar como Nota")
+            }
+            noteFeedback?.let { feedback ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = feedback,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -476,6 +567,67 @@ fun BrainstormingWizardScreen(
             },
         )
     }
+
+    pendingNote?.let { payload ->
+        AlertDialog(
+            onDismissRequest = { pendingNote = null },
+            title = { Text(text = "Guardar como Nota") },
+            text = {
+                Column {
+                    Text(text = previewBody(payload.body))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Track: ${payload.track?.code ?: "Sin track"}")
+                    Text(
+                        text = "Géneros: " +
+                            payload.genres.joinToString(", ").ifEmpty { "Ninguno" },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmNoteSave() }) {
+                    Text(text = "Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingNote = null }) {
+                    Text(text = "Cancelar")
+                }
+            },
+        )
+    }
+
+    duplicateMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { duplicateMessage = null },
+            title = { Text(text = "Nota duplicada") },
+            text = { Text(text = message) },
+            confirmButton = {
+                TextButton(onClick = { duplicateMessage = null }) {
+                    Text(text = "Aceptar")
+                }
+            },
+        )
+    }
+
+    noteError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { noteError = null },
+            title = { Text(text = "No se pudo guardar la Nota") },
+            text = { Text(text = message) },
+            confirmButton = {
+                TextButton(onClick = { noteError = null }) {
+                    Text(text = "Aceptar")
+                }
+            },
+        )
+    }
+}
+
+/** Preview corto del body; la Nota persistida conserva el contenido completo. */
+private fun previewBody(body: String): String {
+    val byLines = body.lines().take(5).joinToString("\n")
+    val clipped = if (byLines.length > 200) byLines.take(200) else byLines
+    return if (clipped.length < body.length) "$clipped…" else clipped
 }
 
 @Composable

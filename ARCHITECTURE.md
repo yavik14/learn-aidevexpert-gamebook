@@ -178,6 +178,12 @@ composeApp (Android app / commonMain) ──▶ core
   `vacío`/`esbozado` persistido (se deriva) y sin FK Nota→Proyecto (pertenencia
   implícita). Cableado a la UI por `brainstorming-wizard` (wizard de 9 pasos;
   guardado explícito de la ficha completa).
+- **Mapper de Brainstorming** (`com.playbook.core.brainstorming`,
+  `brainstorming-note-per-step`): `BrainstormingStepNote(body, track, genres)` y
+  `buildBrainstormingStepNote(step, draft)` proyectan el estado de un paso
+  (índice `0..8`) a una Nota; `isDuplicateBrainstormingNote` normaliza ambos
+  lados de los Géneros para bloquear duplicados. Core Loop/Mecánicas →
+  `MECHANICS`, Concepto/Fantasía → `STORY`, el resto `null`; puro y determinista.
 - `Track.fromCode(null | desconocido)` → `null` (edge case "Nota sin `track`").
   `NoteStatus.fromCode(desconocido)` → `IllegalArgumentException` fail-fast: la
   columna es `NOT NULL` y sólo la escribe este código.
@@ -676,8 +682,12 @@ composeApp (Android app / commonMain) ──▶ core
   "Sugerir" por paso: pide 2 ideas a `BrainstormingSuggestionService`, las muestra
   como tarjetas efímeras y el usuario decide con Usar/Agregar o Ignorar; nunca
   auto-rellena ni guarda, y las sugerencias se descartan al cambiar de paso,
-  cancelar o guardar. La creación de Notas por paso queda en
-  `brainstorming-note-per-step` (no implementada).
+  cancelar o guardar. `brainstorming-note-per-step` agrega "Guardar como Nota"
+  en cada paso: usa el mismo `buildDraft()` + el mapper puro, muestra un
+  `AlertDialog` con preview/Track/Géneros, bloquea duplicados exactos por
+  contenido (Géneros normalizados en ambos lados) y crea la Nota vía
+  `onSaveNote` (`NoteRepository.create` + `indexBestEffort`), sin salir del
+  wizard ni tocar la ficha. `Cancelar` del wizard conserva las Notas ya creadas.
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
   (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de
   `track` ("Sin track" + `Track.entries`) que comunica la selección con marca

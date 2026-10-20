@@ -42,13 +42,14 @@ mergeadas (specs `docs/specs/inline-dictation-30s.md`,
 `brainstorming-ai-suggestions` quedó `accepted` (spec
 `docs/specs/brainstorming-ai-suggestions.md`; validación independiente `accept`
 en `docs/validations/brainstorming-ai-suggestions.md`).
+`brainstorming-note-per-step` quedó `accepted` (spec
+`docs/specs/brainstorming-note-per-step.md`; re-validación independiente `accept`
+en `docs/validations/brainstorming-note-per-step.md` §11).
 
-**En vuelo (no tocar ni duplicar):** `brainstorming-note-per-step` (`in_progress`
-en `worktree/brainstorming-note-per-step`, spec y código sin commit), pendiente
-de revisión y de implementer → validator. `first-run-project-onboarding` quedó
-implementada y `accepted` (spec `docs/specs/first-run-project-onboarding.md`;
-validación independiente `accept`). La siguiente ready sin dependencias abiertas
-es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión);
+`first-run-project-onboarding` quedó implementada y `accepted` (spec
+`docs/specs/first-run-project-onboarding.md`; validación independiente
+`accept`). La siguiente ready sin dependencias abiertas es
+`gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión);
 luego las demás `not_started` de las olas 3–6. `gdd-export-hybrid` espera
 `gdd-document-hybrid` y `readme-project-documentation` cierra el MVP. Para iOS:
 el upload firmado (`ios-release-pipeline-first-upload`) sigue
