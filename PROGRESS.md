@@ -1911,4 +1911,4 @@
 - Evidence captured: `docs/validations/tts-read-aloud.md`, `feature_list.json` (`accepted`), salida de tests/XML y gate; smoke revisado (no re-ejecutado por emuladores compartidos).
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/specs/ai-client-ports.md`; commit de cierre posterior.
 - Known risk or unresolved issue: iOS no reproduce (congelado); sin smoke real key-gated de MP3; Lows no bloqueantes de evidencia PNG/request-id/concurrencia; smoke no re-ejecutado en la validación por emuladores compartidos. Nada bloqueante.
-- Next best step: push de la rama y PR contra `develop`; no mergear (lo hace la sesión integradora).
+- Next best step: PR #55 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/55`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
