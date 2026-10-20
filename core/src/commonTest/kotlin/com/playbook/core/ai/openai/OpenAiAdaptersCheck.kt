@@ -16,6 +16,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -88,6 +90,49 @@ class OpenAiAdaptersCheck {
 
         assertEquals("respuesta", answer)
         assertEquals(1, transport.requests.size)
+    }
+
+    @Test
+    fun chatSendsOptionalInstructionsAndParams() = runTest {
+        val transport = RecordingTransport { request ->
+            val body = Json.parseToJsonElement(request.body!!.decodeToString()).jsonObject
+            assertEquals(0.3, body["temperature"]!!.jsonPrimitive.double)
+            assertEquals(128, body["max_tokens"]!!.jsonPrimitive.int)
+            val system = body["messages"]!!.jsonArray[0].jsonObject["content"]!!
+                .jsonPrimitive.content
+            assertTrue(system.contains("Respondé sólo con el contexto"))
+            assertTrue(system.contains("Contexto provisto:"))
+            jsonResponse("""{"choices":[{"message":{"content":"ok"}}]}""")
+        }
+        val runtime = openAiAiRuntime(realConfig(), transport)
+
+        val answer = runtime.aiClient.generate(
+            GenerateRequest(
+                prompt = "pregunta",
+                context = listOf("nota"),
+                instructions = "Respondé sólo con el contexto",
+                temperature = 0.3,
+                maxTokens = 128,
+            ),
+        )
+
+        assertEquals("ok", answer)
+    }
+
+    @Test
+    fun chatOmitsOptionalParamsByDefault() = runTest {
+        val transport = RecordingTransport { request ->
+            val body = Json.parseToJsonElement(request.body!!.decodeToString()).jsonObject
+            assertFalse(body.containsKey("temperature"))
+            assertFalse(body.containsKey("max_tokens"))
+            val system = body["messages"]!!.jsonArray[0].jsonObject["content"]!!
+                .jsonPrimitive.content
+            assertFalse(system.contains("Contexto provisto:"))
+            jsonResponse("""{"choices":[{"message":{"content":"ok"}}]}""")
+        }
+        val runtime = openAiAiRuntime(realConfig(), transport)
+
+        assertEquals("ok", runtime.aiClient.generate(GenerateRequest("pregunta")))
     }
 
     @Test

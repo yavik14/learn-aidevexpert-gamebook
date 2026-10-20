@@ -57,6 +57,8 @@ suspend fun verifyBrainstormingSuggestionHappyPath() {
     assertTrue(request.context.any { it == "Géneros: JRPG; Puzzle" })
     assertTrue(request.context.any { it == "Concepto: Un viaje por constelaciones" })
     assertTrue(request.context.any { it == "Borrador actual: Aurora" })
+    assertEquals(0.7, request.temperature)
+    assertEquals(400, request.maxTokens)
 }
 
 /** Escenario 2: el fake determinista del gate devuelve 2 ideas parseables. */
@@ -124,6 +126,51 @@ suspend fun verifyBrainstormingSuggestionDedupeAndFilter() {
         GameProjectDraft(owner = "local", inspirations = listOf("Zelda")),
     )
     assertEquals(listOf("Mario", "Sonic"), filtered.map { it.text })
+
+    val normalizedDraft = parseBrainstormingSuggestions(
+        BrainstormingStep.TITLE,
+        "1. un   mundo\n2. Otra idea",
+        GameProjectDraft(owner = "local", title = "  Un mundo "),
+    )
+    assertEquals(listOf("Otra idea"), normalizedDraft.map { it.text })
+}
+
+/** Respuestas reales: preámbulos, encabezados, markdown y ruido. */
+suspend fun verifyBrainstormingSuggestionRealFormat() {
+    val markdown = """
+        Aquí tienes dos ideas:
+
+        ## Ideas
+        **1. Idea: Un mundo que respira**
+        **2. Idea:** "Ciudades que cantan"
+    """.trimIndent()
+    val success = successOf(
+        BrainstormingSuggestionService(StubSuggestionAiClient(markdown))
+            .suggest(BrainstormingStep.TITLE, emptyDraft()),
+    )
+    assertEquals(
+        listOf("Un mundo que respira", "Ciudades que cantan"),
+        success.suggestions.map { it.text },
+    )
+    assertFalse(success.partial)
+
+    val mechanics = parseBrainstormingSuggestions(
+        BrainstormingStep.KEY_MECHANICS,
+        "- **Movimiento:** Correr por paredes\n- **Interacción**: Abrir portales",
+        emptyDraft(),
+    )
+    assertEquals(2, mechanics.size)
+    assertEquals(MechanicCategory.MOVEMENT, mechanics[0].category)
+    assertEquals("Correr por paredes", mechanics[0].text)
+    assertEquals(MechanicCategory.INTERACTION, mechanics[1].category)
+    assertEquals("Abrir portales", mechanics[1].text)
+
+    val invalid = BrainstormingSuggestionService(
+        StubSuggestionAiClient(
+            "Aquí tienes dos ideas:\n\n## Ideas\n\n---\n\n**Sugerencias:**",
+        ),
+    ).suggest(BrainstormingStep.TITLE, emptyDraft())
+    assertSame(BrainstormingSuggestionResult.InvalidResponse, invalid)
 }
 
 /** Escenario 6: mecánicas con categoría válida, inválidas descartadas y truncado. */

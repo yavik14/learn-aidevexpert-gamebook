@@ -77,8 +77,14 @@ internal class OpenAiAiClient(
     override suspend fun generate(request: GenerateRequest): String {
         val system = buildString {
             append(SYSTEM_PROMPT)
+            request.instructions
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { instructions ->
+                    append("\n\n").append(instructions)
+                }
             if (request.context.isNotEmpty()) {
-                append("\n\nContexto de las Notas del usuario:\n")
+                append("\n\nContexto provisto:\n")
                 request.context.forEachIndexed { index, text ->
                     append("${index + 1}. ").append(text).append('\n')
                 }
@@ -86,6 +92,8 @@ internal class OpenAiAiClient(
         }
         val body = jsonBody {
             put("model", config.modelChat)
+            request.temperature?.let { put("temperature", it) }
+            request.maxTokens?.let { put("max_tokens", it) }
             putJsonArray("messages") {
                 addJsonObject {
                     put("role", "system")

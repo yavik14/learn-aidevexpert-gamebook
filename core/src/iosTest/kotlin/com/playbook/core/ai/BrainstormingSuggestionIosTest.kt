@@ -39,4 +39,9 @@ class BrainstormingSuggestionIosTest {
     fun contextContainsCatalogAndNoInternalData() {
         verifyBrainstormingSuggestionContext()
     }
+
+    @Test
+    fun realMarkdownAndNoiseAreParsed() = runTest {
+        verifyBrainstormingSuggestionRealFormat()
+    }
 }

@@ -130,6 +130,10 @@ Reabrir este ADR si ocurre **cualquiera** de:
 
 ## Preguntas abiertas
 
-- Modelos y dimensión concretos de embedding; parámetros por caso.
+- Modelos y dimensión de embedding: **resueltos** (`ai-real-embeddings`: 1536).
+- Parámetros por caso: **resueltos** en `ai-real-chat` (Brainstorming
+  `temperature=0.7`/`maxTokens=400`; Q&A `temperature=0.2`/`maxTokens=600`, como
+  campos opcionales de `GenerateRequest`). El smoke real verifica que el
+  proveedor los acepta, no que los honre.
 - Política de reintentos/timeouts por caso y UX de "IA no disponible".
 - Límites de costo/cuota y observabilidad de uso.
