@@ -1556,12 +1556,15 @@ key/release guard. El diff de producción endurece el contrato de chat.
   sin fallback a fake, sin reintentos/streaming y sin cambios de esquema (v8),
   flag, proveedor, build files, `init.sh`, roots, pantallas ni `iosApp`. iOS sigue
   fake.
-- **Verificación:** `:core` 34 suites/103 tests/0 failures en Android/JVM e iOS;
-  `:composeApp` 4 suites/11 tests/0 failures; `CI=true ./init.sh` exit 0; build y
-  link iOS OK. Smoke real key-gated fuera del gate:
-  `AI smoke chat OK: suggestions=2, partial=false, answerLen=157, sources=1`.
-  Controles negativos: sin `instructions` falla el contrato RAG; sin limpieza de
-  markdown falla el parser; vacío como `Answer` falla el test de `Failed`.
+- **Verificación:** pre-rebase `:core` 34 suites/103 tests/0 failures en
+  Android/JVM e iOS; post-rebase sobre `origin/develop` `85aba36` (con
+  `tts-read-aloud` y `main-screen-playbook-shell`) **36 suites/111 tests/0
+  failures** en ambas plataformas. `:composeApp` 4 suites/11 tests/0 failures;
+  `CI=true ./init.sh` exit 0; build y link iOS OK. Smoke real key-gated fuera del
+  gate: `AI smoke chat OK: suggestions=2, partial=false, answerLen=160,
+  sources=1` (la longitud varía por el modelo). Controles negativos: sin
+  `instructions` falla el contrato RAG; sin limpieza de markdown falla el parser;
+  vacío como `Answer` falla el test de `Failed`.
 - **Riesgos aceptados:** el parser es heurístico; el smoke prueba aceptación de
   `temperature`/`max_tokens`, no que el proveedor los honre; el grounding es por
   instrucción + citas de retrieval, no una prueba semántica; sin reintentos ni

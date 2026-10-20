@@ -1338,24 +1338,25 @@
       "brainstorming-wizard",
       "rag-query"
     ],
-    "status": "passing",
+    "status": "accepted",
     "verification": [
-      "`CI=true ANDROID_HOME=<sdk> ./init.sh` → exit 0 (Android-only, IA fake, sin red ni key).",
-      "`./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test -Pplaybook.ai.mode=fake --rerun-tasks` → 34 suites / 103 tests / 0 failures en Android/JVM e iOS.",
-      "`./gradlew :composeApp:assembleDebug :composeApp:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; 4 suites / 11 tests / 0 failures en `:composeApp`.",
-      "Smoke real key-gated fuera del gate: Brainstorming 2 ideas parseables (`suggestions=2, partial=false`) y Q&A con respuesta no vacía + fuentes (`answerLen=157, sources=1`); salida sanitizada sin key, prompt, contexto ni contenido.",
-      "Controles negativos reproducidos y restaurados byte-idénticos: (a) sin `instructions` en RAG falla su test; (b) sin limpieza de markdown falla el parser; (c) respuesta vacía como `Answer` falla el test que exige `Failed`.",
-      "Alcance: `Schema.version == 8`, `.sqm` 1..7, sin cambios en `init.sh`, build files, `FakeAiClient`, `AiRuntime`, `AiRuntimeConfig`, roots, `App.kt`, pantallas, `iosApp/**` ni dependencias."
+      "`CI=true ANDROID_HOME=<sdk> ./init.sh` → exit 0 post-rebase sobre `origin/develop` `85aba36` (Android-only, IA fake, sin red ni key).",
+      "`./gradlew :core:testDebugUnitTest :core:iosSimulatorArm64Test -Pplaybook.ai.mode=fake --rerun-tasks` → **36 suites / 111 tests / 0 failures** en Android/JVM e iOS post-rebase (pre-rebase: 34/103/0).",
+      "`./gradlew :composeApp:assembleDebug :composeApp:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **4 suites / 11 tests / 0 failures** en `:composeApp`; link iOS OK.",
+      "Smoke real key-gated fuera del gate post-rebase: Brainstorming 2 ideas parseables (`suggestions=2, partial=false`) y Q&A con respuesta no vacía + fuentes (`answerLen=160, sources=1`); salida sanitizada sin key, prompt, contexto ni contenido.",
+      "Validación independiente `accept` en `docs/validations/ai-real-chat.md`; controles negativos (a)/(b)/(c) reproducidos/restaurados byte-idénticos.",
+      "Alcance post-rebase: `Schema.version == 8`, `.sqm` 1..7, sin cambios en `init.sh`, build files, `FakeAiClient`, `AiRuntime`, `AiRuntimeConfig`, roots, `App.kt`, pantallas, `iosApp/**` ni dependencias; `git diff origin/develop...HEAD` sin paths protegidos."
     ],
     "evidence": [
-      "2026-10-20: `GenerateRequest` extendido con `instructions`/`temperature`/`maxTokens` opcionales; `OpenAiAiClient.generate` serializa `temperature`/`max_tokens` sólo si están presentes y agrega instrucciones al `system` con contexto rotulado `Contexto provisto:`.",
-      "Brainstorming: `temperature=0.7`/`maxTokens=400`; prompt contra preámbulos/markdown; parser tolerante a encabezados, `**`/`__`/backticks, viñetas, numeración, comillas, preámbulos y separadores; dedupe/filtro normalizado (trim + espacios colapsados + lowercase).",
-      "Q&A: `RAG_INSTRUCTIONS` de grounding, `temperature=0.2`/`maxTokens=600`; se preservan `prompt=question.trim()` y `context=cuerpos de sources`; normalización de fences/encabezados/`**`/`__`; vacío → `RagAnswer.Failed` + `AI_QUERY`; refusal textual → `Answer`.",
-      "`:core`: 34 suites / 103 tests / 0 failures en Android/JVM e iOS (nuevos casos de markdown/ruido, contrato RAG y campos opcionales del adaptador). `:composeApp`: 4 suites / 11 tests / 0 failures. `CI=true ./init.sh` exit 0; `assembleDebug` y link iOS OK.",
-      "Smoke real key-gated (`PLAYBOOK_AI_SMOKE=1 ... -Pplaybook.ai.mode=real -Pplaybook.ai.smoke=1`): `AI smoke chat OK: suggestions=2, partial=false, answerLen=157, sources=1`; sin key, prompt, contexto ni contenido en la salida.",
-      "Controles negativos (a)/(b)/(c) reproducidos y restaurados byte-idénticos (SHA-256 verificado). Esquema v8, `.sqm` 1..7; paths protegidos sin cambios; `local.properties` gitignored. Evidencia sanitizada en `composeApp/build/smoke-evidence/ai-real-chat/smoke-real-chat.txt` (ignorado por git)."
+      "2026-10-20: validación independiente con veredicto `accept` (`docs/validations/ai-real-chat.md`); sin hallazgos Critical/High/Medium, sólo Lows heurísticos no bloqueantes.",
+      "2026-10-20: rebase sobre `origin/develop` `85aba36` (incluye `tts-read-aloud` y `main-screen-playbook-shell`); conflictos resueltos sólo en `AGENTS.md` y `PROGRESS.md` conservando ambas features y el estado de `ai-real-chat`. `feature_list.json` auto-mergeado sin perder entradas.",
+      "Post-rebase (`85aba36`, fake): `CI=true ./init.sh` exit 0; `:core` 36 suites/111 tests/0 failures en Android/JVM e iOS; `:composeApp` 4 suites/11 tests/0 failures; `assembleDebug` y link iOS OK; esquema v8, `.sqm` 1..7 y paths protegidos sin cambios.",
+      "Smoke real key-gated post-rebase: `AI smoke chat OK: suggestions=2, partial=false, answerLen=160, sources=1` (la longitud varía por el modelo; las aserciones son de contrato). Evidencia sanitizada en `composeApp/build/smoke-evidence/ai-real-chat/postrebase/` (ignorado por git).",
+      "`GenerateRequest` extendido con `instructions`/`temperature`/`maxTokens` opcionales; `OpenAiAiClient.generate` serializa `temperature`/`max_tokens` sólo si están presentes y agrega instrucciones al `system`.",
+      "Brainstorming `0.7`/`400` con prompt y parser tolerantes a markdown/preámbulos/ruido y dedupe normalizado. Q&A `0.2`/`600` con `RAG_INSTRUCTIONS`, `prompt`/`context` intactos, normalización de fences/encabezados/`**`/`__`, vacío → `Failed` + `AI_QUERY` y refusal textual → `Answer`.",
+      "Sin persistencia, flag, proveedor, UI/indicador fake-real, reintentos/streaming ni IA real en iOS. `local.properties` (key) permanece gitignored y no aparece en el diff."
     ],
-    "notes": "Chat real de Brainstorming y Q&A sin duplicar `ai-fake-real-switch`: se extendió `GenerateRequest` con `instructions`/`temperature`/`maxTokens` opcionales, se serializan en `OpenAiAiClient.generate` y se endurecieron prompt/parser/normalización. Brainstorming 0.7/400 y Q&A 0.2/600; Q&A conserva `prompt`/`context` y agrega grounding. Smoke real key-gated OK (2 ideas, respuesta con fuentes). Sin persistencia, esquema, flag, proveedor, UI/indicador fake-real, reintentos/streaming ni IA real en iOS. Riesgos residuales: parser heurístico, el smoke no prueba que el proveedor honre los parámetros y la variabilidad del modelo real."
+    "notes": "Chat real de Brainstorming y Q&A sin duplicar `ai-fake-real-switch`. `GenerateRequest` suma `instructions`/`temperature`/`maxTokens` opcionales; Brainstorming 0.7/400 con parser tolerante y Q&A 0.2/600 con grounding y normalización. Validado de forma independiente (`accept`), rebasado sobre `origin/develop` `85aba36` y re-verificado (36/111 core, 4/11 app, smoke 2 ideas + Q&A con fuentes). Sin persistencia, esquema, flag, proveedor, UI/indicador, reintentos/streaming ni IA real en iOS. Riesgos residuales: parser heurístico, el smoke no prueba que el proveedor honre los parámetros y la variabilidad del modelo."
   },
   {
     "id": "ai-real-embeddings",

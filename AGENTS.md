@@ -68,10 +68,11 @@ independiente `accept`, 2026-10-20). `tts-read-aloud` quedó `accepted` (spec
 `docs/validations/tts-read-aloud.md`, 2026-10-20). `main-screen-playbook-shell`
 quedó `accepted` (spec `docs/specs/main-screen-playbook-shell.md`; validación
 independiente `accept` en `docs/validations/main-screen-playbook-shell.md`).
-`ai-real-chat` quedó implementada y `passing` (spec
-`docs/specs/ai-real-chat.md`; pendiente de validación independiente). Sigue
-`readme-project-documentation` (cierre del MVP). Para iOS: el upload firmado
-(`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
+`ai-real-chat` quedó `accepted` (spec `docs/specs/ai-real-chat.md`; validación
+independiente `accept` en `docs/validations/ai-real-chat.md`, rebasada sobre
+`origin/develop` `85aba36`). Sigue `readme-project-documentation` (cierre del
+MVP). Para iOS: el upload firmado (`ios-release-pipeline-first-upload`) sigue
+`blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).

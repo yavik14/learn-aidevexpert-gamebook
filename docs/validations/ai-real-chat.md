@@ -147,6 +147,25 @@ bloqueantes:
   cobertura es `:core` Android/iOS + `:composeApp` + smoke key-gated, como
   justifica la spec.
 
+## Re-verificación post-rebase (2026-10-20)
+
+- **Base:** `origin/develop` `85aba36`, que incluye `tts-read-aloud` y
+  `main-screen-playbook-shell`.
+- **Rebase:** conflictos sólo en `AGENTS.md` y `PROGRESS.md`, resueltos
+  conservando ambas features y el estado de `ai-real-chat`;
+  `feature_list.json` se auto-mergeó sin perder entradas. Sin conflictos de
+  código.
+- **Checks post-rebase (fake):** `CI=true ./init.sh` exit 0; `:core`
+  **36 suites / 111 tests / 0 failures** en Android/JVM e iOS; `:composeApp`
+  **4 suites / 11 tests / 0 failures**; `assembleDebug` y link iOS OK; esquema
+  v8, `.sqm` 1..7 y paths protegidos sin diff.
+- **Smoke real post-rebase:** `AI smoke chat OK: suggestions=2, partial=false,
+  answerLen=160, sources=1`. El `answerLen` varía por el modelo; las aserciones
+  son de contrato. Evidencia sanitizada en
+  `composeApp/build/smoke-evidence/ai-real-chat/postrebase/` (ignorado por git).
+- **Veredicto:** se mantiene **accept**. El estado `accepted` se persiste en
+  `feature_list.json` con esta evidencia post-rebase.
+
 ## Estado recomendado
 
 `accepted`. El integrador debe persistir el estado, rebasar la rama sobre la
