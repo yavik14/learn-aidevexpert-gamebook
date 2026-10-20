@@ -640,6 +640,36 @@ Implementado 2026-10-13. Detalles en `ARCHITECTURE.md`.
   (retrieval real + petición de generación anclada en las Notas), no la calidad de
   la respuesta, que depende del ADR 0001. Sin red ni keys.
 
+## Guardar respuesta Q&A como Nota (save-answer-as-note)
+
+Implementado 2026-10-20. Sólo cubre Q&A; el guardado por paso del Brainstorming
+ya lo entrega `brainstorming-note-per-step` (el wizard no se toca).
+
+- **Body = respuesta sola:** `body = answerText.trim()`, sin anteponer la
+  pregunta. Si queda en blanco, la acción está deshabilitada y `App` devuelve
+  `FAILED` sin escribir (defensivo).
+- **Sin clasificación inventada:** `track = null` ("Sin track") y
+  `genres = emptyList()` ("Ninguno"). Una respuesta RAG puede abarcar varios
+  Tracks/fuentes; el editor permite clasificarla después. No se agrega IA.
+- **Duplicados exactos:** se reutiliza `isDuplicateBrainstormingNote` (body
+  exacto tras `trim` + Track + Géneros normalizados, sin importar `status`). La
+  UI pre-chequea con `existingNotes` y `App.saveQaAnswer` repite el chequeo con
+  `noteRepository.getAll()` antes de crear. Mismo body con otro Track/Géneros no
+  es duplicado. `NoteSaveResult` (`SAVED`/`DUPLICATE`/`FAILED`) sigue siendo el
+  contrato de paquete que ya usa el wizard.
+- **Confirmación explícita:** `AlertDialog` con preview truncado (5 líneas/200
+  caracteres + `…`, helper privado en `AskNotesScreen.kt`) y `Guardar`/`Cancelar`;
+  nunca autosave. `SAVED` muestra `Nota guardada.` inline y permanece en Q&A;
+  `FAILED` muestra `No se pudo guardar la Nota.` sin crear.
+- **Persistencia best-effort:** `create(NoteDraft(...))` con `status` default
+  `CAPTURED`, luego `indexBestEffort(created)` + `reload()`. Si el indexado falla,
+  la Nota persiste (`CAPTURED`/`PENDING`) y no se revierte; con IA fake termina
+  `INDEXED`. Las citas/fuentes/scores de la respuesta son efímeros y no se
+  persisten.
+- **Sin esquema ni deps:** reutiliza `note`/`note_genre`/`embedding` (v8), sin
+  `.sqm` nuevos. Sin tests nuevos: cobertura por compilación, smoke Android y
+  controles negativos (el flujo síncrono no agrega estado de carga).
+
 ## Voice / STT Decisions (voice-capture-stt)
 
 Implementado 2026-10-09. Detalles en `ARCHITECTURE.md`.

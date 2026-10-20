@@ -1218,18 +1218,32 @@
     "id": "save-answer-as-note",
     "area": "ui",
     "title": "Guardar respuesta como Nota",
-    "user_visible_behavior": "Desde el Q&A y el Brainstorming, 'Guardar como Nota' crea una Nota pre-clasificada por contexto.",
+    "user_visible_behavior": "Desde una respuesta del Q&A (`Preguntar`), 'Guardar como Nota' persiste la respuesta sola como Nota editable (`track = null`, sin Géneros), con confirmación y bloqueo de duplicados exactos. El guardado por paso del Brainstorming pertenece a `brainstorming-note-per-step`.",
     "depends_on": [
       "rag-answer-citations",
       "brainstorming-wizard",
       "create-text-note"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
-      "Provisional: smoke Android de guardar respuesta como Nota (pre-clasificada por contexto)."
+      "`ANDROID_HOME=<ruta-al-Android-SDK> CI=true ./init.sh` → exit 0 (Android-only, IA fake, sin red).",
+      "`:composeApp:assembleDebug -Pplaybook.ai.mode=fake` y `:composeApp:linkDebugFrameworkIosSimulatorArm64` (--rerun-tasks) → BUILD SUCCESSFUL.",
+      "`:core:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → 34 suites / 99 tests / 0 failures.",
+      "Smoke Android manual en emulador dedicado (Pixel_XL_API_31, puerto 5560, IA fake): Answered + Fuentes, Cancelar sin Nota, Guardar con feedback, lista/GDD, duplicado, mismo body con otro Track, SQL `note`/`note_genre` y `PRAGMA user_version = 8`.",
+      "Controles negativos (a)-(f) reproducidos, restaurados byte-idénticos (`cmp` + SHA-256) y re-verificados."
     ],
-    "evidence": [],
-    "notes": "Pre-clasificación por contexto (mapeo por paso del Brainstorming; Q&A sin Track único), editable."
+    "evidence": [
+      "2026-10-20 worktree `save-answer-as-note` (base `origin/develop@0cffd1e`): `CI=true ./init.sh` → exit 0; `:composeApp:assembleDebug` + `:composeApp:linkDebugFrameworkIosSimulatorArm64` (--rerun-tasks) → BUILD SUCCESSFUL; `:core:testDebugUnitTest --rerun-tasks` → 34 suites/99 tests/0 failures.",
+      "Implementación: `AskNotesScreen` recibe `existingNotes`/`onSaveNote`; acción sólo en `Answered` con `enabled = text.isNotBlank()`; diálogo con preview 5 líneas/200 chars + `…`, `Track: Sin track`, `Géneros: Ninguno`; feedback `Nota guardada.`; `Nota duplicada`; `No se pudo guardar la Nota.`. `App.saveQaAnswer` chequea duplicado con `noteRepository.getAll()`, crea `NoteDraft(owner = LOCAL_OWNER_ID, body = answerText.trim(), track = null, genres = emptyList())` y sólo en éxito corre `indexBestEffort` + `reload()`.",
+      "Smoke Android (evidencia en `composeApp/build/smoke-evidence/save-answer-as-note/`): Answered + Fuentes; Cancelar no creó (conteo 3→3); Guardar creó 1 Nota `body='[fake] u (context=2)'`, `track IS NULL`, sin fila en `note_genre`, `indexada`, feedback inline; lista y GDD bajo 'Sin track'.",
+      "Duplicado smoke: Nota no indexada sembrada con el body exacto → 'Nota duplicada' y conteo 5→5; mismo body con `track='historia'` → confirmación y Nota nueva con `track IS NULL` (conteo 6); GDD muestra la original en `historia` y la nueva en `Sin track`.",
+      "Controles negativos: (a) quitar `enabled = text.isNotBlank()` deja la acción habilitada con respuesta en blanco; (c) forzar `Answered(\" \")` → acción `enabled=false` sin diálogo; (b) quitar el chequeo en UI/App → segunda Nota (7→8); (d) quitar `reload()` → DB 9 Notas pero lista sin la nueva; (e) forzar `track = Track.STORY` → la Nota aparece en `historia`; (f) forzar fallo de creación → diálogo de error y conteo 10→10. Todos restaurados byte-idénticos.",
+      "SQL: `PRAGMA user_version = 8`; Notas de Q&A con `track IS NULL` y sin `note_genre`; embeddings presentes; sin `.sqm` nuevos, deps nuevas ni cambios en paths protegidos.",
+      "Límite honesto: no hay E2E persistente ni harness de UI; escenarios de texto vacío y fallos se cubrieron por inspección + controles (a)/(c)/(f). Sin smoke/paridad iOS (iOS sólo compila).",
+      "2026-10-20 validación independiente `accept` (sin hallazgos bloqueantes); veredicto registrado por el orquestador.",
+      "2026-10-20 cierre post-rebase sobre `origin/develop@763a357`: `CI=true ./init.sh` exit 0; `:composeApp:assembleDebug` + `:core:testDebugUnitTest --rerun-tasks` → 34 suites/99 tests/0 failures; `:composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` → BUILD SUCCESSFUL; paths protegidos sin cambios."
+    ],
+    "notes": "Alcance efectivo (decisión del autor, 2026-10-20): sólo Q&A; el guardado por paso del Brainstorming ya lo entrega `brainstorming-note-per-step`. Q&A sin Track único (`track = null`, `genres = emptyList()`), `body` = respuesta sola, duplicados exactos e indexado best-effort. Implementada, auto-verificada y validada independientemente (`accept`); cerrada."
   },
   {
     "id": "ai-client-ports",

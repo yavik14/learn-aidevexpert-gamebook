@@ -61,9 +61,11 @@ en `docs/validations/transcribe-audio-attachment.md`, 2026-10-20).
 en `docs/validations/image-generation-from-text.md`, reverificada sobre
 `0cffd1e`). `gdd-export-hybrid` quedó `accepted` (spec
 `docs/specs/gdd-export-hybrid.md`; validación independiente `accept` en
-`docs/validations/gdd-export-hybrid.md`, 2026-10-20). Sigue `main-screen-playbook-shell`
+`docs/validations/gdd-export-hybrid.md`, 2026-10-20). `save-answer-as-note`
+quedó `accepted` (spec `docs/specs/save-answer-as-note.md`; validación
+independiente `accept`, 2026-10-20). Sigue `main-screen-playbook-shell`
 (primera ready por dependencias, **sin spec todavía**: requiere `$feature-spec`);
-luego `save-answer-as-note`, `ai-real-chat` y `tts-read-aloud`. Después siguen
+luego `ai-real-chat` y `tts-read-aloud`. Después siguen
 las demás `not_started` de las olas 4–6.
 `readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.

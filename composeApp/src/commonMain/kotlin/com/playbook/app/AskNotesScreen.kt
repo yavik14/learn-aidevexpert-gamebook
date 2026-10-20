@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +30,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.playbook.core.ai.RetrievedNote
+import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
+import com.playbook.core.model.Note
 
 /**
  * Estado visible de la pantalla de consulta (RAG).
@@ -69,13 +73,54 @@ sealed interface AskUiState {
 @Composable
 fun AskNotesScreen(
     state: AskUiState,
+    existingNotes: List<Note>,
+    onSaveNote: (String) -> NoteSaveResult,
     onAsk: (String) -> Unit,
     onOpenSource: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var question by remember { mutableStateOf("") }
+    var pendingBody by remember { mutableStateOf<String?>(null) }
+    var duplicateMessage by remember { mutableStateOf<String?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var saveFeedback by remember { mutableStateOf<String?>(null) }
     val canSubmit = question.isNotBlank() && state != AskUiState.Asking
+
+    fun startSave() {
+        val answered = state as? AskUiState.Answered ?: return
+        saveFeedback = null
+        val body = answered.text.trim()
+        if (body.isBlank()) return
+        val duplicate = existingNotes.any { note ->
+            isDuplicateBrainstormingNote(note, body, null, emptyList())
+        }
+        if (duplicate) {
+            duplicateMessage = duplicateText
+            return
+        }
+        pendingBody = body
+    }
+
+    fun confirmSave() {
+        val body = pendingBody ?: return
+        when (onSaveNote(body)) {
+            NoteSaveResult.SAVED -> {
+                pendingBody = null
+                saveFeedback = "Nota guardada."
+            }
+
+            NoteSaveResult.DUPLICATE -> {
+                pendingBody = null
+                duplicateMessage = duplicateText
+            }
+
+            NoteSaveResult.FAILED -> {
+                pendingBody = null
+                saveError = "No se pudo guardar la Nota."
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -99,6 +144,8 @@ fun AskNotesScreen(
         AskResult(
             state = state,
             onOpenSource = onOpenSource,
+            onSaveClick = ::startSave,
+            saveFeedback = saveFeedback,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         Spacer(modifier = Modifier.height(24.dp))
@@ -112,19 +159,82 @@ fun AskNotesScreen(
             }
             Spacer(modifier = Modifier.weight(1f))
             Button(
-                onClick = { onAsk(question) },
+                onClick = {
+                    // Cada consulta es un intento nuevo: el feedback de guardado
+                    // anterior deja de ser relevante.
+                    saveFeedback = null
+                    duplicateMessage = null
+                    saveError = null
+                    onAsk(question)
+                },
                 enabled = canSubmit,
             ) {
                 Text(text = primaryActionLabel(state))
             }
         }
     }
+
+    pendingBody?.let { body ->
+        AlertDialog(
+            onDismissRequest = { pendingBody = null },
+            title = { Text(text = "Guardar como Nota") },
+            text = {
+                Column {
+                    Text(text = previewBody(body))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Track: Sin track")
+                    Text(text = "Géneros: Ninguno")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmSave() }) {
+                    Text(text = "Guardar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBody = null }) {
+                    Text(text = "Cancelar")
+                }
+            },
+        )
+    }
+
+    duplicateMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { duplicateMessage = null },
+            title = { Text(text = "Nota duplicada") },
+            text = { Text(text = message) },
+            confirmButton = {
+                TextButton(onClick = { duplicateMessage = null }) {
+                    Text(text = "Aceptar")
+                }
+            },
+        )
+    }
+
+    saveError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { saveError = null },
+            title = { Text(text = message) },
+            text = { Text(text = "Intentá de nuevo.") },
+            confirmButton = {
+                TextButton(onClick = { saveError = null }) {
+                    Text(text = "Aceptar")
+                }
+            },
+        )
+    }
 }
+
+private const val duplicateText =
+    "Ya existe una Nota con el mismo contenido, Track y Géneros."
 
 @Composable
 private fun AskResult(
     state: AskUiState,
     onOpenSource: (String) -> Unit,
+    onSaveClick: () -> Unit,
+    saveFeedback: String?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -148,6 +258,17 @@ private fun AskResult(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(text = state.text, style = MaterialTheme.typography.bodyLarge)
                     }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onSaveClick,
+                    enabled = state.text.isNotBlank(),
+                ) {
+                    Text(text = "Guardar como Nota")
+                }
+                saveFeedback?.let { feedback ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = feedback, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (state.sources.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -221,6 +342,16 @@ private fun SourceCitation(
             LabelChip(text = note.track?.code ?: "Sin track")
         }
     }
+}
+
+/**
+ * Preview corto del body para la confirmación (5 líneas / 200 caracteres + `…`);
+ * la Nota persistida conserva el contenido completo.
+ */
+private fun previewBody(body: String): String {
+    val byLines = body.lines().take(5).joinToString("\n")
+    val clipped = if (byLines.length > 200) byLines.take(200) else byLines
+    return if (clipped.length < body.length) "$clipped…" else clipped
 }
 
 private fun primaryActionLabel(state: AskUiState): String = when (state) {

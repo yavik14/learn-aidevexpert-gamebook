@@ -84,8 +84,12 @@
   mapeo Título→sin Track; Género→sin Track (body = Géneros); Core Loop→
   `mecánicas`; Audiencia→sin Track; Concepto→`historia`; Inspiraciones→sin
   Track; Fantasía→`historia`; Keys→`mecánicas`; Out→sin Track. La Nota es final,
-  indexada best-effort y los duplicados exactos se bloquean por contenido. El
-  Q&A sigue **sin Track único** para sus respuestas.
+  indexada best-effort y los duplicados exactos se bloquean por contenido. Para
+  Q&A, **resuelta** en `save-answer-as-note` (implementada 2026-10-20): la
+  respuesta se guarda sola (`body` sin la pregunta), `track = null` ("Sin track")
+  y sin Géneros porque no hay un Track único ni clasificación confirmada; el
+  usuario los agrega luego en el editor. Mismo criterio de duplicado exacto
+  (contenido + Track + Géneros). Ver `docs/specs/save-answer-as-note.md`.
 - **UI fina del wizard:** **resuelta** en `brainstorming-wizard` (2026-10-19;
   validación independiente `accept` en `docs/validations/brainstorming-wizard.md`): 9 pasos,
   progreso `Paso X/9`, guardado explícito, reapertura con precarga, topes 3/3/5,
