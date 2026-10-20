@@ -175,6 +175,9 @@ Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
 7. **Notas Relacionadas:** enlaces por similitud.
 8. **Estado de indexado:** pendiente/fallida + reintento.
 9. **Sugerencia de clasificación:** propuesta de Track/Género con confirmación.
+10. **Onboarding del primer arranque:** si no hay Proyecto, oferta saltable para
+    iniciar el Brainstorming o crear un Proyecto vacío; no reaparece cuando el
+    Proyecto ya existe.
 
 ## Responsive Baseline
 

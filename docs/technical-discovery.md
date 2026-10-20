@@ -1240,8 +1240,8 @@ Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
   descarta.
 - **Entrada temporal.** `NotesListScreen` suma un botón "Brainstorming" en una
   fila propia; `main-screen-playbook-shell` lo reemplazará por el icono de top
-  bar. No hay apertura automática en el primer arranque
-  (`first-run-project-onboarding`).
+  bar. La apertura automática del onboarding del primer arranque se agregó en
+  `first-run-project-onboarding`.
 - **Sin IA ni rediseño.** No se muestran sugerencias; `brainstorming-ai-suggestions`
   las agrega después. Progreso con `LinearProgressIndicator` + `Paso X/9`, sin
   artefacto de diseño nuevo.
@@ -1283,6 +1283,28 @@ Implementado 2026-10-19. Detalles en `docs/specs/brainstorming-ai-suggestions.md
   2 tarjetas, parcial por dedupe, Género/Inspiraciones/Mecánicas, limpieza al
   navegar y guardado v8. Evidencia en
   `composeApp/build/smoke-evidence/brainstorming-ai-suggestions/`.
+## First-Run Project Onboarding Decisions (first-run-project-onboarding)
+
+Implementado 2026-10-19. Detalles en `ARCHITECTURE.md` y esta spec.
+
+- **Detección por estado, no por flag.** `App` usa `ProjectLoadState`
+  (`Loading`/`Missing`/`Loaded(project)`) y lee `GameProjectRepository.get()` en
+  el `LaunchedEffect(refreshKey)`. `Loading` sólo es el estado inicial; los
+  `reload()` no lo reintroducen. `Missing` muestra la oferta full-screen y
+  `Loaded` el destino normal.
+- **Crear al aceptar o saltar.** Ambas acciones persisten primero
+  `GameProjectDraft(owner = "local")` (singleton vacío, escalares `null`,
+  listas/hijas vacías, `createdAt == updatedAt`, topes 3/3/5) y luego navegan:
+  aceptar a `Brainstorming`, saltar a la lista. Cancelar el wizard deja el
+  Proyecto vacío y no reabre el onboarding.
+- **Idempotencia y error.** `GameProjectRepository.save` hace upsert y la UI
+  bloquea dobles taps (`onboardingBusy`); un fallo registra
+  `STORAGE`/`STORAGE_FAILED`, muestra `AlertDialog` y no navega. La existencia
+  del singleton es la única señal: no hay flag "onboarding visto".
+- **Verificación:** `assembleDebug` OK, `:core:testDebugUnitTest` 28 suites/87
+  tests/0 failures (post-rebase), `CI=true ./init.sh` exit 0, link iOS no
+  bloqueante y smoke Android real (oferta, saltar, aceptar+cancelar, relanzar sin
+  oferta, aceptar+Guardar y error forzado) documentado en `PROGRESS.md`.
 
 ## AI Real Embeddings Decisions (ai-real-embeddings)
 

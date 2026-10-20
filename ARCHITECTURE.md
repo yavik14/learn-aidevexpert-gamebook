@@ -599,17 +599,19 @@ composeApp (Android app / commonMain) ──▶ core
   attachmentRepository: AttachmentRepository, voiceTranscriber: VoiceTranscriber,
   noteIndexingOrchestrator: NoteIndexingOrchestrator, ragQueryService: RagQueryService,
   noteLinkRepository: NoteLinkRepository, semanticLinkingService: SemanticLinkingService)`
-  es la raíz de la UI y dueña del estado. Hoistea `notes`, `project`
-  (`GameProject?`) y `attachments` (`mutableStateOf`), `destination`
+  es la raíz de la UI y dueña del estado. Hoistea `notes`, `projectState`
+  (`ProjectLoadState`: `Loading`/`Missing`/`Loaded(project)`) y `attachments`
+  (`mutableStateOf`), `destination`
   (`NotesDestination`:
   `List`/`Create`/`Edit(noteId)`/`CreateWithImage(image)`/`Gdd`/`Ask`/
   `Brainstorming`/`Related(noteId)`),
   `refreshKey`, `relatedNotes`, `dictation` (`DictationUiState`), `dictatedText`
   (texto final pendiente de anexar), `pendingAudio` (`RecordedAudio?`),
-  `dictationJob`, `askState` (`AskUiState`) y el
-  estado de captura de imagen (`showImageSourceDialog`/`imageError`). Recibe
-  `aiClient` y crea `BrainstormingSuggestionService` con `remember(aiClient)` para
-  el wizard. La lectura
+  `dictationJob`, `askState` (`AskUiState`), el estado de captura de imagen
+  (`showImageSourceDialog`/`imageError`) y el estado del onboarding
+  (`onboardingBusy`/`onboardingError`). Recibe `aiClient` y crea
+  `BrainstormingSuggestionService` con `remember(aiClient)` para el wizard. La
+  lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
   sin `ViewModel`/`Lifecycle` y sin Flow ni librería de navegación; las llamadas
@@ -618,6 +620,17 @@ composeApp (Android app / commonMain) ──▶ core
   `remember`; la acción de imagen abre un `AlertDialog` "Agregar imagen"
   (Cámara/Galería/Cancelar), `onResult` navega a `CreateWithImage` y `onError`
   muestra un `AlertDialog` accionable.
+- **Onboarding del Proyecto (`first-run-project-onboarding`):** `App` lee el
+  singleton en el mismo `LaunchedEffect(refreshKey)` y lo representa con
+  `ProjectLoadState` (`Loading` inicial; **no** vuelve a `Loading` en cada
+  `reload()`). Con `Missing` renderiza `FirstRunOnboardingScreen` full-screen
+  ("Iniciar Brainstorming"/"Saltar") y no la lista; con `Loaded` corre el
+  `when(destination)` normal. Ambas acciones crean primero el singleton vacío
+  (`GameProjectDraft(owner = LOCAL_OWNER_ID)`) con guard `onboardingBusy`;
+  aceptar navega a `Brainstorming` y saltar a `List`. Un fallo registra
+  `STORAGE`/`STORAGE_FAILED`, muestra un `AlertDialog` y no navega. No hay flag
+  persistido: la existencia del Proyecto es la única señal, así que no se
+  reofrece cuando ya existe.
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
 - **`NotesListScreen`**: `Scaffold` con una fila de `ExtendedFloatingActionButton`

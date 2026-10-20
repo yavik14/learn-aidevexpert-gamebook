@@ -40,11 +40,12 @@
 - **Plan de ejecución del MVP restante** (2026-10-16): `docs/mvp-execution-plan.md` define 6 olas para las 18 features `not_started`, hasta **3 sesiones en paralelo**, una feature por sesión/worktree/rama, con paradas tras planner/implementer/validator y una sola cola de merge. Cierra con validación end-to-end y un `README.md` bitácora (`readme-project-documentation`, al final). Excepción controlada al WIP=1 documentada en `AGENTS.md`.
 - `inline-dictation-30s` `accepted` (2026-10-19; Session 063 implementación + Session 064 cierre/integración; validación independiente `accept` en `docs/validations/inline-dictation-30s.md`): el dictado pasa a ser **inline en Nueva nota** (panel con progreso de 30s + parcial + Detener/Processing/Error), el cap arranca con `onStarted` (no cuenta el diálogo de permiso), auto-stop a los 30s, audio pendiente adjuntado al guardar y limpieza sin huérfanos; se retira `VoiceCaptureScreen`/`VoiceUiState`/`NotesDestination.VoiceCapture`. Sin deps, esquema ni `:core`. Detalle en `docs/specs/inline-dictation-30s.md`, `ARCHITECTURE.md` y `docs/technical-discovery.md`.
 - `brainstorming-ai-suggestions` `accepted` (2026-10-19; Session 069 implementación + Session 070 cierre/integración; validación independiente `accept` en `docs/validations/brainstorming-ai-suggestions.md`): `BrainstormingSuggestionService` en `:core` (prompt/contexto por paso, parsing/dedupe, parcial/error y máximo 2) + `FakeAiClient` determinista + UI efímera en el wizard (Sugerir/Usar/Agregar/Ignorar) + wiring de `aiClient` en `App`/roots. Sin persistencia, Notas, esquema ni IA real. `:core` 28 suites/87 tests/0 failures en Android e iOS (post-rebase), `assembleDebug` OK, `./init.sh` exit 0 e iOS link OK; smoke Android con evidencia.
+- `first-run-project-onboarding` `accepted` (2026-10-20; Session 071 implementación + Session 072 cierre; validación independiente `accept`): onboarding saltable del Proyecto en el primer arranque. `App` usa `ProjectLoadState` (`Loading`/`Missing`/`Loaded`) y, sin Proyecto, muestra `FirstRunOnboardingScreen` full-screen; “Iniciar Brainstorming” y “Saltar” crean primero el singleton vacío (`owner = "local"`, `id = "singleton"`, escalares `null`, listas/hijas vacías, `createdAt == updatedAt`, topes 3/3/5) y luego navegan al wizard o a la lista. Guard `onboardingBusy`, error con `AlertDialog` y sin flag persistido (la existencia del Proyecto evita reofrecer). Sin cambios en `:core`, esquema v8, raíces, build files, `init.sh` ni `iosApp`. Detalle en `docs/specs/first-run-project-onboarding.md`, `ARCHITECTURE.md` y `PROGRESS.md` (Sessions 071/072).
 - **En vuelo (no integradas en `develop`; no tocar ni duplicar):**
   - `brainstorming-note-per-step` — `in_progress` en `worktree/brainstorming-note-per-step` (rama homónima, base `a00c72d`): spec `docs/specs/brainstorming-note-per-step.md` y código en curso, sin commit; pendiente revisión del spec y luego implementer → validator.
-- Current state: **36 `accepted`, 12 `not_started` (una de ellas, `brainstorming-note-per-step`, en vuelo en su worktree) y 1 `blocked`** (49 total). Siguiente ready sin dependencias abiertas y sin worktree: `first-run-project-onboarding` (`not_started`, sin spec; arranca con planner). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
+- Current state: **37 `accepted`, 11 `not_started` (una de ellas, `brainstorming-note-per-step`, en vuelo en su worktree) y 1 `blocked`** (49 total). La siguiente ready sin dependencias abiertas es `gdd-document-hybrid` (ya tiene worktree/rama; no tocar desde esta sesión). `gdd-export-hybrid` sigue no lista (espera `gdd-document-hybrid`) y `readme-project-documentation` espera el cierre del MVP. Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
-- Last verified at: 2026-10-19.
+- Last verified at: 2026-10-20.
 
 ## Session Log
 
@@ -1570,3 +1571,50 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/brainstorming-ai-suggestions.md` (más el diff validado de la feature).
 - Known risk or unresolved issue: el dedupe no colapsa espacios internos del borrador (Low, follow-up); no hay harness UI/E2E; la calidad/formato del proveedor real queda para `ai-real-chat`.
 - Next best step: abrir el PR contra `develop`; la integración la hace la sesión integradora. Luego `first-run-project-onboarding`.
+### Session 071 (first-run-project-onboarding — implementación)
+
+- Date: 2026-10-19
+- Goal: implementar `docs/specs/first-run-project-onboarding.md` (onboarding saltable del Proyecto en el primer arranque) sin ampliar alcance.
+- Completed:
+  - `FirstRunOnboardingScreen.kt` (nuevo): oferta full-screen con "Tu Proyecto de Juego", "Iniciar Brainstorming" y "Saltar"; `FirstRunLoading` con `CircularProgressIndicator` y texto accesible. Tokens Material 3, sin artefacto de diseño nuevo.
+  - `App.kt`: `ProjectLoadState` (`Loading`/`Missing`/`Loaded`), lectura del singleton en el `LaunchedEffect(refreshKey)` sin volver a `Loading` en reloads, gate antes del `when(destination)` y derivación de `project` para el wizard.
+  - Ambas acciones crean primero el singleton vacío (`GameProjectDraft(owner = LOCAL_OWNER_ID)`) con guard `onboardingBusy` + `try/finally`; aceptar navega a `Brainstorming` y saltar a `List`. Un fallo registra `STORAGE`/`STORAGE_FAILED`, muestra `AlertDialog` ("No se pudo crear el Proyecto" / "Intentá de nuevo." / "Aceptar") y no navega.
+  - Sin flag persistido: la existencia de `game_project` es la señal; con Proyecto no se reofrece. Sin cambios en `:core`, esquema v8, raíces, `NotesListScreen`, wizard, build files, `init.sh` ni `iosApp/**`.
+  - Docs: `ARCHITECTURE.md` (ProjectLoadState/gate/acciones), `DESIGN.md` (Core Screens), `docs/technical-discovery.md` (decisiones), `AGENTS.md` (sólo cola), `feature_list.json` (`passing` + evidencia) y este bloque.
+- Verification run:
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; 27 suites / 80 tests / 0 failures / 0 errors / 0 skipped.
+  - `CI=true ./init.sh` → exit 0 (Android-only, IA fake, sin red ni dev servers).
+  - iOS no bloqueante: `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - Smoke Android real (emulator-5556): `pm clear` + arranque mostró la oferta con `game_project` en 0; "Saltar" creó `singleton|local` con `created_at == updated_at` y hijas 0/0/0; relanzar no reofreció. `pm clear` + "Iniciar Brainstorming" abrió `Paso 1/9`, la fila ya existía antes de navegar y "Cancelar" volvió a la lista; relanzar no reofreció. Aceptar + "Guardar" actualizó la misma fila con título `SmokeProj`, `owner`/`created_at` preservados y `updated_at` avanzado. Base sembrada con una Nota y sin Proyecto: la oferta apareció, "Saltar" creó el Proyecto y la Nota siguió visible.
+  - Control negativo (a): se forzó temporalmente el fallo de `save`; apareció el diálogo, la oferta permaneció y `game_project` siguió en 0. Código restaurado y smoke re-verificado en verde.
+  - `git diff --check` OK; sin cambios en `*.sq`/`*.sqm` (`1.sqm`..`7.sqm`), `:core`, raíces, build files, `gradle/libs.versions.toml`, `init.sh` ni `iosApp/**`.
+- Evidence captured: resultados de build/tests/gate/link iOS y smoke Android (UI dumps/consultas SQL) en este bloque y en `feature_list.json`.
+- Files or artifacts updated: `composeApp/src/commonMain/kotlin/com/playbook/app/FirstRunOnboardingScreen.kt` (nuevo), `composeApp/src/commonMain/kotlin/com/playbook/app/App.kt`, `ARCHITECTURE.md`, `DESIGN.md`, `docs/technical-discovery.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: el smoke de doble tap no se ejecutó de forma aislada; el guard `onboardingBusy` + upsert del repositorio están cubiertos por revisión y `GameProjectCheck`. El estado `Loading` no se capturó visualmente porque la lectura local es instantánea; su contrato se verificó por revisión y compilación. `get()` que lanza sigue fuera de alcance (fallo local app-wide). Sin tests de UI/E2E persistentes; la verificación de UI es smoke manual.
+- Next best step: validación independiente de `first-run-project-onboarding` con `$feature-validator`; no commitear todavía.
+
+### Session 072 (first-run-project-onboarding — cierre e integración)
+
+- Date: 2026-10-20
+- Goal: persistir la aceptación de `first-run-project-onboarding`, sincronizar con `origin/develop`, re-verificar, commitear y abrir el PR sin mergear.
+- Completed:
+  - Validación independiente `accept` (`$feature-validator`), sin bloqueantes. Hallazgos Low no bloqueantes: un doble tap puede abrir el editor tras navegar, el estado `Loading` no se capturó visualmente y no hay UI/E2E persistente.
+  - `feature_list.json`: `first-run-project-onboarding` `passing` → `accepted`, con evidencia de la validación, build/tests/gate/iOS link y smoke Android en `emulator-5558`.
+  - Rebase sobre `origin/develop` `66611ec` (incluye `brainstorming-ai-suggestions`). Conflictos en `AGENTS.md`, `ARCHITECTURE.md`, `PROGRESS.md` y `docs/technical-discovery.md`, resueltos preservando ambas features; `App.kt` auto-merge conservando `aiClient`/`suggestionService` y el onboarding. Sin merge commits.
+  - `PROGRESS.md`/`AGENTS.md`: estado, cola y sesiones de cierre actualizados; sin cambios de alcance ni de código de producto.
+- Verification run (pre-rebase, base `6db4d38`):
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 27 suites / 80 tests / 0 failures / 0 errors / 0 skipped.
+  - `CI=true ./init.sh` → exit 0.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+- Verification run (post-rebase, `origin/develop` `66611ec`):
+  - `./gradlew :composeApp:assembleDebug --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `./gradlew :core:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → 28 suites / 87 tests / 0 failures / 0 errors / 0 skipped.
+  - `CI=true ./init.sh` → exit 0.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - Smoke de validación en `emulator-5558`: oferta, saltar, aceptar+cancelar, relanzar sin oferta, aceptar+Guardar, Notas sin Proyecto y error forzado.
+- Evidence captured: veredicto `accept`, resultados pre/post-rebase de build/tests/gate/link iOS y smoke de validación; detalle en `feature_list.json` y en las Sessions 071/072.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: los tres Low de la validación (doble tap, `Loading` no capturado, sin UI/E2E persistente); `get()` que lanza sigue fuera de alcance.
+- Next best step: push de la rama y PR contra `develop`; la integración la hace la sesión integradora. No mergear.

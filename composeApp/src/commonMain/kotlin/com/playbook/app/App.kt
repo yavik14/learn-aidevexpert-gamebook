@@ -32,6 +32,7 @@ import com.playbook.core.linking.buildRelatedNotes
 import com.playbook.core.model.Attachment
 import com.playbook.core.model.AttachmentKind
 import com.playbook.core.model.GameProject
+import com.playbook.core.model.GameProjectDraft
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.Track
@@ -71,6 +72,12 @@ sealed interface NotesDestination {
 
     /** Notas relacionadas por similitud, desde una Nota de origen. */
     data class Related(val noteId: String) : NotesDestination
+}
+
+private sealed interface ProjectLoadState {
+    data object Loading : ProjectLoadState
+    data object Missing : ProjectLoadState
+    data class Loaded(val project: GameProject) : ProjectLoadState
 }
 
 /**
@@ -118,7 +125,9 @@ fun App(
 ) {
     MaterialTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
-        var project by remember { mutableStateOf<GameProject?>(null) }
+        var projectState by remember { mutableStateOf<ProjectLoadState>(ProjectLoadState.Loading) }
+        var onboardingBusy by remember { mutableStateOf(false) }
+        var onboardingError by remember { mutableStateOf(false) }
         var attachments by remember { mutableStateOf(emptyList<Attachment>()) }
         var destination by remember { mutableStateOf<NotesDestination>(NotesDestination.List) }
         var refreshKey by remember { mutableStateOf(0) }
@@ -151,8 +160,15 @@ fun App(
         LaunchedEffect(refreshKey) {
             notes = noteRepository.getAll()
             attachments = attachmentRepository.getAll()
-            project = gameProjectRepository.get()
+            val loaded = gameProjectRepository.get()
+            projectState = if (loaded == null) {
+                ProjectLoadState.Missing
+            } else {
+                ProjectLoadState.Loaded(loaded)
+            }
         }
+
+        val project = (projectState as? ProjectLoadState.Loaded)?.project
 
         fun reload() {
             refreshKey++
@@ -170,6 +186,26 @@ fun App(
 
         fun goToList() {
             destination = NotesDestination.List
+        }
+
+        fun createProjectFromOnboarding(action: (GameProject) -> Unit) {
+            if (onboardingBusy) return
+            onboardingBusy = true
+            try {
+                val saved = runCatching {
+                    gameProjectRepository.save(GameProjectDraft(owner = LOCAL_OWNER_ID))
+                }
+                saved.onSuccess { savedProject ->
+                    projectState = ProjectLoadState.Loaded(savedProject)
+                    reload()
+                    action(savedProject)
+                }.onFailure {
+                    diagnostics.recordFailure(DiagnosticSource.STORAGE, STORAGE_FAILED)
+                    onboardingError = true
+                }
+            } finally {
+                onboardingBusy = false
+            }
         }
 
         /**
@@ -462,7 +498,23 @@ fun App(
             fileStore.read(path)?.let(::decodeImageBitmap)
         }
 
-        when (val current = destination) {
+        when (projectState) {
+            ProjectLoadState.Loading -> FirstRunLoading()
+            ProjectLoadState.Missing -> FirstRunOnboardingScreen(
+                onStartBrainstorming = {
+                    createProjectFromOnboarding {
+                        destination = NotesDestination.Brainstorming
+                    }
+                },
+                onSkip = {
+                    createProjectFromOnboarding { goToList() }
+                },
+            )
+
+            is ProjectLoadState.Loaded -> Unit
+        }
+
+        if (projectState is ProjectLoadState.Loaded) when (val current = destination) {
             NotesDestination.List -> NotesListScreen(
                 notes = notes,
                 attachmentKinds = attachmentKinds,
@@ -620,6 +672,19 @@ fun App(
                 onAsk = ::ask,
                 onOpenSource = { noteId -> destination = NotesDestination.Edit(noteId) },
                 onBack = ::goToList,
+            )
+        }
+
+        if (onboardingError) {
+            AlertDialog(
+                onDismissRequest = { onboardingError = false },
+                title = { Text(text = "No se pudo crear el Proyecto") },
+                text = { Text(text = "Intentá de nuevo.") },
+                confirmButton = {
+                    TextButton(onClick = { onboardingError = false }) {
+                        Text(text = "Aceptar")
+                    }
+                },
             )
         }
 
