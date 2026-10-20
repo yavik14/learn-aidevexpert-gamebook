@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
                 aiClient = aiClient,
                 transcribeClient = aiRuntime.transcribeClient,
                 jevClient = aiRuntime.jevClient,
+                imageClient = aiRuntime.imageClient,
                 diagnostics = diagnostics,
             )
         }

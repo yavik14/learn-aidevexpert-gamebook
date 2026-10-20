@@ -1604,3 +1604,38 @@ Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
   tras relanzar. `Empty`/`Error` no son alcanzables con el fake de producción
   (cubiertos por tests del core); con el fake la carga es instantánea y no se
   pudo capturar "Sugiriendo…" en el smoke.
+
+## Image Generation Decisions (image-generation-from-text)
+
+Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
+`docs/specs/image-generation-from-text.md`.
+
+- **Caso de uso en `:core`.** `TextImageGenerationService` valida el prompt
+  (`trim`; vacío → `EmptyPrompt` sin llamar al puerto), invoca una vez
+  `ImageClient.generateImage` y valida el `GeneratedImage`: bytes no vacíos,
+  `mimeType` no vacío e `image/*` (case-insensitive). Un resultado inválido no se
+  muestra ni persiste (`InvalidImage`); `AiClientException` → `Failed`. Los
+  diagnósticos usan `IMAGE` con `image_generation_failed`/`image_generation_invalid`
+  y nunca incluyen prompt, bytes, rutas ni ids.
+- **Entrada y persistencia reutilizadas.** La lista agrega "Generar con IA" al
+  diálogo "Agregar imagen"; el éxito navega a `CreateWithImage(PickedImage)` y el
+  Guardar existente (`saveNoteWithImage`) escribe archivo, Nota y fila
+  `attachment` con ruta relativa, mime real y tamaño, con la limpieza ya probada
+  ante fallo. Generar siempre crea una Nota nueva y no reindexa por la imagen.
+- **Fake decodificable.** `FakeImageClient` ya no devuelve texto UTF-8 con mime
+  `image/png`: devuelve un PNG 1×1 válido más un chunk `tEXt` (`Comment\0fake
+  image: <Base64 UTF-8>`) con CRC32 insertado antes de `IEND`. Es un chunk
+  ancillary estándar que Android/Skia ignoran; conserva determinismo,
+  `image/png` y bytes distintos por prompt. Hallazgo de implementación: el largo
+  del chunk debe ser el de sus **datos** (sin el tipo); un largo incorrecto hacía
+  que `BitmapFactory` devolviera `null` aunque CoreGraphics lo tolerara.
+- **Mime vs extensión.** El store sigue usando `images/<uuid>.jpg` como extensión
+  fija (contrato preexistente); el mime real va en `attachment.mime_type` y la UI
+  decodifica por bytes. La generación no cambia el store.
+- **Verificación:** `:core` 34 suites/99 tests post-rebase (`42e6c60`) en Android/JVM e iOS, gate exit 0,
+  `assembleDebug` y link iOS OK; smoke Android con fake (generar → preview →
+  guardar con `body` vacío → chip "Imagen" + miniatura → persistencia tras
+  relanzar) e inspección de `attachment` (`kind=imagen`, `mime_type=image/png`,
+  `file_path` relativa). Controles negativos (a–d) reproducidos y restaurados.
+- **Límites:** sin smoke real (fuera del gate), sin edición/reemplazo/multi-imagen,
+  sin historial de prompts ni caché de miniaturas; iOS congelado sólo compila.

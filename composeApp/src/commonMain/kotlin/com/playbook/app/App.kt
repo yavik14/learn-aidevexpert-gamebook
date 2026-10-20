@@ -23,12 +23,15 @@ import com.playbook.core.ai.AudioAttachmentTranscriptionService
 import com.playbook.core.ai.AudioTranscriptionResult
 import com.playbook.core.ai.BrainstormingSuggestionService
 import com.playbook.core.ai.ClassificationSuggestionService
+import com.playbook.core.ai.ImageClient
+import com.playbook.core.ai.ImageGenerationResult
 import com.playbook.core.ai.JevClient
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
 import com.playbook.core.ai.RagAnswer
 import com.playbook.core.ai.RagQueryService
+import com.playbook.core.ai.TextImageGenerationService
 import com.playbook.core.ai.TranscribeClient
 import com.playbook.core.diagnostics.DiagnosticSource
 import com.playbook.core.diagnostics.Diagnostics
@@ -132,6 +135,7 @@ fun App(
     aiClient: AiClient,
     transcribeClient: TranscribeClient,
     jevClient: JevClient,
+    imageClient: ImageClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
     MaterialTheme {
@@ -150,6 +154,12 @@ fun App(
         var askState by remember { mutableStateOf<AskUiState>(AskUiState.Idle) }
         var showImageSourceDialog by remember { mutableStateOf(false) }
         var imageError by remember { mutableStateOf<ImageCaptureError?>(null) }
+        var showGenerateImageDialog by remember { mutableStateOf(false) }
+        var imagePrompt by remember { mutableStateOf("") }
+        var imageGenerationState by remember {
+            mutableStateOf<ImageGenerationUiState>(ImageGenerationUiState.Idle)
+        }
+        var generationJob by remember { mutableStateOf<Job?>(null) }
         // Transcripción diferida del Adjunto AUDIO: el job y el último texto
         // viven acá; el editor sólo aplica/confirma y avisa que lo consumió.
         var transcriptionState by remember {
@@ -194,6 +204,10 @@ fun App(
                 fileStore = fileStore,
                 diagnostics = diagnostics,
             )
+        }
+        // Genera y valida la imagen; la persistencia sigue en saveNoteWithImage.
+        val imageGenerationService = remember(imageClient, diagnostics) {
+            TextImageGenerationService(imageClient, diagnostics)
         }
 
         LaunchedEffect(refreshKey) {
@@ -616,6 +630,68 @@ fun App(
             reload()
         }
 
+        /** Cierra el diálogo de generación y descarta cualquier resultado en vuelo. */
+        fun cancelImageGeneration() {
+            generationJob?.cancel()
+            generationJob = null
+            showGenerateImageDialog = false
+            imagePrompt = ""
+            imageGenerationState = ImageGenerationUiState.Idle
+        }
+
+        /**
+         * Genera una imagen desde el prompt y, si es válida, navega al editor con
+         * la imagen en memoria. Nada se persiste hasta Guardar. Los errores se
+         * muestran en el diálogo y permiten reintentar con el mismo prompt.
+         */
+        fun generateImage() {
+            val prompt = imagePrompt
+            if (prompt.isBlank() || imageGenerationState is ImageGenerationUiState.Generating) return
+            generationJob?.cancel()
+            generationJob = scope.launch {
+                imageGenerationState = ImageGenerationUiState.Generating
+                try {
+                    when (val result = imageGenerationService.generate(prompt)) {
+                        is ImageGenerationResult.Generated -> {
+                            showGenerateImageDialog = false
+                            imagePrompt = ""
+                            imageGenerationState = ImageGenerationUiState.Idle
+                            destination = NotesDestination.CreateWithImage(
+                                PickedImage(result.image.bytes, result.image.mimeType),
+                            )
+                        }
+
+                        ImageGenerationResult.EmptyPrompt ->
+                            imageGenerationState = ImageGenerationUiState.Error(
+                                "Escribí una descripción para generar la imagen.",
+                            )
+
+                        ImageGenerationResult.InvalidImage ->
+                            imageGenerationState = ImageGenerationUiState.Error(
+                                "La IA devolvió una imagen inválida. Intentá de nuevo.",
+                            )
+
+                        is ImageGenerationResult.Failed ->
+                            imageGenerationState = ImageGenerationUiState.Error(
+                                "No se pudo generar la imagen. Revisá la conexión e intentá de nuevo.",
+                            )
+                    }
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (_: Throwable) {
+                    diagnostics.recordFailure(
+                        DiagnosticSource.IMAGE,
+                        TextImageGenerationService.SUMMARY_FAILED,
+                    )
+                    imageGenerationState = ImageGenerationUiState.Error(
+                        "No se pudo generar la imagen. Intentá de nuevo.",
+                    )
+                } finally {
+                    generationJob = null
+                }
+            }
+        }
+
         // Limpieza a nivel App: al salir de composición se corta el micrófono y
         // se borra el audio pendiente. No se pone un DisposableEffect por destino
         // Create/CreateWithImage: alternar la imagen no debe cortar el dictado.
@@ -625,6 +701,8 @@ fun App(
                 dictationJob = null
                 transcriptionJob?.cancel()
                 transcriptionJob = null
+                generationJob?.cancel()
+                generationJob = null
                 voiceTranscriber.cancel()
                 discardPendingAudio()
             }
@@ -889,6 +967,16 @@ fun App(
                         ) {
                             Text(text = "Galería")
                         }
+                        TextButton(
+                            onClick = {
+                                showImageSourceDialog = false
+                                imagePrompt = ""
+                                imageGenerationState = ImageGenerationUiState.Idle
+                                showGenerateImageDialog = true
+                            },
+                        ) {
+                            Text(text = "Generar con IA")
+                        }
                     }
                 },
                 confirmButton = {
@@ -909,6 +997,16 @@ fun App(
                         Text(text = "Aceptar")
                     }
                 },
+            )
+        }
+
+        if (showGenerateImageDialog) {
+            ImageGenerationDialog(
+                prompt = imagePrompt,
+                onPromptChange = { imagePrompt = it },
+                state = imageGenerationState,
+                onGenerate = ::generateImage,
+                onCancel = ::cancelImageGeneration,
             )
         }
     }

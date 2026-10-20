@@ -142,6 +142,7 @@ fun MainViewController(): UIViewController {
             aiClient = ai,
             transcribeClient = runtime.transcribeClient,
             jevClient = runtime.jevClient,
+            imageClient = runtime.imageClient,
             diagnostics = diag,
         )
     }
