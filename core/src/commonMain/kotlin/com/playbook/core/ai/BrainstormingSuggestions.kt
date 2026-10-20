@@ -42,11 +42,27 @@ private const val MAX_SUGGESTIONS = 2
 private const val MAX_SUGGESTION_CHARS = 280
 private const val MAX_CONTEXT_ENTRIES = 12
 private const val MAX_CONTEXT_VALUE_CHARS = 300
+private const val SUGGESTION_TEMPERATURE = 0.7
+private const val SUGGESTION_MAX_TOKENS = 400
 
-private val LIST_MARKER = Regex("^\\s*(?:[-*•]|\\d+[.)])\\s*")
+private val HEADING_MARKER = Regex("^\\s*#{1,6}\\s*")
+private val BLOCKQUOTE_MARKER = Regex("^\\s*>+\\s*")
+private val LIST_MARKER = Regex("^\\s*(?:[-*•—]|\\d+[.)]|\\(\\d+\\))\\s*")
 private val IDEA_PREFIX = Regex(
-    "^\\s*(?:idea|opción|opcion)\\s*\\d+\\s*[:\\-]\\s*",
+    "^\\s*(?:idea|opción|opcion)\\s*(?:\\d+)?\\s*[:\\-]\\s*",
     RegexOption.IGNORE_CASE,
+)
+private val MARKDOWN_EMPHASIS = Regex("\\*\\*|__|`")
+private val SEPARATOR_LINE = Regex("^\\s*[-*_=—](?:\\s*[-*_=—]){2,}\\s*$")
+private val EXACT_NOISE = setOf("ideas", "sugerencias", "opciones")
+private val PREAMBLE_PREFIXES = listOf(
+    "aquí",
+    "claro",
+    "por supuesto",
+    "estas son",
+    "estos son",
+    "te propongo",
+    "te sugiero",
 )
 private val MECHANIC_LINE = Regex(
     "^(movimiento|interacci[oó]n|conflicto)\\s*[:\\-]\\s*(.+)$",
@@ -69,6 +85,8 @@ class BrainstormingSuggestionService(private val aiClient: AiClient) {
         val request = GenerateRequest(
             prompt = buildBrainstormingPrompt(step),
             context = buildBrainstormingContext(step, draft),
+            temperature = SUGGESTION_TEMPERATURE,
+            maxTokens = SUGGESTION_MAX_TOKENS,
         )
         val response = try {
             aiClient.generate(request)
@@ -97,7 +115,14 @@ internal fun buildBrainstormingPrompt(step: BrainstormingStep): String = buildSt
         "Respondé sólo con 2 líneas, una idea por línea, sin títulos, " +
             "explicaciones ni markdown.",
     )
-    appendLine("Escribí en español, máximo 200 caracteres por idea y no repitas lo que ya está en el contexto.")
+    appendLine(
+        "No incluyas frases introductorias, encabezados, viñetas, negritas " +
+            "ni comillas.",
+    )
+    appendLine(
+        "Escribí en español, máximo 200 caracteres por idea y no repitas lo que " +
+            "ya está en el contexto.",
+    )
     if (step == BrainstormingStep.KEY_MECHANICS) {
         appendLine(
             "Para cada idea usá el formato \"Movimiento: descripción\", " +
@@ -210,27 +235,27 @@ internal fun parseBrainstormingSuggestions(
     draft: GameProjectDraft,
 ): List<BrainstormingSuggestion> {
     val seen = mutableSetOf<String>()
-    return raw
-        .replace("\r\n", "\n")
-        .replace('\r', '\n')
+    return stripWrappingFence(raw)
         .lineSequence()
         .mapNotNull { line -> parseLine(step, line) }
         .filter { suggestion ->
-            val key = suggestion.text.lowercase()
+            val key = normalizeForCompare(suggestion.text)
             seen.add(key) && !isAlreadyInDraft(step, suggestion, draft)
         }
         .take(MAX_SUGGESTIONS)
         .toList()
 }
 
+private fun stripWrappingFence(raw: String): String {
+    val normalized = raw.replace("\r\n", "\n").replace('\r', '\n').trim()
+    val fence = Regex("^```[^\\n]*\\n?([\\s\\S]*?)\\n?```$")
+    return fence.matchEntire(normalized)?.groupValues?.get(1) ?: normalized
+}
+
 private fun parseLine(step: BrainstormingStep, rawLine: String): BrainstormingSuggestion? {
-    var line = rawLine
-        .replace(LIST_MARKER, "")
-        .replace(IDEA_PREFIX, "")
-        .trim()
-        .trim('"', '\'', '“', '”', '‘', '’')
-    line = line.replace(Regex("\\s+"), " ").trim()
-    if (line.isEmpty()) return null
+    if (SEPARATOR_LINE.matches(rawLine.trim())) return null
+    val line = cleanLine(rawLine) ?: return null
+    if (isNoiseLine(line)) return null
 
     if (step != BrainstormingStep.KEY_MECHANICS) {
         return BrainstormingSuggestion(text = truncateSuggestion(line))
@@ -251,6 +276,39 @@ private fun parseLine(step: BrainstormingStep, rawLine: String): BrainstormingSu
     )
 }
 
+private fun cleanLine(rawLine: String): String? {
+    var line = rawLine
+        .replace(HEADING_MARKER, "")
+        .replace(BLOCKQUOTE_MARKER, "")
+        .replace(MARKDOWN_EMPHASIS, "")
+        .replace(LIST_MARKER, "")
+        .replace(IDEA_PREFIX, "")
+        .trim()
+        .trim('"', '\'', '“', '”', '‘', '’')
+        .trim('*', '_')
+        .trim()
+    line = line.replace(Regex("\\s+"), " ").trim()
+    return line.ifEmpty { null }
+}
+
+private fun isNoiseLine(line: String): Boolean {
+    if (SEPARATOR_LINE.matches(line)) return true
+    val lower = line.lowercase()
+    if (lower in EXACT_NOISE) return true
+    val isPreamble = PREAMBLE_PREFIXES.any { prefix ->
+        lower == prefix ||
+            lower.startsWith("$prefix ") ||
+            lower.startsWith("$prefix:") ||
+            lower.startsWith("$prefix,")
+    }
+    if (isPreamble) return true
+    val words = line.split(' ').count { it.isNotBlank() }
+    return line.endsWith(":") && words <= 6
+}
+
+private fun normalizeForCompare(text: String): String =
+    text.trim().replace(Regex("\\s+"), " ").lowercase()
+
 private fun truncateSuggestion(text: String): String =
     if (text.length <= MAX_SUGGESTION_CHARS) {
         text
@@ -262,20 +320,36 @@ private fun isAlreadyInDraft(
     step: BrainstormingStep,
     suggestion: BrainstormingSuggestion,
     draft: GameProjectDraft,
-): Boolean = when (step) {
-    BrainstormingStep.TITLE -> suggestion.text.equals(draft.title.orEmpty(), ignoreCase = true)
-    BrainstormingStep.GENRE -> draft.genres.any { it.equals(suggestion.text, ignoreCase = true) }
-    BrainstormingStep.CORE_LOOP -> suggestion.text.equals(draft.coreLoop.orEmpty(), ignoreCase = true)
-    BrainstormingStep.AUDIENCE -> suggestion.text.equals(draft.audience.orEmpty(), ignoreCase = true)
-    BrainstormingStep.CONCEPT -> suggestion.text.equals(draft.concept.orEmpty(), ignoreCase = true)
-    BrainstormingStep.INSPIRATIONS ->
-        draft.inspirations.any { it.equals(suggestion.text, ignoreCase = true) }
+): Boolean {
+    val suggestionKey = normalizeForCompare(suggestion.text)
+    return when (step) {
+        BrainstormingStep.TITLE ->
+            normalizeForCompare(draft.title.orEmpty()) == suggestionKey
 
-    BrainstormingStep.FANTASY -> suggestion.text.equals(draft.fantasy.orEmpty(), ignoreCase = true)
-    BrainstormingStep.KEY_MECHANICS -> draft.keyMechanics.any {
-        it.category == suggestion.category && it.description.equals(suggestion.text, ignoreCase = true)
+        BrainstormingStep.GENRE ->
+            draft.genres.any { normalizeForCompare(it) == suggestionKey }
+
+        BrainstormingStep.CORE_LOOP ->
+            normalizeForCompare(draft.coreLoop.orEmpty()) == suggestionKey
+
+        BrainstormingStep.AUDIENCE ->
+            normalizeForCompare(draft.audience.orEmpty()) == suggestionKey
+
+        BrainstormingStep.CONCEPT ->
+            normalizeForCompare(draft.concept.orEmpty()) == suggestionKey
+
+        BrainstormingStep.INSPIRATIONS ->
+            draft.inspirations.any { normalizeForCompare(it) == suggestionKey }
+
+        BrainstormingStep.FANTASY ->
+            normalizeForCompare(draft.fantasy.orEmpty()) == suggestionKey
+
+        BrainstormingStep.KEY_MECHANICS -> draft.keyMechanics.any {
+            it.category == suggestion.category &&
+                normalizeForCompare(it.description) == suggestionKey
+        }
+
+        BrainstormingStep.OUT_OF_SCOPE ->
+            draft.outOfScope.any { normalizeForCompare(it) == suggestionKey }
     }
-
-    BrainstormingStep.OUT_OF_SCOPE ->
-        draft.outOfScope.any { it.equals(suggestion.text, ignoreCase = true) }
 }

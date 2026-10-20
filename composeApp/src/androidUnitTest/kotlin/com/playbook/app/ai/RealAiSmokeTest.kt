@@ -2,6 +2,9 @@ package com.playbook.app.ai
 
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.playbook.core.ai.BrainstormingSuggestionResult
+import com.playbook.core.ai.BrainstormingSuggestionService
+import com.playbook.core.ai.BrainstormingStep
 import com.playbook.core.ai.GenerateRequest
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.ai.NoteIndexingService
@@ -12,6 +15,7 @@ import com.playbook.core.db.DatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
 import com.playbook.core.diagnostics.InMemoryDiagnostics
+import com.playbook.core.model.GameProjectDraft
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
@@ -19,6 +23,7 @@ import com.playbook.core.repository.SqlDelightNoteRepository
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -173,6 +178,109 @@ class RealAiSmokeTest {
             }
         } finally {
             driver.close()
+        }
+    }
+
+    /**
+     * Smoke real del chat: 2 ideas parseables en Brainstorming y respuesta con
+     * fuentes en Q&A. Salida sanitizada (sin key, prompt, contexto ni contenido).
+     */
+    @Test
+    fun smokeRealChat() {
+        if (!smokeEnabled()) return
+
+        val runtime = createAndroidAiRuntime()
+        if (runtime.mode != AiMode.REAL) {
+            println("AI smoke chat: omitido (build fake)")
+            return
+        }
+
+        runBlocking {
+            val suggestions = BrainstormingSuggestionService(runtime.aiClient).suggest(
+                step = BrainstormingStep.TITLE,
+                draft = GameProjectDraft(
+                    owner = "smoke",
+                    genres = listOf("JRPG"),
+                    concept = "Un viaje por constelaciones",
+                ),
+            )
+            val success = assertIs<BrainstormingSuggestionResult.Success>(
+                suggestions,
+                "el Brainstorming real debe devolver Success",
+            )
+            assertEquals(
+                2,
+                success.suggestions.size,
+                "el Brainstorming real debe devolver 2 ideas parseables",
+            )
+            assertFalse(success.partial, "el Brainstorming real no debe ser parcial")
+            assertTrue(
+                success.suggestions.all { it.text.isNotBlank() && !it.text.contains("**") },
+                "las ideas no deben estar vacías ni conservar markdown",
+            )
+
+            val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+            try {
+                PlaybookDatabase.Schema.create(driver)
+                val database = createDatabase(
+                    object : DatabaseDriverFactory {
+                        override fun createDriver(): SqlDriver = driver
+                    },
+                )
+                val noteRepository = SqlDelightNoteRepository(
+                    database = database,
+                    idFactory = { "smoke-chat-note" },
+                    clock = { System.currentTimeMillis() },
+                )
+                val embeddingRepository = SqlDelightEmbeddingRepository(
+                    database = database,
+                    clock = { System.currentTimeMillis() },
+                )
+                val diagnostics = InMemoryDiagnostics()
+                val orchestrator = NoteIndexingOrchestrator(
+                    NoteIndexingService(
+                        aiClient = runtime.aiClient,
+                        embeddingRepository = embeddingRepository,
+                        diagnostics = diagnostics,
+                        expectedDimension = runtime.embeddingDimension,
+                    ),
+                    noteRepository,
+                )
+
+                val note = noteRepository.create(
+                    NoteDraft(
+                        "smoke",
+                        "Un RPG por turnos con combates tácticos y personajes complejos",
+                        null,
+                    ),
+                )
+                assertEquals(
+                    NoteStatus.INDEXED,
+                    orchestrator.index(note),
+                    "el indexado real debe dejar INDEXED",
+                )
+
+                val answer = RagQueryService(
+                    aiClient = runtime.aiClient,
+                    noteRepository = noteRepository,
+                    embeddingRepository = embeddingRepository,
+                    diagnostics = diagnostics,
+                ).ask("¿De qué trata la nota de humo?")
+                val answered = assertIs<RagAnswer.Answer>(
+                    answer,
+                    "el Q&A real debe responder",
+                )
+                assertTrue(answered.text.isNotBlank(), "el Q&A real devolvió texto vacío")
+                assertTrue(answered.sources.isNotEmpty(), "el Q&A real debe devolver fuentes")
+
+                println(
+                    "AI smoke chat OK: suggestions=${success.suggestions.size}, " +
+                        "partial=${success.partial}, answerLen=${answered.text.length}, " +
+                        "sources=${answered.sources.size}",
+                )
+            } finally {
+                driver.close()
+            }
         }
     }
 }

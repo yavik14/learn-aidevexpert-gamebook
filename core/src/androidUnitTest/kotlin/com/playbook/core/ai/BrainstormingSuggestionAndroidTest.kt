@@ -39,4 +39,9 @@ class BrainstormingSuggestionAndroidTest {
     fun contextContainsCatalogAndNoInternalData() {
         verifyBrainstormingSuggestionContext()
     }
+
+    @Test
+    fun realMarkdownAndNoiseAreParsed() = runTest {
+        verifyBrainstormingSuggestionRealFormat()
+    }
 }

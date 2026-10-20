@@ -7,6 +7,17 @@ import com.playbook.core.model.Note
 import com.playbook.core.repository.EmbeddingRepository
 import com.playbook.core.repository.NoteRepository
 
+/** Instrucción de sistema del Q&A: grounding estricto en las Notas recuperadas. */
+internal const val RAG_INSTRUCTIONS: String =
+    "Respondé la pregunta usando exclusivamente el contexto provisto. Si el " +
+        "contexto no alcanza para responder, decilo explícitamente y no inventes. " +
+        "No uses conocimiento externo. No enumeres ni cites fuentes: la app las " +
+        "muestra por separado. Escribí en español, en texto plano, sin markdown, " +
+        "de forma breve y concreta."
+
+private const val RAG_TEMPERATURE = 0.2
+private const val RAG_MAX_TOKENS = 600
+
 /** Nota recuperada por la consulta, con su score coseno contra la pregunta. */
 data class RetrievedNote(val note: Note, val score: Float)
 
@@ -100,14 +111,27 @@ class RagQueryService(
 
         val text = try {
             aiClient.generate(
-                GenerateRequest(prompt = question.trim(), context = top.map { it.note.body }),
+                GenerateRequest(
+                    prompt = question.trim(),
+                    context = top.map { it.note.body },
+                    instructions = RAG_INSTRUCTIONS,
+                    temperature = RAG_TEMPERATURE,
+                    maxTokens = RAG_MAX_TOKENS,
+                ),
             )
         } catch (cause: AiClientException) {
             diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
             return RagAnswer.Failed(cause)
         }
 
-        return RagAnswer.Answer(text = text, sources = top)
+        val normalized = normalizeRagAnswer(text)
+        if (normalized == null) {
+            val cause = AiClientException("chat devolvió una respuesta vacía")
+            diagnostics.recordFailure(DiagnosticSource.AI_QUERY, SUMMARY_FAILED, cause.message)
+            return RagAnswer.Failed(cause)
+        }
+
+        return RagAnswer.Answer(text = normalized, sources = top)
     }
 
     companion object {
@@ -117,4 +141,23 @@ class RagQueryService(
         /** Resumen estable (sin datos del usuario) para los fallos de consulta. */
         private const val SUMMARY_FAILED = "query_failed"
     }
+}
+
+/**
+ * Normaliza el texto del modelo para mostrarlo en texto plano: quita un code
+ * fence que envuelva toda la respuesta, encabezados y marcas `**`/`__`, colapsa
+ * saltos de línea excesivos y recorta. No reinterpreta enlaces/código ni elimina
+ * citas escritas por el modelo. `null` si no queda contenido.
+ */
+internal fun normalizeRagAnswer(raw: String): String? {
+    var text = raw.replace("\r\n", "\n").replace('\r', '\n').trim()
+    val fence = Regex("^```[^\\n]*\\n?([\\s\\S]*?)\\n?```$")
+    text = fence.matchEntire(text)?.groupValues?.get(1) ?: text
+    text = text
+        .lines()
+        .joinToString("\n") { line -> line.replace(Regex("^\\s*#{1,6}\\s*"), "") }
+        .replace(Regex("\\*\\*|__"), "")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
+    return text.ifEmpty { null }
 }

@@ -148,6 +148,17 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
   Enlaces/RAG, y el límite de persistencia no puede depender sólo del proveedor.
   Un mismatch persistente agota el presupuesto y termina en `FAILED` según
   `offline-pending-retry` (no se agrega sonda de conectividad en esta feature).
+- El chat real (`ai-real-chat`) **MUST NOT** caer a fake si el runtime falla; el
+  fallo se surfacea como `Failed`/`Error` con "Reintentar". **MUST NOT** persistir
+  sugerencias ni respuestas, y **MUST NOT** loguear key, prompt, contexto ni
+  respuesta.
+- El Q&A **MUST** preservar `prompt = question.trim()` y `context = cuerpos de
+  sources`; el grounding va en `GenerateRequest.instructions`. Una respuesta real
+  vacía/sin sustancia **MUST** mapearse a `Failed` (nunca `Answer`), y un refusal
+  textual **MUST** conservarse como `Answer`.
+- `temperature`/`maxTokens` son opcionales y **MUST** enviarse sólo si están
+  presentes; si el proveedor los rechaza, el smoke real **MUST** bloquear la
+  feature en vez de quitarlos en silencio.
 
 ## GDD
 

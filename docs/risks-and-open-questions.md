@@ -158,8 +158,13 @@
   `brainstorming-ai-suggestions` (2026-10-19) con IA fake determinista, parsing
   de 2 ideas, dedupe y UI efímera (spec
   `docs/specs/brainstorming-ai-suggestions.md`). La **calidad real** y el formato
-  del proveedor no se verifican hasta `ai-real-chat` (ADR 0004); el fake no
-  valida calidad semántica.
+  se verificaron en `ai-real-chat` (2026-10-20) con smoke key-gated fuera del
+  gate (`suggestions=2, partial=false`); persisten la variabilidad del modelo y
+  el parser heurístico.
+- **Chat real (formato/parámetros):** `ai-real-chat` tolera markdown/ruido y el
+  smoke exige 2 ideas y Q&A con fuentes; el smoke prueba que el proveedor acepta
+  `temperature`/`max_tokens`, **no** que los honre. Sin reintentos/streaming ni
+  indicador fake/real en UI; iOS sigue fake.
 - **Calidad real de `jev` pendiente de smoke key-gated:** la sugerencia de
   clasificación ya existe con confirmación explícita y fake determinista
   (`ai-suggest-classification`, 2026-10-20), pero la semántica del modelo real
@@ -174,7 +179,8 @@
 ## Research Tasks
 - **Hecho (2026-10-09):** spike cloud vs on-device detrás de `AiClient`
   (`docs/spikes/ai-runtime-spike.md`; ADR 0001).
-- **Pendiente:** verificar latencia/calidad/costo cloud reales con la sonda
-  key-gated del ADR (fuera del gate) al elegir proveedor/modelo.
+- **Pendiente:** medir latencia/costo cloud reales con la sonda key-gated del
+  ADR (fuera del gate). `ai-real-chat` ya verificó calidad básica de chat
+  (2 ideas + Q&A con fuentes), pero no latencia/costo agregados.
 - Evaluar `sqlite-vec` u otra extensión vectorial si el volumen de notas crece y la
   similitud en memoria deja de alcanzar.

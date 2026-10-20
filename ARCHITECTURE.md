@@ -329,8 +329,10 @@ composeApp (Android app / commonMain) ──▶ core
   `suspend fun embed(texts: List<String>): List<Embedding>` y
   `suspend fun generate(request: GenerateRequest): String`. Tipos: `Embedding`
   (`values: List<Float>`), `GenerateRequest` (`prompt`, `context` default
-  `emptyList()`) y `AiClientException` para fallos del runtime (red, cuota,
-  modelo). `suspend` porque las llamadas de IA son asíncronas y cancelables.
+  `emptyList()` y, desde `ai-real-chat`, `instructions`, `temperature` y
+  `maxTokens` opcionales con `null` por defecto) y `AiClientException` para
+  fallos del runtime (red, cuota, modelo). `suspend` porque las llamadas de IA
+  son asíncronas y cancelables.
 - **Dirección de dependencia (regla durable):** la lógica de dominio consume
   **sólo el puerto** `AiClient`; los adaptadores concretos se inyectan desde
   afuera. `:core` expone el puerto y un adaptador fake por defecto. Excepción
@@ -447,6 +449,20 @@ composeApp (Android app / commonMain) ──▶ core
   el marcador (determinista, sin red). `BrainstormingWizardScreen` mantiene el
   estado efímero por paso y sólo muta el borrador con Usar/Agregar; las
   sugerencias se descartan al navegar.
+- **Chat real de Brainstorming/Q&A (`ai-real-chat`, 2026-10-20):** sin duplicar
+  `ai-fake-real-switch`, el adaptador `OpenAiAiClient.generate` acepta
+  `instructions` (se agregan al `system`), `temperature` y `maxTokens` (se
+  serializan como `temperature`/`max_tokens` sólo si no son `null`) y rotula el
+  contexto como `Contexto provisto:`. Brainstorming usa `temperature=0.7`/
+  `maxTokens=400`, refuerza el prompt contra preámbulos/markdown y parsea hasta 2
+  ideas tolerando encabezados, `**`/`__`/backticks, viñetas, numeración, comillas,
+  preámbulos y separadores; el dedupe/filtro contra el borrador normaliza
+  espacios y mayúsculas. Q&A conserva `prompt=question.trim()` y
+  `context=cuerpos de sources`, agrega `RAG_INSTRUCTIONS` de grounding y usa
+  `temperature=0.2`/`maxTokens=600`; normaliza fences/encabezados/`**`/`__` y un
+  vacío/sin sustancia se mapea a `Failed` + `AI_QUERY` (un refusal textual sigue
+  siendo `Answer`). No persiste, no cae a fake, no toca UI/esquema y se verifica
+  con smoke real key-gated fuera del gate.
 - **Reconciliación de dimensión de embeddings (`ai-fake-real-switch`):**
   `com.playbook.core.ai.EmbeddingDimensionReconciler` recibe la dimensión del
   runtime activo (1536 en real, 8 en fake). Si un embedding persistido no coincide,
@@ -557,11 +573,13 @@ composeApp (Android app / commonMain) ──▶ core
   no vacío → `Failed`; (4) score coseno contra cada candidato de dimensión
   compatible (los incompatibles se descartan), orden descendente con desempate
   estable por `note.id`, top-K; (5) `context = top.map { it.note.body }` y
-  `aiClient.generate(GenerateRequest(prompt = question.trim(), context))`
-  (try/catch → `Failed`); (6) `Answer(text, sources)`. Los fallos del runtime se
-  mapean a `Failed` sin propagar la excepción ni inventar respuesta. Cada `Failed`
-  se reporta a `Diagnostics` (`AI_QUERY`) de forma best-effort y sin registrar la
-  pregunta (ver "Observability").
+  `aiClient.generate(GenerateRequest(prompt = question.trim(), context,
+  instructions = RAG_INSTRUCTIONS, temperature = 0.2, maxTokens = 600))`
+  (try/catch → `Failed`); (6) normaliza fences/encabezados/`**`/`__` y, si no
+  queda contenido, `Failed` + `AI_QUERY`; (7) `Answer(text, sources)`. Los fallos
+  del runtime se mapean a `Failed` sin propagar la excepción ni inventar
+  respuesta. Cada `Failed` se reporta a `Diagnostics` (`AI_QUERY`) de forma
+  best-effort y sin registrar la pregunta (ver "Observability").
 - **`RagAnswer`** (`Answer(text, sources)` / `NoIndexedNotes` / `Failed(cause)`) y
   **`RetrievedNote(note, score)`**. `sources` viene ordenado por score
   descendente; la UI lo renderiza como **citas numeradas** ("Fuentes", rank 1..N,
@@ -571,11 +589,13 @@ composeApp (Android app / commonMain) ──▶ core
   BLOBs. Es **efímero** (por consulta): no crea filas `link`.
 - **Sin conocimiento externo:** sin Notas indexadas no se llama al runtime (las
   respuestas provienen sólo de las Notas). El `generate` ancla la respuesta en el
-  `context` recuperado; el adaptador formatea el contexto.
-- **Runtime real:** se inyecta `FakeAiClient` (determinista, sin red). El
-  adaptador cloud/on-device real es follow-up del ADR 0001; por eso la
-  verificación prueba el **pipeline** (retrieval real + petición anclada), no la
-  calidad de la respuesta.
+  `context` recuperado y `RAG_INSTRUCTIONS` refuerza el grounding (responder sólo
+  con el contexto, no inventar, decir si no alcanza, no enumerar fuentes).
+- **Runtime real:** el composition root inyecta `FakeAiClient` (default) o el
+  `AiRuntime` real; `RagQueryService` y `BrainstormingSuggestionService` no
+  conocen el proveedor. La verificación fake prueba el **pipeline**; la calidad
+  real se cubre con el smoke key-gated de `ai-real-chat` (2 ideas parseables y
+  respuesta + fuentes), fuera del gate.
 - **Indexado best-effort al guardar** (glue del RAG): tras crear/editar una Nota
   (texto/voz/imagen) con `body` no vacío se dispara
   `scope.launch { noteIndexingService.index(note) }`; es silencioso ante fallo,

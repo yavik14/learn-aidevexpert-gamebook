@@ -1529,6 +1529,44 @@ pass-through de la dimensión a `NoteIndexingService`.
   abrir); la dimensión activa no se expone en UI/diagnóstico. Sin cambios de
   esquema (v8), `init.sh`, `App.kt`, `iosApp/**` ni dependencias de producción.
 
+## AI Real Chat Decisions (ai-real-chat)
+
+Implementado 2026-10-20. No duplica `ai-fake-real-switch`: reutiliza flag,
+`AiRuntime`, `AiRuntimeConfig`, `OpenAiAiClient`, transporte, roots, fake y
+key/release guard. El diff de producción endurece el contrato de chat.
+
+- **`GenerateRequest`:** suma `instructions`, `temperature` y `maxTokens`
+  opcionales con `null` por defecto (valida `0.0..2.0` y `> 0`). Las llamadas
+  existentes conservan el comportamiento.
+- **Adaptador:** `OpenAiAiClient.generate` agrega `instructions` al `system`,
+  rotula el contexto como `Contexto provisto:` y envía `temperature`/`max_tokens`
+  sólo si están presentes. No cambia parsing, errores ni auth.
+- **Brainstorming:** `temperature=0.7`/`maxTokens=400`; prompt contra
+  preámbulos/markdown. El parser tolera encabezados, `**`/`__`/backticks,
+  viñetas, numeración, comillas, preámbulos y separadores; dedupe/filtro contra
+  el borrador con `trim` + espacios colapsados + lowercase. Sigue sin reconstruir
+  dos ideas embebidas en una línea: 0 usables → `InvalidResponse`, 1 →
+  `Success(partial=true)`.
+- **Q&A:** conserva `prompt=question.trim()` y `context=cuerpos de sources`;
+  agrega `RAG_INSTRUCTIONS` de grounding y `temperature=0.2`/`maxTokens=600`.
+  Normaliza fences/encabezados/`**`/`__` y colapsa saltos de línea; vacío/sin
+  sustancia → `Failed` + `AI_QUERY`; refusal textual → `Answer`. `sources` no se
+  toca.
+- **UI/alcance:** sin cambios de UI, sin indicador fake/real, sin persistencia,
+  sin fallback a fake, sin reintentos/streaming y sin cambios de esquema (v8),
+  flag, proveedor, build files, `init.sh`, roots, pantallas ni `iosApp`. iOS sigue
+  fake.
+- **Verificación:** `:core` 34 suites/103 tests/0 failures en Android/JVM e iOS;
+  `:composeApp` 4 suites/11 tests/0 failures; `CI=true ./init.sh` exit 0; build y
+  link iOS OK. Smoke real key-gated fuera del gate:
+  `AI smoke chat OK: suggestions=2, partial=false, answerLen=157, sources=1`.
+  Controles negativos: sin `instructions` falla el contrato RAG; sin limpieza de
+  markdown falla el parser; vacío como `Answer` falla el test de `Failed`.
+- **Riesgos aceptados:** el parser es heurístico; el smoke prueba aceptación de
+  `temperature`/`max_tokens`, no que el proveedor los honre; el grounding es por
+  instrucción + citas de retrieval, no una prueba semántica; sin reintentos ni
+  streaming; el indicador fake/real queda como follow-up de UI.
+
 ## Inline Dictation Decisions (inline-dictation-30s)
 
 Implementado 2026-10-19. Detalles en `ARCHITECTURE.md`.

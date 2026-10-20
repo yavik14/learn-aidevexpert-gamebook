@@ -4,6 +4,8 @@ import app.cash.sqldelight.db.SqlDriver
 import com.playbook.core.db.DatabaseDriverFactory
 import com.playbook.core.db.PlaybookDatabase
 import com.playbook.core.db.createDatabase
+import com.playbook.core.diagnostics.DiagnosticSource
+import com.playbook.core.diagnostics.InMemoryDiagnostics
 import com.playbook.core.model.Note
 import com.playbook.core.model.NoteDraft
 import com.playbook.core.repository.SqlDelightEmbeddingRepository
@@ -66,6 +68,19 @@ private class StubEmbeddingAiClient(private val embeddings: List<Embedding>) : A
     override suspend fun generate(request: GenerateRequest): String {
         generateCalls++
         return "stub"
+    }
+}
+
+/** Devuelve una respuesta de chat fija y registra el último `GenerateRequest`. */
+private class FixedAnswerAiClient(private val answer: String) : AiClient {
+    var lastRequest: GenerateRequest? = null
+    private val delegate = FakeAiClient()
+
+    override suspend fun embed(texts: List<String>): List<Embedding> = delegate.embed(texts)
+
+    override suspend fun generate(request: GenerateRequest): String {
+        lastRequest = request
+        return answer
     }
 }
 
@@ -343,4 +358,59 @@ suspend fun verifyRagRanking(driver: SqlDriver) {
         ).ask("pregunta"),
         "si todos los candidatos se descartan no hay fuentes",
     )
+}
+
+
+/** Escenario 4: contrato de chat real y normalización del Q&A. */
+suspend fun verifyRagRealChatContract(driver: SqlDriver) {
+    val database = databaseFrom(driver)
+    var sequence = 0
+    val noteRepository = SqlDelightNoteRepository(database, { "note-${sequence++}" }, { FIXED_NOW })
+    val embeddingRepository = SqlDelightEmbeddingRepository(database, { FIXED_NOW })
+    val note = noteRepository.create(NoteDraft("owner-1", "Nota fuente sobre jefes finales", null))
+    embeddingRepository.upsert(note.id, FakeAiClient().embed(listOf(note.body)).single().values)
+
+    val raw = "  ```markdown\n# Respuesta\n\n**Contenido**\n\n\nFin\n```  "
+    val client = FixedAnswerAiClient(raw)
+    val diagnostics = InMemoryDiagnostics(clock = { FIXED_NOW })
+    val result = RagQueryService(
+        client,
+        noteRepository,
+        embeddingRepository,
+        diagnostics = diagnostics,
+    ).ask("  pregunta  ")
+    assertTrue(result is RagAnswer.Answer, "con respuesta válida debe devolver Answer")
+    val answer = result as RagAnswer.Answer
+    assertEquals("Respuesta\n\nContenido\n\nFin", answer.text)
+    assertEquals(listOf(note.id), answer.sources.map { it.note.id })
+    val request = assertNotNull(client.lastRequest)
+    assertEquals("pregunta", request.prompt)
+    assertEquals(listOf(note.body), request.context)
+    assertEquals(RAG_INSTRUCTIONS, request.instructions)
+    assertEquals(0.2, request.temperature)
+    assertEquals(600, request.maxTokens)
+    assertTrue(diagnostics.snapshot().isEmpty(), "una respuesta válida no registra fallo")
+
+    val refusal = RagQueryService(
+        FixedAnswerAiClient("No tengo información suficiente en las notas."),
+        noteRepository,
+        embeddingRepository,
+    ).ask("pregunta")
+    assertTrue(refusal is RagAnswer.Answer, "un refusal textual es una Answer")
+    assertEquals(
+        "No tengo información suficiente en las notas.",
+        (refusal as RagAnswer.Answer).text,
+    )
+
+    val emptyDiagnostics = InMemoryDiagnostics(clock = { FIXED_NOW })
+    val empty = RagQueryService(
+        FixedAnswerAiClient("```\n\n```"),
+        noteRepository,
+        embeddingRepository,
+        diagnostics = emptyDiagnostics,
+    ).ask("pregunta")
+    assertTrue(empty is RagAnswer.Failed, "una respuesta vacía debe ser Failed")
+    assertEquals(1, emptyDiagnostics.snapshot().size)
+    assertEquals(DiagnosticSource.AI_QUERY, emptyDiagnostics.snapshot().single().source)
+    assertFalse(emptyDiagnostics.snapshot().single().detail?.contains("pregunta") == true)
 }

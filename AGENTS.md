@@ -68,8 +68,9 @@ independiente `accept`, 2026-10-20). `tts-read-aloud` quedó `accepted` (spec
 `docs/validations/tts-read-aloud.md`, 2026-10-20). `main-screen-playbook-shell`
 quedó `accepted` (spec `docs/specs/main-screen-playbook-shell.md`; validación
 independiente `accept` en `docs/validations/main-screen-playbook-shell.md`).
-Siguen `ai-real-chat` y las demás `not_started` de las olas 4–6.
-`readme-project-documentation` cierra el MVP. Para iOS: el upload firmado
+`ai-real-chat` quedó implementada y `passing` (spec
+`docs/specs/ai-real-chat.md`; pendiente de validación independiente). Sigue
+`readme-project-documentation` (cierre del MVP). Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero

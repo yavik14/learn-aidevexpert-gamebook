@@ -35,6 +35,11 @@ class RagQueryAndroidTest {
         withInMemoryDb { verifyRagRanking(it) }
     }
 
+    @Test
+    fun realChatContractAndNormalization() = runTest {
+        withInMemoryDb { verifyRagRealChatContract(it) }
+    }
+
     private suspend fun withInMemoryDb(block: suspend (SqlDriver) -> Unit) {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
