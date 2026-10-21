@@ -1779,3 +1779,58 @@ Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
   (sin paddings manuales); targets ≥48dp y nombres accesibles únicos. Verificado
   en smoke Android (API 31) con top bar, speed-dial, scrim/Back, diálogo de
   imagen, “Generar con IA”, lista con miniatura/chips y estado vacío.
+
+## Design System Decisions (design-system-brand-header)
+
+Implementado 2026-10-21. Detalles de UI en `ARCHITECTURE.md` (UI) y `DESIGN.md`.
+
+- **Dependencia y recursos.** Se agrega `implementation(compose.components.resources)`
+  a `commonMain` y `compose.resources { packageOfResClass = "com.playbook.app.resources" }`
+  en `composeApp/build.gradle.kts`. No se agregan librerías de iconos ni de fuentes:
+  `Res`/`Font`/`painterResource` cubren Android e iOS (framework estático).
+- **Fuentes OFL versionadas** en `composeApp/src/commonMain/composeResources/font/`
+  (sin red en el gate):
+  - Bricolage Grotesque `Regular`/`SemiBold`, commit
+    `84745e5b96261ae5f8c6c856e262fe78d1d6efdd` de `ateliertriay/bricolage`
+    (`fonts/ttf/…` + `OFL.txt`). SHA-256:
+    `dcfe24ee…676e06f` (Regular) y `25534ff9…20c6a8cf` (SemiBold).
+  - JetBrains Mono `Regular`/`Medium`, tag `v2.304` de `JetBrains/JetBrainsMono`
+    (`fonts/ttf/…` + `OFL.txt`). SHA-256:
+    `a0bf60ef…898d138f` (Regular) y `31c92d01…358e14d3d` (Medium).
+  - Licencias en `composeResources/files/licenses/OFL-BricolageGrotesque.txt`
+    (`4b5a7d8f…5d3e07ba`) y `OFL-JetBrainsMono.txt` (`30f0c136…8cac4ad`).
+- **Icono de cabecera.** `composeResources/drawable/playbook_icon.png` se genera
+  una vez con `sips -Z 192 docs/design/icon.png` (SHA-256
+  `ba01f3ab…a538eea`); es sólo para la cabecera. El icono de launcher
+  (`mipmap-*`/adaptive) **no** se modifica.
+- **Carga tipográfica.** `playbookTypography()` construye `FontFamily` con
+  `Font(Res.font.…, weight)` dentro de `PlaybookTheme` (API `@Composable`) y
+  define toda la escala en `sp`: display 40/34/30, headline 34/28/24, title
+  20/18/14, body 16/14/13, label 14/13/12; Bricolage SemiBold en títulos y
+  JetBrains Mono Regular/Medium en el resto. El peso 700 de `DESIGN.md` se
+  reemplaza por 600 porque sólo se versionan Regular/SemiBold.
+- **Theme claro.** `theme/Color.kt` es el único archivo con literales de color;
+  `PlaybookTheme` usa `lightColorScheme` con la paleta y una rampa
+  `surfaceContainer*` neutra derivada (evita el violeta default de M3). Los tokens
+  extra (`PlaybookColors`: acción/track/estado/scrim) viajan por
+  `LocalPlaybookColors`; el scrim es `Color(0x522C2926)` (tinta 32 %), no negro.
+- **Cabecera y edge-to-edge.** `PlaybookBrandHeader` (Surface + status bar inset
+  una vez, mínimo 56dp) se usa como `topBar` de todos los `Scaffold`; las
+  secundarias muestran Back 48dp → icono decorativo → título ≤2 líneas. En GDD
+  lectura/Compartir van en `FlowRow` debajo del título. `MainActivity` llama
+  `enableEdgeToEdge` con `SystemBarStyle.light` transparente; `themes.xml` usa
+  `windowBackground @color/playbook_background (#F9F6F8)`, barras transparentes
+  y `windowLightStatusBar`; `values-v27/themes.xml` agrega
+  `windowLightNavigationBar`.
+- **Contraste.** `PlaybookContrastTest` (androidUnitTest, sin red) calcula WCAG
+  sobre 11 pares de texto (≥4.5:1) y 5 no textuales (≥3:1) más el alpha/tono del
+  scrim. Resultados: 14 tests de `:composeApp`, 0 fallos.
+- **Font scale.** Smoke Android API 35 (emulador, IA fake) a 130 % y 200 %:
+  onboarding, principal, editor, GDD con título largo (≤2 líneas + ellipsis),
+  Q&A, wizard y relacionadas. Se corrigieron con `FlowRow` los footers/chips que
+  comprimían texto a 200 % (editor, chips de notas/relacionadas, CTAs del estado
+  vacío). Capturas en `composeApp/build/smoke-evidence/design-system-brand-header/`
+  (ignorado por git).
+- **Límites.** Sin dark mode, splash, logo/wordmark nuevo ni cambio de launcher;
+  sin smoke iOS (sólo `linkDebugFrameworkIosSimulatorArm64`). El test de
+  contraste valida tokens, no mide píxeles en dispositivo.

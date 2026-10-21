@@ -72,6 +72,17 @@
   son opcionales (`0..3`/`0..5`), el estado `vacío`/`esbozado` se **deriva** (no
   se persiste), no hay FK Nota→Proyecto y la feature no cablea UI ni crea fila de
   Proyecto al migrar. Ver `docs/specs/game-project-persistence.md`.
+- **Tokens visuales (acción/estado/logo):** **resueltos** en
+  `design-system-brand-header` (2026-10-21): paleta/tipografía/formas
+  implementadas en `PlaybookTheme`, AA medido con `PlaybookContrastTest`, cabecera
+  común y scrim por token. La marca es `docs/design/icon.png` (sin logo nuevo) y
+  el icono de launcher no cambia. **Dark mode queda diferido** al MVP siguiente:
+  el theme es sólo claro por decisión de producto; no hay `darkColorScheme` ni
+  `dynamicColor`.
+  - **Riesgo residual aceptado:** los pares AA se validan sobre tokens, no sobre
+    píxeles de dispositivo; los glifos de acción (`GDD`/`✦`/`?`) dependen de la
+    fuente del sistema si el glifo no existe, y a font scale 200 % las acciones de
+    GDD se apilan en dos filas (sin recorte). Sin harness E2E de UI.
 
 ## Implementation-Time Questions
 - **IA real (proveedor propio):** modelos y dimensión concretos de embedding;

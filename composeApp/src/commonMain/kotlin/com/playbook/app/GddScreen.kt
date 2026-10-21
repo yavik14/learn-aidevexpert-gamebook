@@ -4,13 +4,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,9 +46,10 @@ import kotlinx.coroutines.launch
  * fino sobre [buildGddDocument] (la proyección vive en `:core`, cubierta por
  * tests cross-platform).
  *
- * - Cabecera fija `GDD — <título>` (o sólo "GDD") con el total de Notas y los
- *   botones "Volver" y **"Compartir"** (habilitado con Notas o con ficha con
- *   título/campos; deshabilitado sólo sin contenido exportable).
+ * - Cabecera de detalle `GDD — <título>` (o sólo "GDD") con Back; debajo, el
+ *   total de Notas y **"Compartir"** junto a lectura en voz alta (habilitado con
+ *   Notas o con ficha con título/campos; deshabilitado sólo sin contenido
+ *   exportable).
  * - Ficha en una `Card` destacada con encabezado "Proyecto": campos verticales
  *   (label arriba, valor debajo) y estados explícitos "Proyecto sin datos
  *   adicionales" / "Todavía no hay Proyecto".
@@ -96,6 +97,12 @@ fun GddScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            PlaybookBrandHeader(
+                title = gddTitle(document.project?.title),
+                onBack = onBack,
+            )
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -103,14 +110,18 @@ fun GddScreen(
                 .padding(innerPadding)
                 .padding(24.dp),
         ) {
-            Row(
+            Text(
+                text = notesSummary(notes.size),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            // Lectura y Compartir en su propia fila debajo del título: con títulos
+            // largos o font scale alto no compiten por el ancho de la cabecera.
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TextButton(onClick = onBack) {
-                    Text(text = "Volver")
-                }
-                Spacer(modifier = Modifier.weight(1f))
                 ReadAloudButton(
                     surface = ReadAloudSurface.GDD,
                     surfaceLabel = "GDD",
@@ -119,7 +130,6 @@ fun GddScreen(
                     onRead = { onReadAloud(narration) },
                     onStop = onStopReadAloud,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
                 TextButton(
                     onClick = {
                         val markdown = buildGddMarkdown(
@@ -140,15 +150,6 @@ fun GddScreen(
                     Text(text = "Compartir")
                 }
             }
-            Text(
-                text = gddTitle(document.project?.title),
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = notesSummary(notes.size),
-                style = MaterialTheme.typography.bodyMedium,
-            )
             Spacer(modifier = Modifier.height(16.dp))
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -295,7 +296,10 @@ private fun GddNoteCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 LabelChip(text = note.status.code)
                 if (hasAttachment) {
                     LabelChip(text = "Imagen")

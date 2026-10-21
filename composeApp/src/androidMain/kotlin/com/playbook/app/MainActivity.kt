@@ -1,8 +1,11 @@
 package com.playbook.app
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import com.playbook.app.ai.createAndroidAiRuntime
 import com.playbook.app.voice.AndroidVoiceTranscriber
 import com.playbook.core.ai.EmbeddingDimensionReconciler
@@ -37,6 +40,19 @@ class MainActivity : ComponentActivity() {
     private lateinit var database: PlaybookDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge-to-edge con barras transparentes y glifos oscuros: el fondo del
+        // theme (#F9F6F8) se ve detrás de la status/navigation bar y cada
+        // cabecera/pantalla consume sus insets vía Scaffold.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                scrim = AndroidColor.TRANSPARENT,
+                darkScrim = AndroidColor.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                scrim = AndroidColor.TRANSPARENT,
+                darkScrim = AndroidColor.TRANSPARENT,
+            ),
+        )
         super.onCreate(savedInstanceState)
         database = createDatabase(AndroidDatabaseDriverFactory(applicationContext))
         val noteRepository: NoteRepository = SqlDelightNoteRepository(

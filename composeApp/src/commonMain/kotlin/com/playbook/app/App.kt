@@ -2,7 +2,6 @@ package com.playbook.app
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -18,6 +17,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import com.playbook.app.voice.RecordedAudio
 import com.playbook.app.voice.VoiceCaptureError
 import com.playbook.app.voice.VoiceTranscriber
+import com.playbook.app.theme.PlaybookTheme
 import com.playbook.core.ai.AiClient
 import com.playbook.core.ai.AudioAttachmentTranscriptionService
 import com.playbook.core.ai.AudioTranscriptionResult
@@ -143,7 +143,7 @@ fun App(
     imageClient: ImageClient,
     diagnostics: Diagnostics = NoOpDiagnostics,
 ) {
-    MaterialTheme {
+    PlaybookTheme {
         var notes by remember { mutableStateOf(emptyList<Note>()) }
         var projectState by remember { mutableStateOf<ProjectLoadState>(ProjectLoadState.Loading) }
         var onboardingBusy by remember { mutableStateOf(false) }

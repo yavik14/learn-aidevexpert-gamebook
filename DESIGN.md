@@ -1,9 +1,10 @@
 ---
 name: Playbook
 description: >-
-  Dirección visual (provisional) derivada de la paleta del autor
-  (docs/design/paleta.png). App Android-first de notas de diseño de juegos.
-status: provisional
+  Dirección visual derivada de la paleta del autor (docs/design/paleta.png),
+  implementada en el theme claro de la app. App Android-first de notas de diseño
+  de juegos.
+status: implemented
 designAssets:
   sourceOfTruth:
     - docs/design/paleta.png
@@ -20,12 +21,21 @@ colors:
   actionEdit: "#0E4B54"
   actionAlt: "#6B4A2A"
   actionWarn: "#7A7A2E"
+  actionWarnText: "#5F5F22"
   danger: "#C0392B"
+  scrim: "#522C2926"
+  trackMechanics: "#0E4B54"
+  trackCharacters: "#6B4A2A"
+  trackStory: "#7A7A2E"
+  statusCaptured: "#4A4440"
+  statusPending: "#7A7A2E"
+  statusIndexed: "#0E4B54"
+  statusFailed: "#C0392B"
 typography:
   headline:
     fontFamily: Bricolage Grotesque
     fontSize: 34
-    fontWeight: 700
+    fontWeight: 600
   body:
     fontFamily: JetBrains Mono
     fontSize: 16
@@ -37,6 +47,7 @@ typography:
 rounded:
   sm: 8
   md: 16
+  lg: 24
 spacing:
   sm: 8
   md: 16
@@ -80,6 +91,15 @@ components:
 > principal con top bar + iconos + FAB desplegable; Géneros; Proyecto/Brainstorming;
 > superficies de IA (tts, generación de imagen, transcripción, sugerencia de
 > clasificación) e indicador fake/real.
+
+## Implementation Status
+
+Implementado 2026-10-21 (`design-system-brand-header`): `PlaybookTheme` (M3 claro,
+sin dark/dynamic color), tokens extra de acción/track/estado/scrim, tipografía
+Bricolage Grotesque + JetBrains Mono desde `composeResources` (OFL), shapes
+8/16/24 dp, cabecera común `PlaybookBrandHeader` y edge-to-edge con system bars
+claras. Los colores literales viven sólo en `theme/Color.kt` y los tamaños de
+texto sólo en `theme/Type.kt`.
 
 ## Overview
 
@@ -128,33 +148,54 @@ GDD debe leerse como un documento del juego.
   etiquetas/realces.
 - **Acciones/estado (derivados):** teal `#0E4B54`, marrón `#6B4A2A`, oliva
   `#7A7A2E`, rojo `#C0392B`. Contraste AA obligatorio.
-- Cada `Track` debe distinguirse con más que color (forma/texto).
+- **Scrim:** tinta `#2C2926` al 32 % (`#522C2926`), no negro puro.
+- **Superficies M3 derivadas:** `surfaceVariant #EFEAF0`/`onSurfaceVariant
+  #4A4440`, `outline #6F6862`, `outlineVariant #D8D2D6` y rampa
+  `surfaceContainer*` neutra (sin violeta default). `errorContainer #F7D9D5`/
+  `onErrorContainer #7A1F16`.
+- Cada `Track` debe distinguirse con más que color (forma/texto). Los tokens de
+  track/estado (`#0E4B54`, `#6B4A2A`, `#7A7A2E`, `#4A4440`, `#C0392B`) se usan
+  como forma/borde/relleno; para texto sobre base, el oliva AA es `#5F5F22`.
 
 ## Typography
 
-- **Headline:** Bricolage Grotesque (títulos).
-- **Body / Label:** JetBrains Mono (UI y cuerpo).
-- Escala: headline (34), body (16), label (13). Números y etiquetas legibles a
-  tamaño pequeño; soporte de tamaños del sistema.
+- **Headline:** Bricolage Grotesque (títulos). Se versionan **Regular (400)** y
+  **SemiBold (600)**; los títulos usan **SemiBold 600** (desviación documentada
+  desde 700: no se versiona Bold para no cargar un tercer peso).
+- **Body / Label:** JetBrains Mono **Regular (400)** y **Medium (500)** para
+  cuerpo, labels, botones, chips y badges.
+- Escala: headline (34), body (16), label (13), todo en `sp` (font scale del
+  sistema aplica). `display*` 40/34/30 y alturas de línea proporcionales.
+- Familias cargadas desde `composeResources/font` (TTF OFL versionados); los
+  el glifo sin cobertura en esas familias (`✦`, U+2726) usa fallback del
+  sistema; `←` (U+2190) sí está en Bricolage.
 
 ## Layout
 
 - Mobile-first, una columna.
-- **Pantalla principal:** top bar con "Playbook" y, a la derecha, iconos de
+- **Cabecera común:** modo marca (icono decorativo + "Playbook") en onboarding y
+  pantalla principal; modo detalle (Back 48dp → icono decorativo → título ≤2
+  líneas con ellipsis) en secundarias. En la principal, acciones por icono
   **Ver GDD**, **Brainstorming** y **Preguntar**; **FAB desplegable** (speed-dial)
   abajo-derecha con Nota de texto, Galería y Cámara.
-- Jerarquía por agrupación (Track → Nota). Edge-to-edge e insets correctos.
+- Jerarquía por agrupación (Track → Nota). Edge-to-edge real: barras
+  transparentes/light, `windowBackground` base y cada `Scaffold` consume sus
+  insets una sola vez.
 
 ## Shapes
 
-Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
-`rounded.md`.
+Radios suaves: `sm` 8dp, `md` 16dp, `lg` 24dp (más extremos 4/32dp en la escala
+M3). Superficies tipo papel; miniaturas con recorte `rounded.md`.
 
 ## Components
 
-- **TopAppBar:** "Playbook" + acciones por **icono** (con `contentDescription`).
-  Implementado 2026-10-20 con fallback textual accesible `GDD`/`✦`/`?` (sin
-  `material-icons` en `commonMain`); si un glifo no renderiza, se usa `*`.
+- **Cabecera de marca (`PlaybookBrandHeader`):** implementada 2026-10-21 sobre
+  `Surface(background)` + `statusBarsPadding`, altura mínima 56dp. Marca: icono
+  28dp decorativo + "Playbook"; detalle: Back 48dp ("Volver") → icono 24dp
+  decorativo → título Bricolage `headlineSmall` ≤2 líneas. Acciones por icono con
+  un único `contentDescription` (fallback textual `GDD`/`✦`/`?`, sin
+  `material-icons` en `commonMain`). No es el icono de launcher: usa
+  `playbook_icon.png`.
 - **FAB desplegable:** "Nueva nota" → Nota de texto / Galería / Cámara. Estado
   local `+`/`×`, acciones apiladas, scrim y cierre por Back (Android). “Galería”
   abre el diálogo “Añadir imagen” (conserva “Generar con Playbook”); “Cámara” lanza el
@@ -194,9 +235,14 @@ Teléfonos primero; tablets con ancho cómodo. Sin Desktop/Web en el MVP.
 
 ## Accessibility Baseline
 
-- Contraste AA (≥ 4.5:1 texto normal).
-- Objetivos táctiles ≥ 48dp (top bar, FAB, controles de IA).
-- Tipografía dinámica / tamaños del sistema.
+- Contraste AA (≥ 4.5:1 texto normal; ≥ 3:1 no textual) verificado con
+  `PlaybookContrastTest` sobre los pares usados. Pares clave: tinta/base 13.5:1,
+  blanco/teal 9.8:1, tinta/celeste 10.2:1, tinta/amarillo 11.2:1, error/blanco
+  5.4:1, outline/blanco 5.5:1.
+- Objetivos táctiles ≥ 48dp (cabecera, FAB, celdas y controles de IA); el Back de
+  la cabecera es 48dp.
+- Tipografía dinámica / tamaños del sistema: verificado a font scale 130 % y
+  200 % en onboarding, principal, editor, GDD, Q&A, wizard y relacionadas.
 - Estados e iconos con forma/texto/`contentDescription`, no solo color.
 
 ## Do's and Don'ts
@@ -208,10 +254,15 @@ Teléfonos primero; tablets con ancho cómodo. Sin Desktop/Web en el MVP.
 
 ## Open Design Questions
 
-- Valores de acción/estado definitivos (afinar los derivados de la captura).
-- Logo/wordmark definitivo.
-- Representación visual de cada `Track` (color + forma).
+- ~~Valores de acción/estado definitivos.~~ **Resuelto** (2026-10-21): tokens
+  implementados en `theme/Color.kt` con AA medido (ver Accessibility Baseline).
+- ~~Logo/wordmark definitivo.~~ **Resuelto para el MVP** (2026-10-21): la marca es
+  `docs/design/icon.png`; la cabecera usa `playbook_icon.png` y no se toca el
+  icono de launcher. Un wordmark nuevo queda para una entrega de UI/UX formal.
+- Representación visual de cada `Track` (color + forma): el color está tokenizado
+  (`trackMechanics`/`trackCharacters`/`trackStory`); falta la forma propia.
 - "Pendiente/fallida/sin indexar" sin parecer error grave.
+- **Dark mode: diferido** (fuera del MVP; el theme es sólo claro).
 - ~~Aspecto del **FAB desplegable** y su expansión/colapso.~~ **Resuelto**
   (2026-10-20): `+`/`×`, acciones Nota de texto/Galería/Cámara, scrim y Back;
   ver Components.

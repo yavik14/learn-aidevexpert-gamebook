@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Playbook" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <!-- Tema claro Playbook: fondo base y system bars transparentes (el color
+         real lo pinta Compose). Los flags light viven en values-v27. -->
+    <style name="Theme.Playbook" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/playbook_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>

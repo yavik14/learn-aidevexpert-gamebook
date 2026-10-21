@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -125,57 +126,64 @@ fun AskNotesScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-    ) {
-        Text(text = "Preguntar", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "La respuesta se arma sólo con tus notas.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = question,
-            onValueChange = { question = it },
-            label = { Text(text = "Pregunta") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        AskResult(
-            state = state,
-            onOpenSource = onOpenSource,
-            onSaveClick = ::startSave,
-            saveFeedback = saveFeedback,
-            readAloudState = readAloudState,
-            onReadAloud = onReadAloud,
-            onStopReadAloud = onStopReadAloud,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            PlaybookBrandHeader(
+                title = "Preguntar",
+                onBack = onBack,
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
         ) {
-            TextButton(onClick = onBack) {
-                Text(text = "Volver")
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Button(
-                onClick = {
-                    // Cada consulta es un intento nuevo: el feedback de guardado
-                    // anterior deja de ser relevante.
-                    saveFeedback = null
-                    duplicateMessage = null
-                    saveError = null
-                    onAsk(question)
-                },
-                enabled = canSubmit,
+            Text(
+                text = "La respuesta se arma sólo con tus notas.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = question,
+                onValueChange = { question = it },
+                label = { Text(text = "Pregunta") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            AskResult(
+                state = state,
+                onOpenSource = onOpenSource,
+                onSaveClick = ::startSave,
+                saveFeedback = saveFeedback,
+                readAloudState = readAloudState,
+                onReadAloud = onReadAloud,
+                onStopReadAloud = onStopReadAloud,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = primaryActionLabel(state))
+                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        // Cada consulta es un intento nuevo: el feedback de guardado
+                        // anterior deja de ser relevante.
+                        saveFeedback = null
+                        duplicateMessage = null
+                        saveError = null
+                        onAsk(question)
+                    },
+                    enabled = canSubmit,
+                ) {
+                    Text(text = primaryActionLabel(state))
+                }
             }
         }
     }

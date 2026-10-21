@@ -1583,6 +1583,46 @@
     "notes": "Migración de copy a español de España y voz de marca Playbook. Incluye cambios de soporte (permiso INTERNET, `playbook.ai.mode=real` y textos de marca del wizard). **Excepción aceptada por el autor:** el repo queda en modo real por defecto; el gate y los build/instalación manuales usan `-Pplaybook.ai.mode=fake` (o key fuera del repo). No cambia esquema, `.sqm`, dependencias, `init.sh`, runtime/adaptadores reales ni `iosApp/**`. Validada de forma independiente (`accept`, 2026-10-21); `accepted`."
   },
   {
+    "id": "design-system-brand-header",
+    "area": "ui",
+    "title": "Design system Playbook y cabecera de marca",
+    "user_visible_behavior": "Toda la app usa la paleta, tipografía y estilos de texto de Playbook; el icono aparece en la cabecera, con 'Playbook' en onboarding y principal y junto al título en secundarias.",
+    "depends_on": [
+      "main-screen-playbook-shell",
+      "first-run-project-onboarding",
+      "gdd-document-hybrid",
+      "save-answer-as-note",
+      "tts-read-aloud",
+      "ai-real-chat"
+    ],
+    "status": "accepted",
+    "verification": [
+      "`CI=true ./init.sh` → exit 0 (gate Android-only, IA fake, sin red).",
+      "`:composeApp:assembleDebug` → BUILD SUCCESSFUL; `linkDebugFrameworkIosSimulatorArm64` compila (iOS congelado, sin paridad exigida).",
+      "Smoke Android de onboarding, pantalla principal, editor, GDD, Q&A, wizard y pantallas relacionadas: sin regresiones de navegación, textos ni datos.",
+      "Contraste AA verificado para texto y elementos interactivos sobre los tokens de la paleta.",
+      "Tipografía dinámica verificada a escala de fuente 130–200 % sin recortes ni solapamientos.",
+      "El icono de la app aparece en la cabecera: onboarding/principal con wordmark 'Playbook'; secundarias junto al título y el Back.",
+      "`grep`/revisión de colores y tamaños ad-hoc fuera de los tokens del theme → sin hallazgos."
+    ],
+    "evidence": [
+      "`CI=true ./init.sh` → exit 0; BUILD SUCCESSFUL (`:composeApp:assembleDebug` + `:core:testDebugUnitTest`, IA fake, sin red).",
+      "`./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.",
+      "`./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL (iOS sólo compila).",
+      "`./gradlew :composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; 5 suites / 14 tests / 0 failures, incluido `PlaybookContrastTest` (11 pares de texto ≥4.5:1, 5 no textuales ≥3:1, scrim tinta 32 %).",
+      "Greps del spec: 0 `MaterialTheme {`; 0 `TopAppBar`; `Color(0x…)`/`Color.Black|White|…` sólo en `theme/Color.kt`; `fontSize`/`.sp` sólo en `theme/Type.kt`.",
+      "Smoke Android API 35 (emulador, IA fake): onboarding, principal, speed-dial + scrim por token, editor (Back/onCancel), GDD con título largo, Q&A, wizard (Back=Cancelar), relacionadas; font scale 130 % y 200 % sin recortes (footers/chips con `FlowRow`). Capturas en `composeApp/build/smoke-evidence/design-system-brand-header/` (ignorado por git).",
+    "Recursos versionados y hashes: Bricolage Regular `dcfe24ee…676e06f`, SemiBold `25534ff9…20c6a8cf` (commit `84745e5b…`); JetBrains Mono Regular `a0bf60ef…898d138f`, Medium `31c92d01…358e14d3d` (tag `v2.304`); OFL `4b5a7d8f…`/`30f0c136…`; icono `playbook_icon.png` (sips -Z 192) `ba01f3ab…a538eea`.",
+    "Sin cambios en `:core`, SQLDelight/`.sqm`, IA, `init.sh`, `iosApp/**`, launcher icon, `libs.versions.toml` ni `AndroidManifest.xml`.",
+    "2026-10-21 (repair `revise`): semántica de cabecera fusionada en el mismo nodo clickeable — `PlaybookHeaderAction` y Back usan `clickable(...) + clearAndSetSemantics { contentDescription; role = Button; onClick }`; `uiautomator dump` en `emulator-5556` → `content-desc=\"Ver GDD|Brainstorming|Preguntar\"` con `clickable=\"true\"` y bounds 132×132 px (~50dp), `content-desc=\"Volver\"` con `clickable=\"true\"` y bounds 132×132 px.",
+    "2026-10-21 (repair): `DESIGN.md`/spec corrigen error/blanco a 5.4:1 (AA) y documentan fallback de glifos no cubiertos; `PlaybookContrastTest` re-ejecutado 3/0.",
+    "2026-10-21 (repair): capturas intermedias pre-fix eliminadas; smoke final recapturado con APK final y serial explícito: `30-onboarding-200-final.png`, `31-main-200-final.png`, `32-main-speeddial-200-final.png`, `33-gdd-200-final.png` (`lastUpdateTime=2026-10-21 11:20:55`; font scale 200 % restaurado a 1.0 al terminar).",
+    "2026-10-21: validación independiente `accept` (`docs/validations/design-system-brand-header.md`). El validador re-ejecutó `CI=true ./init.sh` (exit 0), `:composeApp:assembleDebug`, `:composeApp:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` (5 suites/14 tests/0 failures; `PlaybookContrastTest` 3/0), greps del spec y smoke Android con font scale 200 %; verificó con `uiautomator dump` en `emulator-5556` que `content-desc='Ver GDD'`, `'Brainstorming'`, `'Preguntar'` y `'Volver'` son `class=android.widget.Button`, `clickable='true'` y bounds 132×132 px; confirmó AA error/blanco 5.438:1 y la evidencia/capturas finales. Sin hallazgos bloqueantes.",
+    "2026-10-21 (cierre): rebase sobre `origin/develop` `9a3837b` (incluye `spain-spanish-copy`) con conflictos resueltos preservando copy es-ES y design system; post-rebase `CI=true ./init.sh` exit 0, `:composeApp:assembleDebug` OK, `:composeApp:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks` OK (6 suites/15 tests/0 failures; `PlaybookContrastTest` 3/0) y smoke mínimo en `emulator-5556` (3 acciones + `Volver` clickeables, scrim, font scale restaurado)."
+  ],
+  "notes": "Implementada 2026-10-21: theme claro M3 `PlaybookTheme` (paleta, tipografía OFL, shapes, tokens acción/track/estado/scrim), `PlaybookBrandHeader` en todas las pantallas y edge-to-edge con system bars light. Sin dark mode, splash, logo nuevo ni cambios de producto/datos/IA/navegación. Repair post-validación `revise`: semántica de acciones/Back en el mismo nodo clickeable, ratio AA 5.4:1 corregido, fallback tipográfico documentado y recapturas finales. `accepted` (validación independiente `accept`, `docs/validations/design-system-brand-header.md`, 2026-10-21). Follow-up fuera de alcance: FAB/speed-dial y `ReadAloudButton` conservan semántica anidada (padre con `content-desc` no clickable + hijo clickable sin descripción)."
+  },
+  {
     "id": "readme-project-documentation",
     "area": "docs",
     "title": "README-bitácora del proyecto",
@@ -1605,7 +1645,9 @@
       "transcribe-audio-attachment",
       "tts-read-aloud",
       "image-generation-from-text",
-      "ai-suggest-classification"
+      "ai-suggest-classification",
+      "design-system-brand-header",
+      "spain-spanish-copy"
     ],
     "status": "not_started",
     "verification": [

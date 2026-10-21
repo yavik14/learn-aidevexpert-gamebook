@@ -714,14 +714,31 @@ composeApp (Android app / commonMain) ──▶ core
   reofrece cuando ya existe.
 - **Owner del MVP:** `LOCAL_OWNER_ID = "local"` (`private const val` en `App.kt`);
   la UI lo provee al construir el `NoteDraft` de creación. `:core` no cambia.
+- **Theme y cabecera (`design-system-brand-header`):** toda la UI vive bajo
+  `PlaybookTheme` (`theme/PlaybookTheme.kt`), único `MaterialTheme` de la app:
+  `lightColorScheme` con la paleta de `DESIGN.md` (acción `#0E4B54`, celeste
+  `#98E4FF`, tinta `#2C2926`, amarillo `#FFE17D`, base `#F9F6F8`, superficie
+  `#FFFFFF`), `Typography` con Bricolage Grotesque (títulos) y JetBrains Mono
+  (body/labels) cargadas desde `composeResources/font` (OFL versionadas), y
+  `PlaybookShapes` (8/16/24 dp). `PlaybookColors`
+  (`LocalPlaybookColors`, acceso `MaterialTheme.playbookColors`) expone tokens
+  extra de acción/track/estado y el scrim `#522C2926`; los colores literales
+  existen sólo en `theme/Color.kt` y los tamaños de texto sólo en `theme/Type.kt`.
+  `PlaybookBrandHeader` es la cabecera común (`topBar` de cada `Scaffold`): modo
+  marca (icono decorativo + “Playbook”) en onboarding/principal y modo detalle
+  (Back 48dp con `contentDescription = "Volver"` → icono decorativo → título ≤2
+  líneas) en secundarias. `MainActivity` usa edge-to-edge con barras
+  transparentes/light y `res/values-v27` para la navigation bar; cada pantalla
+  consume `innerPadding` una sola vez. Sin dark mode, splash ni logo nuevo.
 - **`NotesListScreen` (`main-screen-playbook-shell`)**: shell principal con
-  `Scaffold(topBar = PlaybookTopBar, floatingActionButton = CaptureSpeedDial)`.
-  `PlaybookTopBar` usa `TopAppBar` con “Playbook” y tres acciones
+  `Scaffold(topBar = PlaybookBrandHeader, floatingActionButton = CaptureSpeedDial)`.
+  La cabecera de marca muestra el icono decorativo + “Playbook” y tres acciones
   (`GDD`/`✦`/`?` como fallback textual sin `material-icons`, cada una con un único
   `contentDescription`: “Ver GDD”, “Brainstorming”, “Preguntar”). El speed-dial
   alterna `+`/`×` y apila “Nota de texto”, “Galería” (`contentDescription`
-  “Galería y generar imagen con Playbook”) y “Cámara”; un scrim dentro del contenido
-  cierra al tocar y un `PlaybookBackHandler` (`expect`/`actual`; Android usa
+  “Galería y generar imagen con Playbook”) y “Cámara”; un scrim del token
+  (`MaterialTheme.playbookColors.scrim`, tinta 32 %) dentro del contenido cierra al
+  tocar y un `PlaybookBackHandler` (`expect`/`actual`; Android usa
   `androidx.activity.compose.BackHandler`, iOS no-op) cierra con Back. “Galería”
   abre el diálogo “Añadir imagen” existente (conserva Cámara/Galería/“Generar
   con Playbook”); “Cámara” lanza `ImageSource.CAMERA` directo. Estado vacío (“Todavía
@@ -755,7 +772,8 @@ composeApp (Android app / commonMain) ──▶ core
   (Título, Género, Core Loop, Audiencia, Concepto, Inspiraciones, Fantasía,
   Mecánicas clave, Fuera de alcance) para crear/iterar la ficha del Proyecto.
   Todos los pasos son opcionales; `LinearProgressIndicator` + `Paso X/9`;
-  "Atrás"/"Siguiente" y "Guardar" (explícito) o "Cancelar" (descarta). El estado
+  "Atrás"/"Siguiente" y "Guardar" (explícito) o el Back de la cabecera
+  (`onCancel`, descarta). El estado
   local se inicializa desde `initialProject` y se re-inicializa con
   `updatedAt` como clave cuando `App` termina de cargar. El paso Género reutiliza
   `GenrePicker`; Inspiraciones/Fuera de alcance topan en 3 y Mecánicas en 5 (con

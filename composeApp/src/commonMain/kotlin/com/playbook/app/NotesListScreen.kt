@@ -7,26 +7,25 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,24 +33,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.playbook.app.theme.playbookColors
 import com.playbook.core.model.AttachmentKind
 import com.playbook.core.model.Note
 
 /**
  * Pantalla principal Playbook: notas locales con el shell definido en `DESIGN.md`.
  *
- * - `TopAppBar`: "Playbook" + acciones GDD, Brainstorming y Preguntar (cada una con
- *   un único `contentDescription`). Sin `material-icons` en `commonMain`, las
- *   acciones usan glifos textuales (`GDD`, `✦`, `?`) como fallback accesible.
+ * - `PlaybookBrandHeader` (modo marca): icono decorativo + "Playbook" + acciones
+ *   GDD, Brainstorming y Preguntar (cada una con un único `contentDescription`).
+ *   Sin `material-icons` en `commonMain`, las acciones usan glifos textuales
+ *   (`GDD`, `✦`, `?`) como fallback accesible.
  * - FAB desplegable: Nota de texto, Galería y Cámara. El menú se cierra al elegir
  *   una acción, al tocar el scrim o con Back; el scrim no entra en accesibilidad.
  * - Galería abre el diálogo "Añadir imagen" existente (que conserva Galería,
@@ -83,10 +85,16 @@ fun NotesListScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            PlaybookTopBar(
-                onOpenGdd = onOpenGdd,
-                onOpenBrainstorming = onOpenBrainstorming,
-                onAsk = onAsk,
+            PlaybookBrandHeader(
+                actions = {
+                    PlaybookHeaderAction(label = "Ver GDD", glyph = "GDD", onClick = onOpenGdd)
+                    PlaybookHeaderAction(
+                        label = "Brainstorming",
+                        glyph = "✦",
+                        onClick = onOpenBrainstorming,
+                    )
+                    PlaybookHeaderAction(label = "Preguntar", glyph = "?", onClick = onAsk)
+                },
             )
         },
         floatingActionButton = {
@@ -145,7 +153,7 @@ fun NotesListScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.32f))
+                        .background(MaterialTheme.playbookColors.scrim)
                         .pointerInput(Unit) {
                             detectTapGestures { captureMenuExpanded = false }
                         }
@@ -156,45 +164,32 @@ fun NotesListScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Acción de cabecera: un único `contentDescription` y target de 48dp. */
 @Composable
-private fun PlaybookTopBar(
-    onOpenGdd: () -> Unit,
-    onOpenBrainstorming: () -> Unit,
-    onAsk: () -> Unit,
-) {
-    TopAppBar(
-        title = { Text(text = "Playbook") },
-        actions = {
-            PlaybookTopBarAction(label = "Ver GDD", glyph = "GDD", onClick = onOpenGdd)
-            PlaybookTopBarAction(
-                label = "Brainstorming",
-                glyph = "✦",
-                onClick = onOpenBrainstorming,
-            )
-            PlaybookTopBarAction(label = "Preguntar", glyph = "?", onClick = onAsk)
-        },
-    )
-}
-
-@Composable
-private fun PlaybookTopBarAction(
+internal fun PlaybookHeaderAction(
     label: String,
     glyph: String,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = label
-        },
+        modifier = Modifier
+            .size(48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics {
+                contentDescription = label
+                role = Role.Button
+                this.onClick {
+                    onClick()
+                    true
+                }
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        IconButton(onClick = onClick) {
-            Text(
-                text = glyph,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
-        }
+        Text(
+            text = glyph,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clearAndSetSemantics { },
+        )
     }
 }
 
@@ -228,7 +223,11 @@ private fun CaptureSpeedDial(
                 }
             },
         ) {
-            FloatingActionButton(onClick = { onExpandedChange(!expanded) }) {
+            FloatingActionButton(
+                onClick = { onExpandedChange(!expanded) },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Text(
                     text = if (expanded) "×" else "+",
                     style = MaterialTheme.typography.headlineSmall,
@@ -280,7 +279,10 @@ private fun EmptyNotes(
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Button(onClick = onCreate) {
                 Text(text = "Crear primera nota")
             }
@@ -315,7 +317,11 @@ private fun NoteCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow: con font scale alto los chips se apilan sin recortarse.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 // Chips de texto por tipo (orden estable: Imagen, luego Audio).
                 AttachmentKind.entries.filter { it in attachmentKinds }.forEach { kind ->
                     LabelChip(text = attachmentLabel(kind))

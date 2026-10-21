@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,13 +35,14 @@ import kotlin.math.round
  * resolución/orden vive en `:core`, cubierta por tests cross-platform): sólo
  * emite [onOpenNote]/[onBack].
  *
- * - Encabezado "Notas relacionadas" y el cuerpo de la Nota de origen (máx. 2
- *   líneas, ellipsis).
+ * - Cabecera de detalle "Notas relacionadas" (Back) y el cuerpo de la Nota de
+ *   origen (máx. 2 líneas, ellipsis).
  * - Estado vacío explícito ("No hay notas relacionadas") con una línea de apoyo.
  * - Con resultados, un `LazyColumn` de tarjetas: el cuerpo de la relacionada
  *   (máx. 2 líneas), el `score` como **texto** ("Similitud 0.92", nunca sólo
  *   color) y chips textuales de `track`/`status`/Géneros, según `DESIGN.md`.
- * - Tocar una tarjeta emite `onOpenNote(note.id)`; "Volver" vuelve a la lista.
+ * - Tocar una tarjeta emite `onOpenNote(note.id)`; el Back de la cabecera
+ *   vuelve a la lista.
  */
 @Composable
 fun RelatedNotesScreen(
@@ -50,40 +52,42 @@ fun RelatedNotesScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            PlaybookBrandHeader(
+                title = "Notas relacionadas",
+                onBack = onBack,
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
         ) {
-            TextButton(onClick = onBack) {
-                Text(text = "Volver")
-            }
-        }
-        Text(text = "Notas relacionadas", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = note.body.ifBlank { "Sin texto" },
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        if (related.isEmpty()) {
-            EmptyRelatedNotes(modifier = Modifier.fillMaxWidth().weight(1f))
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(related, key = { it.note.id }) { relatedNote ->
-                    RelatedNoteCard(
-                        relatedNote = relatedNote,
-                        onClick = { onOpenNote(relatedNote.note.id) },
-                    )
+            Text(
+                text = note.body.ifBlank { "Sin texto" },
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            if (related.isEmpty()) {
+                EmptyRelatedNotes(modifier = Modifier.fillMaxWidth().weight(1f))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(related, key = { it.note.id }) { relatedNote ->
+                        RelatedNoteCard(
+                            relatedNote = relatedNote,
+                            onClick = { onOpenNote(relatedNote.note.id) },
+                        )
+                    }
                 }
             }
         }
@@ -124,7 +128,10 @@ private fun RelatedNoteCard(relatedNote: RelatedNote, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 LabelChip(text = "Similitud ${formatScore(relatedNote.score)}")
                 LabelChip(text = relatedNote.note.track?.code ?: "Sin track")
                 LabelChip(text = relatedNote.note.status.code)
