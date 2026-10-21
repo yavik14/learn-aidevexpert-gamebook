@@ -2,4 +2,7 @@
 <resources>
     <!-- Fondo del adaptive icon (medido del fondo crema de docs/design/icon.png). -->
     <color name="ic_launcher_background">#F7EFE2</color>
+    <!-- Papel neutro del theme Playbook: evita el flash blanco/violeta al
+         arrancar antes de que Compose pinte el fondo. -->
+    <color name="playbook_background">#F9F6F8</color>
 </resources>

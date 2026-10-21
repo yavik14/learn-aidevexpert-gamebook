@@ -22,6 +22,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -405,151 +406,157 @@ fun BrainstormingWizardScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp)
-            .imePadding(),
-    ) {
-        Text(text = "Brainstorming", style = MaterialTheme.typography.headlineMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                onClick = {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            PlaybookBrandHeader(
+                title = "Brainstorming",
+                onBack = {
                     resetSuggestions()
                     onCancel()
                 },
-            ) {
-                Text(text = "Cancelar")
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "Paso ${step + 1}/$TOTAL_STEPS",
-                style = MaterialTheme.typography.titleSmall,
             )
-            if (step < TOTAL_STEPS - 1) {
-                TextButton(onClick = { save() }) {
-                    Text(text = "Guardar")
-                }
-            }
-        }
-        LinearProgressIndicator(
-            progress = { (step + 1) / TOTAL_STEPS.toFloat() },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Todos los pasos son opcionales.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
+        },
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp)
+                .imePadding(),
         ) {
-            Text(
-                text = STEP_TITLES[step],
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            when (step) {
-                0 -> TitleStep(title = title, onTitleChange = { title = it })
-                1 -> GenrePicker(selected = genres, onChange = { genres = it })
-                2 -> TextStep(
-                    value = coreLoop,
-                    onValueChange = { coreLoop = it },
-                    label = "Core Loop",
-                    placeholder = "¿Qué acción central repite el jugador?",
-                    minLines = 3,
-                )
-                3 -> TextStep(
-                    value = audience,
-                    onValueChange = { audience = it },
-                    label = "Audiencia",
-                    placeholder = "¿A quién va dirigido el juego?",
-                    minLines = 2,
-                )
-                4 -> TextStep(
-                    value = concept,
-                    onValueChange = { concept = it },
-                    label = "Concepto",
-                    placeholder = "Describe la idea central del juego.",
-                    minLines = 4,
-                )
-                5 -> StringListStep(
-                    values = inspirations,
-                    label = "Inspiración",
-                    addLabel = "Añadir inspiración",
-                    max = MAX_INSPIRATIONS,
-                )
-                6 -> TextStep(
-                    value = fantasy,
-                    onValueChange = { fantasy = it },
-                    label = "Fantasía",
-                    placeholder = "¿Qué experiencia o poder imagina vivir el jugador?",
-                    minLines = 3,
-                )
-                7 -> MechanicsStep(mechanics = keyMechanics)
-                8 -> StringListStep(
-                    values = outOfScope,
-                    label = "Fuera de alcance",
-                    addLabel = "Añadir fuera de alcance",
-                    max = MAX_OUT_OF_SCOPE,
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            SuggestionSection(
-                stepKind = STEP_KINDS[step],
-                state = suggestState,
-                canAccept = { canAcceptSuggestion(it) },
-                onSuggest = { requestSuggestions() },
-                onAccept = { acceptSuggestion(it) },
-                onIgnore = { dismissSuggestion(it) },
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = { startNoteSave() },
-                enabled = canSaveNote,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "Guardar como Nota")
-            }
-            noteFeedback?.let { feedback ->
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = feedback,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = "Paso ${step + 1}/$TOTAL_STEPS",
+                    style = MaterialTheme.typography.titleSmall,
                 )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(
-                onClick = { if (step > 0) goToStep(step - 1) },
-                enabled = step > 0,
-            ) {
-                Text(text = "Atrás")
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            if (step < TOTAL_STEPS - 1) {
-                Button(onClick = { goToStep(step + 1) }) {
-                    Text(text = "Siguiente")
+                if (step < TOTAL_STEPS - 1) {
+                    TextButton(onClick = { save() }) {
+                        Text(text = "Guardar")
+                    }
                 }
-            } else {
-                Button(onClick = { save() }) {
-                    Text(text = "Guardar")
+            }
+            LinearProgressIndicator(
+                progress = { (step + 1) / TOTAL_STEPS.toFloat() },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Todos los pasos son opcionales.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    text = STEP_TITLES[step],
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                when (step) {
+                    0 -> TitleStep(title = title, onTitleChange = { title = it })
+                    1 -> GenrePicker(selected = genres, onChange = { genres = it })
+                    2 -> TextStep(
+                        value = coreLoop,
+                        onValueChange = { coreLoop = it },
+                        label = "Core Loop",
+                        placeholder = "¿Qué acción central repite el jugador?",
+                        minLines = 3,
+                    )
+                    3 -> TextStep(
+                        value = audience,
+                        onValueChange = { audience = it },
+                        label = "Audiencia",
+                        placeholder = "¿A quién va dirigido el juego?",
+                        minLines = 2,
+                    )
+                    4 -> TextStep(
+                        value = concept,
+                        onValueChange = { concept = it },
+                        label = "Concepto",
+                        placeholder = "Describe la idea central del juego.",
+                        minLines = 4,
+                    )
+                    5 -> StringListStep(
+                        values = inspirations,
+                        label = "Inspiración",
+                        addLabel = "Añadir inspiración",
+                        max = MAX_INSPIRATIONS,
+                    )
+                    6 -> TextStep(
+                        value = fantasy,
+                        onValueChange = { fantasy = it },
+                        label = "Fantasía",
+                        placeholder = "¿Qué experiencia o poder imagina vivir el jugador?",
+                        minLines = 3,
+                    )
+                    7 -> MechanicsStep(mechanics = keyMechanics)
+                    8 -> StringListStep(
+                        values = outOfScope,
+                        label = "Fuera de alcance",
+                        addLabel = "Añadir fuera de alcance",
+                        max = MAX_OUT_OF_SCOPE,
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                SuggestionSection(
+                    stepKind = STEP_KINDS[step],
+                    state = suggestState,
+                    canAccept = { canAcceptSuggestion(it) },
+                    onSuggest = { requestSuggestions() },
+                    onAccept = { acceptSuggestion(it) },
+                    onIgnore = { dismissSuggestion(it) },
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = { startNoteSave() },
+                    enabled = canSaveNote,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = "Guardar como Nota")
+                }
+                noteFeedback?.let { feedback ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = feedback,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { if (step > 0) goToStep(step - 1) },
+                    enabled = step > 0,
+                ) {
+                    Text(text = "Atrás")
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (step < TOTAL_STEPS - 1) {
+                    Button(onClick = { goToStep(step + 1) }) {
+                        Text(text = "Siguiente")
+                    }
+                } else {
+                    Button(onClick = { save() }) {
+                        Text(text = "Guardar")
+                    }
                 }
             }
         }

@@ -5,7 +5,7 @@
 - Repository root: `/Users/javierrodriguez/Alt10/course/ai/devexpert/learn-aidevexpert-gamebook`
 - Standard startup path: `./init.sh`
 - Standard verification path: `./init.sh` (gate no bloqueante **Android-only**) corre `:composeApp:assembleDebug` + `:core:testDebugUnitTest`, sin levantar dev servers. iOS está congelado (ADR 0003).
-- Última feature `accepted`: `tts-read-aloud` (2026-10-20; Session 085 implementación + Session 086 cierre; validación independiente `accept` en `docs/validations/tts-read-aloud.md`); antes `save-answer-as-note` (Session 084), `gdd-export-hybrid` (Sessions 078/083), `image-generation-from-text` (Sessions 081/082), `ai-suggest-classification` (Sessions 079/080), `transcribe-audio-attachment` (Sessions 076/077), `gdd-document-hybrid` (Sessions 074/075), `first-run-project-onboarding` (Sessions 071/072), `brainstorming-note-per-step`, `brainstorming-ai-suggestions` (Sessions 069/070), `sketch-thumbnails`, `inline-dictation-30s`, `ai-real-embeddings`, `brainstorming-wizard`, `ai-fake-real-switch`, `game-project-persistence` y `genres-catalog-ui`.
+- Última feature `accepted`: `design-system-brand-header` (2026-10-21; Session 094 implementación + Session 095 repair + Session 096 cierre; validación independiente `accept` en `docs/validations/design-system-brand-header.md`); antes `tts-read-aloud` (Session 085 implementación + Session 086 cierre; validación independiente `accept` en `docs/validations/tts-read-aloud.md`); antes `save-answer-as-note` (Session 084), `gdd-export-hybrid` (Sessions 078/083), `image-generation-from-text` (Sessions 081/082), `ai-suggest-classification` (Sessions 079/080), `transcribe-audio-attachment` (Sessions 076/077), `gdd-document-hybrid` (Sessions 074/075), `first-run-project-onboarding` (Sessions 071/072), `brainstorming-note-per-step`, `brainstorming-ai-suggestions` (Sessions 069/070), `sketch-thumbnails`, `inline-dictation-30s`, `ai-real-embeddings`, `brainstorming-wizard`, `ai-fake-real-switch`, `game-project-persistence` y `genres-catalog-ui`.
 - `ai-suggest-classification` `accepted` (2026-10-20; Session 079 implementación + Session 080 cierre; validación independiente `accept` en `docs/validations/ai-suggest-classification.md`): sugerencia efímera de `Track`/Géneros con `JevClient` — `ClassificationSuggestionService` en `:core` (timeout 20 s, normalización con `normalizeGenres`, `applyClassificationSuggestion`), `FakeJevClient` con Género del catálogo determinista por hash, UI `Idle`/`Loading`/`Ready`/`Empty`/`Error` en `NoteEditorScreen` (Confirmar/Descartar/Reintentar, cambios manuales descartan) y wiring de `jevClient` en `App`/roots. Sin persistir la propuesta ni cambios de esquema (v8)/runtime/puertos/build files.
 - `ai-client-interface` `accepted`: puerto `AiClient` + `FakeAiClient` en `:core` (runtime sustituible, sin wiring a la app todavía).
 - `ai-runtime-decision` `accepted` (2026-10-09): ADR 0001 (híbrido por fases, cloud-first, detrás de `AiClient`) + spike test-only sin red + docs; validada de forma independiente.
@@ -53,7 +53,8 @@
 
 - `main-screen-playbook-shell` `accepted` (2026-10-20; Session 087 implementación + Session 088 cierre; validación independiente `accept` en `docs/validations/main-screen-playbook-shell.md`): pantalla principal con `TopAppBar` “Playbook” + acciones GDD/Brainstorming/Preguntar (fallback textual `GDD`/`✦`/`?`, `contentDescription` único) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim y Back; “Galería” conserva el diálogo “Agregar imagen”/“Generar con IA” y “Cámara” lanza el picker directo. El dictado sale de la principal y queda sólo en el editor. Se agregó `PlaybookBackHandler` expect/actual porque `androidx.compose.ui.backhandler` no está en el classpath Android. Sin cambios de esquema, deps, `init.sh`, `:core` ni otros destinos. Gate Android + link iOS OK; smoke en emulador dedicado API 31 con capturas 01–14. Ver `docs/specs/main-screen-playbook-shell.md`.
 - `spain-spanish-copy` `accepted` (2026-10-21; Session 091 implementación + Session 092 cierre; validación independiente `accept`): copy visible migrado a español de España (tuteo, sin voseo/regionalismos), “Añadir” en lugar de “Agregar” y “Playbook”/“Generar con Playbook” en lugar de “La IA”/“Generar con IA”. Incluye prompts de IA (sin cambiar su lógica) y cambios de soporte (`INTERNET`, `playbook.ai.mode=real`, marca Playbook en el wizard). **Excepción aceptada:** el repo queda en modo real por defecto; el gate y todo build/instalación manual usan `-Pplaybook.ai.mode=fake` (o key fuera del repo). Ver `docs/specs/spain-spanish-copy.md`.
-- Current state: **48 `accepted`, 0 `passing`, 1 `not_started` y 1 `blocked`** (50 total). `spain-spanish-copy` quedó `accepted`; sigue `readme-project-documentation` (cierre del MVP). Ver `feature_list.json`.
+- `design-system-brand-header` `accepted` (2026-10-21; Session 094 implementación + Session 095 repair + Session 096 cierre; validación independiente `accept` en `docs/validations/design-system-brand-header.md`): feature combinada de **design system** (paleta, tipografía OFL Bricolage Grotesque + JetBrains Mono, estilos de texto, tokens extra) y **cabecera de marca** (`PlaybookBrandHeader`: onboarding/principal con icono + “Playbook”; secundarias con Back → icono → título). Solo modo claro, sin splash nativo, sin nuevo logo ni cambios de producto/datos/IA/esquema. Depende de `main-screen-playbook-shell`, `first-run-project-onboarding`, `gdd-document-hybrid`, `save-answer-as-note`, `tts-read-aloud` y `ai-real-chat`. Spec: `docs/specs/design-system-brand-header.md`.
+- Current state: **49 `accepted`, 0 `passing`, 1 `not_started` y 1 `blocked`** (51 total). Sigue `readme-project-documentation` (`not_started`, cierre del MVP). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-21.
 
@@ -2038,3 +2039,80 @@
 - Push: `origin/feature/spain-spanish-copy`; PR #58 abierto contra `develop`.
 - Known risk or unresolved issue: el repo queda con modo IA real por defecto (excepción aceptada); los builds manuales deben pasar `-Pplaybook.ai.mode=fake` o configurar key. Smoke manual sin E2E persistente. Sin bloqueos.
 - Next best step: PR #58 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/58`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
+
+### Session 093 (design-system-brand-header — backlog y worktree)
+
+- Date: 2026-10-21
+- Goal: abrir la feature combinada `design-system-brand-header` sobre `origin/develop` sin tocar el checkout principal.
+- Completed:
+  - `git fetch origin`; base verificada `origin/develop` = `547b024`.
+  - Worktree/rama `worktree/design-system-brand-header` / `feature/design-system-brand-header` desde `origin/develop`.
+  - `feature_list.json`: nueva feature `design-system-brand-header` (`area: ui`, `status: not_started`) antes de `readme-project-documentation`, con `depends_on` acotado a las 6 features de UI/producto relevantes y verificación provisional; `readme-project-documentation.depends_on` suma el nuevo id.
+  - `PROGRESS.md`/`AGENTS.md`: cola y estado actualizados (47 accepted, 2 not_started, 0 passing, 1 blocked).
+  - Sin cambios de código; los cambios locales ajenos del checkout principal no se tocaron.
+- Verification run:
+  - `python3 -c "json.load(...)"` sobre `feature_list.json` → JSON válido, 50 features, orden esperado.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`.
+- Known risk or unresolved issue: sin spec aún; el alcance combinado (theme + fuentes + cabecera + auditoría de pantallas) podría exceder una spec manejable y requerir división en `design-system-palette-typography` + `app-header-branding`.
+- Next best step: `$feature-spec` para `design-system-brand-header` (Fase 1).
+
+### Session 094 (design-system-brand-header — implementación)
+
+- Date: 2026-10-21
+- Goal: implementar `design-system-brand-header` (spec `docs/specs/design-system-brand-header.md`) en `worktree/design-system-brand-header` / `feature/design-system-brand-header`, desde `origin/develop` `547b024`, sin tocar el checkout principal ni cambiar producto/datos/IA/esquema/navegación.
+- Completed:
+  - Theme claro M3 `PlaybookTheme`: `theme/Color.kt` (único archivo con literales de color; paleta + derivados + rampa `surfaceContainer*` neutra + scrim `0x522C2926`), `theme/Type.kt` (Bricolage Grotesque Regular/SemiBold + JetBrains Mono Regular/Medium desde Compose resources; escala display/headline/title/body/label en `sp`; títulos SemiBold 600), `theme/Shapes.kt` (8/16/24 dp) y `theme/PlaybookTheme.kt` (`lightColorScheme`, `PlaybookColors` + `LocalPlaybookColors`/`MaterialTheme.playbookColors`). `App.kt` usa `PlaybookTheme`; se eliminó `MaterialTheme { }`.
+  - Recursos OFL versionados en `composeApp/src/commonMain/composeResources/` (4 TTF, 2 OFL, `playbook_icon.png` con `sips -Z 192`); `compose.components.resources` + `packageOfResClass = "com.playbook.app.resources"`. Sin red en gate.
+  - `PlaybookBrandHeader` compartido: marca (icono decorativo + "Playbook") en onboarding/loading/principal; detalle (Back 48dp `contentDescription = "Volver"` → icono decorativo → título ≤2 líneas con ellipsis) en editor, GDD, Preguntar, wizard y relacionadas. Acciones de cabecera con target 48dp y un único nombre accesible.
+  - Auditoría: `NotesListScreen` migrada a header + scrim por token + FAB `primary`; GDD con lectura/Compartir en `FlowRow` debajo del título; se retiraron los "Volver"/"Cancelar" redundantes (Q&A, GDD, relacionadas, wizard); `FlowRow` en footers/chips para font scale 130/200 %. `MainActivity` con `enableEdgeToEdge` light transparente; `themes.xml`/`colors.xml` con `windowBackground #F9F6F8` y `values-v27` para `windowLightNavigationBar`.
+  - `PlaybookContrastTest` (androidUnitTest): 11 pares de texto ≥4.5:1, 5 no textuales ≥3:1 y scrim tinta 32 %.
+  - Docs: `DESIGN.md` (status implemented, pesos 600/500, tokens, cabecera, AA, preguntas resueltas y dark mode diferido), `ARCHITECTURE.md` (UI/theme/header/edge-to-edge), `CONSTRAINTS.md` (reglas MUST/MUST NOT de color/sp/sólo claro/cabecera/recursos), `docs/technical-discovery.md` (decisión + hashes + font scale), `docs/risks-and-open-questions.md` (tokens resueltos, dark mode diferido, riesgos residuales), `AGENTS.md`, `feature_list.json` (`passing`) y este entry.
+  - Sin cambios en `:core`, SQLDelight/`.sqm`, IA, `init.sh`, `iosApp/**`, launcher icon, `libs.versions.toml` ni `AndroidManifest.xml`.
+- Verification run:
+  - `CI=true ./init.sh` → **exit 0**, `BUILD SUCCESSFUL` (Android-only, IA fake, sin red).
+  - `./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake` → **BUILD SUCCESSFUL**.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → **BUILD SUCCESSFUL** (iOS congelado: sólo compila).
+  - `./gradlew :composeApp:testDebugUnitTest --rerun-tasks -Pplaybook.ai.mode=fake` → **BUILD SUCCESSFUL**; **5 suites / 14 tests / 0 failures** (incluye `PlaybookContrastTest` 3 tests).
+  - Greps: `MaterialTheme\s*{` → 0; `TopAppBar` → 0; `Color(0x…|Color.Black|…)` fuera de `theme/Color.kt` → 0; `fontSize`/`.sp` fuera de `theme/Type.kt` → 0.
+  - Smoke Android API 35 en `emulator-5556` (IA fake; se limpió sólo el app data del emulador para probar onboarding): onboarding 100/130/200 %, principal 100/200 % + speed-dial/scrim, editor nuevo/edición 100/200 % (Back y footer apilado), GDD con título largo 100/130/200 % (≤2 líneas + ellipsis, acciones debajo), Q&A idle/respuesta 100/200 %, wizard 100/200 % (Back = cancelar, stepper intacto), relacionadas 100/200 %. Capturas en `composeApp/build/smoke-evidence/design-system-brand-header/` (ignorado por git).
+  - Hashes de recursos: Bricolage Regular `dcfe24ee…676e06f`, SemiBold `25534ff9…20c6a8cf`; JetBrains Mono Regular `a0bf60ef…898d138f`, Medium `31c92d01…358e14d3d`; OFL `4b5a7d8f…5d3e07ba` y `30f0c136…8cac4ad`; icono `ba01f3ab…a538eea`.
+- Files or artifacts updated: `composeApp/build.gradle.kts`, `App.kt`, `MainActivity.kt`, `PlaybookBrandHeader.kt`, `theme/{Color,Type,Shapes,PlaybookTheme}.kt`, `NotesListScreen.kt`, `FirstRunOnboardingScreen.kt`, `NoteEditorScreen.kt`, `GddScreen.kt`, `AskNotesScreen.kt`, `BrainstormingWizardScreen.kt`, `RelatedNotesScreen.kt`, `res/values/{themes,colors}.xml`, `res/values-v27/themes.xml`, `composeResources/**`, `PlaybookContrastTest.kt`, docs/estado citados arriba.
+- Known risk or unresolved issue: dark mode queda diferido; sin splash ni logo nuevo (marca = `docs/design/icon.png`); AA se mide sobre tokens, no píxeles; a font scale 200 % las acciones de GDD se apilan en dos filas y el cuerpo del editor queda parcialmente fuera del viewport (scroll), sin recorte de texto; glifos `GDD`/`✦`/`?` dependen del fallback del sistema. Sin E2E de UI ni smoke iOS. Durante el smoke, `installDebug` sin `ANDROID_SERIAL` instaló el APK debug también en los otros dispositivos conectados (incluido el Pixel físico); no se modificó ningún checkout.
+- Next best step: validación independiente con `feature-validator`; no commitear/pushear desde esta sesión.
+
+### Session 095 (design-system-brand-header — repair post-validación `revise`)
+
+- Date: 2026-10-21
+- Goal: aplicar el repair brief del validador independiente (`revise`) sin cambiar alcance ni marcar `accepted`.
+- Completed:
+  - **Semántica (HIGH):** las acciones de cabecera (`Ver GDD`/`Brainstorming`/`Preguntar`) y Back (`Volver`) exponen `contentDescription`, `role = Role.Button` y `onClick` en el **mismo nodo clickeable** mediante `Modifier.clickable(...) + clearAndSetSemantics { … }` (`NotesListScreen.kt`, `PlaybookBrandHeader.kt`). Se eliminó el `IconButton` interno que generaba un nodo accionable sin nombre.
+  - **Estado (MEDIUM):** `PROGRESS.md` deja de decir “`not_started`/Spec pendiente”; ahora refleja `passing` (spec `docs/specs/design-system-brand-header.md`), `47 accepted / 1 passing / 1 not_started / 1 blocked` y `Last verified at: 2026-10-21`.
+  - **AA (LOW):** ratio error/blanco corregido de 6.4:1 a **5.4:1** en `DESIGN.md` y en la tabla del spec (sigue ≥4.5:1 AA).
+  - **Tipografía (LOW):** `DESIGN.md` reformulado: familias desde Compose resources y el glifo no cubierto `✦` (U+2726) usa fallback del sistema; `←` (U+2190) sí está en Bricolage.
+  - **Evidencia (LOW):** eliminadas `08-main-speeddial-scrim-100.png` y `19-main-200.png` (pre-fix); recapturas finales con APK final y `ANDROID_SERIAL=emulator-5556`.
+- Verification run:
+  - `CI=true ./init.sh` → exit 0, `BUILD SUCCESSFUL`.
+  - `./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL.
+  - `./gradlew :composeApp:testDebugUnitTest :composeApp:linkDebugFrameworkIosSimulatorArm64 --rerun-tasks -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; 5 suites / 14 tests / 0 failures (`PlaybookContrastTest` 3/0).
+  - Greps: 0 `MaterialTheme {`, 0 `TopAppBar`; `Color(0x…)` sólo en `theme/Color.kt`; `fontSize`/`.sp` sólo en `theme/Type.kt`.
+  - `uiautomator dump` (main): `content-desc="Ver GDD"`, `"Brainstorming"`, `"Preguntar"` con `clickable="true"`, `class=android.widget.Button`, bounds `132×132 px` (~50dp). Detalle: `content-desc="Volver"` con `clickable="true"`, bounds `132×132 px`.
+  - Smoke final (API 35, APK `lastUpdateTime=2026-10-21 11:20:55`, font scale 200 %): `30-onboarding-200-final.png`, `31-main-200-final.png`, `32-main-speeddial-200-final.png` (scrim por token), `33-gdd-200-final.png` (Back → icono → título). Font scale restaurado a 1.0.
+- Files or artifacts updated: `NotesListScreen.kt`, `PlaybookBrandHeader.kt`, `PROGRESS.md`, `DESIGN.md`, `docs/specs/design-system-brand-header.md`, `feature_list.json` (sigue `passing` con evidencia nueva).
+- Known risk or unresolved issue: el FAB/speed-dial conserva el patrón previo de semántica anidada (fuera del repair brief; no afecta las verificaciones pedidas). AA por tokens, no por píxeles. Sin E2E de UI ni smoke iOS.
+- Next best step: re-validación independiente con `feature-validator`; no commit/push.
+
+### Session 096 (design-system-brand-header — cierre)
+
+- Date: 2026-10-21
+- Goal: persistir `accepted` tras el veredicto independiente `accept`, registrar la validación, commitear, rebasar sobre `origin/develop` y abrir PR sin mergear.
+- Completed:
+  - `feature_list.json`: `design-system-brand-header` → `accepted`, con evidencia de validación independiente (gate/build/tests/link iOS, `uiautomator` de cabecera/Back, AA 5.438:1, smoke 200 % y follow-up de accesibilidad).
+  - `PROGRESS.md`/`AGENTS.md`: feature `accepted`, cola 49/0/1/1 (51 total, incluye `spain-spanish-copy`) y próxima feature `readme-project-documentation`; `Last verified at: 2026-10-21`.
+  - `docs/validations/design-system-brand-header.md`: veredicto `accept`, checks, resolución de hallazgos HIGH/MEDIUM/LOW, seguridad, docs/harness y follow-up.
+  - Nits documentales: timestamp real del APK final `11:20:55`; fallback tipográfico acotado a `✦` (U+2726), con `←` (U+2190) cubierto por Bricolage.
+- Verification run:
+  - Pre-rebase: `CI=true ./init.sh` exit 0; `assembleDebug` OK; `testDebugUnitTest` + link iOS OK (5 suites / 14 tests / 0 failures; `PlaybookContrastTest` 3/0); greps del spec sin hallazgos.
+  - Rebase sobre `origin/develop` `9a3837b` (`spain-spanish-copy`) con conflictos resueltos preservando copy es-ES y design system; post-rebase `CI=true ./init.sh` exit 0, `assembleDebug` OK, tests + link iOS OK (6 suites / 15 tests / 0 failures; `PlaybookContrastTest` 3/0) y smoke mínimo en `emulator-5556` (3 acciones + `Volver` clickeables, scrim, font scale 1.0). Evidencia en `composeApp/build/smoke-evidence/design-system-brand-header/postrebase/`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/design-system-brand-header.md`, `DESIGN.md`.
+- Known risk or unresolved issue: follow-up fuera de alcance por semántica anidada en FAB/speed-dial y `ReadAloudButton`.
+- Next best step: rebase sobre `origin/develop`, re-verificación post-rebase, push de la rama y PR contra `develop` (sin merge).

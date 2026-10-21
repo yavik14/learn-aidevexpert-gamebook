@@ -9,6 +9,12 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+// Recursos compartidos (fuentes OFL e icono de cabecera) con un paquete propio
+// para no mezclar `Res` con el código de la app.
+compose.resources {
+    packageOfResClass = "com.playbook.app.resources"
+}
+
 // Release signing: precedencia variables de entorno > keystore.properties (raíz,
 // gitignored). Nunca se hardcodean credenciales; si falta alguna de las cuatro,
 // el signing config de release no se registra y `assembleRelease` produce un APK
@@ -182,6 +188,8 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // `Res`, `Font` y `painterResource` para fuentes/icono versionados.
+            implementation(compose.components.resources)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)

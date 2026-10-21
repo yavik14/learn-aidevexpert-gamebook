@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -236,189 +237,196 @@ fun NoteEditorScreen(
         !dictationActive &&
         transcriptionState != AudioTranscriptionUiState.Transcribing
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-    ) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            PlaybookBrandHeader(
+                title = if (isEditing) "Editar nota" else "Nueva nota",
+                onBack = onCancel,
+            )
+        },
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(24.dp),
         ) {
-            Text(
-                text = if (isEditing) "Editar nota" else "Nueva nota",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (isEditing && initialStatus != null) {
-                // Estado de indexado de sólo lectura + re-indexado manual. El badge
-                // comunica con texto/forma y el botón sólo se habilita si hay algo
-                // que embeber (body no vacío) y la Nota no está ya indexada.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatusBadge(status = initialStatus)
-                    Spacer(modifier = Modifier.weight(1f))
-                    if (onReindex != null) {
-                        OutlinedButton(
-                            onClick = onReindex,
-                            enabled = initialStatus != NoteStatus.INDEXED && body.isNotBlank(),
-                        ) {
-                            Text(text = "Re-indexar")
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            if (initialImage != null) {
-                val bitmap = remember(initialImage) { decodeImageBitmap(initialImage.bytes) }
-                Text(text = "Imagen adjunta", style = MaterialTheme.typography.titleSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = "Previsualización de la imagen adjunta",
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                } else {
-                    Text(
-                        text = "No se pudo previsualizar la imagen.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                TextButton(onClick = { onRemoveImage?.invoke() }) {
-                    Text(text = "Quitar imagen")
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            if (isEditing && audioAttachments.isNotEmpty() && onTranscribe != null) {
-                AudioAttachmentSection(
-                    attachments = audioAttachments,
-                    selectedId = selectedAudioId,
-                    state = transcriptionState,
-                    notice = transcriptionNotice,
-                    enabled = canTranscribe,
-                    onSelect = { selectedAudioId = it },
-                    onTranscribe = {
-                        selectedAudioId?.let { selected ->
-                            transcriptionNotice = null
-                            onTranscribe(selected)
-                        }
-                    },
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            OutlinedTextField(
-                value = body,
-                onValueChange = {
-                    if (it != body) {
-                        body = it
-                        discardSuggestion()
-                    }
-                },
-                label = { Text(text = "Cuerpo") },
-                placeholder = { Text(text = "Escribe tu idea…") },
+            Column(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .heightIn(min = 200.dp, max = 320.dp),
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (onReadAloud != null && onStopReadAloud != null) {
-                ReadAloudButton(
-                    surface = ReadAloudSurface.NOTE,
-                    surfaceLabel = "nota",
-                    state = readAloudState,
-                    enabled = body.isNotBlank(),
-                    onRead = { onReadAloud(body) },
-                    onStop = onStopReadAloud,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            if (!isEditing && onStartDictation != null && onStopDictation != null) {
-                DictationPanel(
-                    state = dictationState,
-                    onStart = onStartDictation,
-                    onStop = onStopDictation,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            ClassificationSuggestionSection(
-                state = suggestionState,
-                enabled = body.isNotBlank(),
-                onSuggest = ::requestSuggestion,
-                onConfirm = ::confirmSuggestion,
-                onDiscard = ::discardSuggestion,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Track", style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .verticalScroll(rememberScrollState()),
             ) {
-                TrackOption(
-                    label = "Sin track",
-                    selected = selectedTrack == null,
-                    onClick = {
-                        selectedTrack = null
-                        discardSuggestion()
+                if (isEditing && initialStatus != null) {
+                    // Estado de indexado de sólo lectura + re-indexado manual. El badge
+                    // comunica con texto/forma y el botón sólo se habilita si hay algo
+                    // que embeber (body no vacío) y la Nota no está ya indexada.
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        StatusBadge(status = initialStatus)
+                        if (onReindex != null) {
+                            OutlinedButton(
+                                onClick = onReindex,
+                                enabled = initialStatus != NoteStatus.INDEXED && body.isNotBlank(),
+                            ) {
+                                Text(text = "Re-indexar")
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                if (initialImage != null) {
+                    val bitmap = remember(initialImage) { decodeImageBitmap(initialImage.bytes) }
+                    Text(text = "Imagen adjunta", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Previsualización de la imagen adjunta",
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Text(
+                            text = "No se pudo previsualizar la imagen.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    TextButton(onClick = { onRemoveImage?.invoke() }) {
+                        Text(text = "Quitar imagen")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                if (isEditing && audioAttachments.isNotEmpty() && onTranscribe != null) {
+                    AudioAttachmentSection(
+                        attachments = audioAttachments,
+                        selectedId = selectedAudioId,
+                        state = transcriptionState,
+                        notice = transcriptionNotice,
+                        enabled = canTranscribe,
+                        onSelect = { selectedAudioId = it },
+                        onTranscribe = {
+                            selectedAudioId?.let { selected ->
+                                transcriptionNotice = null
+                                onTranscribe(selected)
+                            }
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = {
+                        if (it != body) {
+                            body = it
+                            discardSuggestion()
+                        }
                     },
+                    label = { Text(text = "Cuerpo") },
+                    placeholder = { Text(text = "Escribe tu idea…") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 320.dp),
                 )
-                Track.entries.forEach { track ->
+                Spacer(modifier = Modifier.height(16.dp))
+                if (onReadAloud != null && onStopReadAloud != null) {
+                    ReadAloudButton(
+                        surface = ReadAloudSurface.NOTE,
+                        surfaceLabel = "nota",
+                        state = readAloudState,
+                        enabled = body.isNotBlank(),
+                        onRead = { onReadAloud(body) },
+                        onStop = onStopReadAloud,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                if (!isEditing && onStartDictation != null && onStopDictation != null) {
+                    DictationPanel(
+                        state = dictationState,
+                        onStart = onStartDictation,
+                        onStop = onStopDictation,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                ClassificationSuggestionSection(
+                    state = suggestionState,
+                    enabled = body.isNotBlank(),
+                    onSuggest = ::requestSuggestion,
+                    onConfirm = ::confirmSuggestion,
+                    onDiscard = ::discardSuggestion,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(text = "Track", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     TrackOption(
-                        label = track.code,
-                        selected = selectedTrack == track,
+                        label = "Sin track",
+                        selected = selectedTrack == null,
                         onClick = {
-                            selectedTrack = track
+                            selectedTrack = null
                             discardSuggestion()
                         },
                     )
+                    Track.entries.forEach { track ->
+                        TrackOption(
+                            label = track.code,
+                            selected = selectedTrack == track,
+                            onClick = {
+                                selectedTrack = track
+                                discardSuggestion()
+                            },
+                        )
+                    }
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            GenrePicker(
-                selected = genres,
-                onChange = {
-                    genres = it
-                    discardSuggestion()
-                },
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            if (isEditing && onOpenRelated != null) {
-                // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
-                // Borrar/Cancelar/Guardar empujaba "Guardar" fuera del borde visible.
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onOpenRelated) {
-                        Text(text = "Ver relacionadas")
+                Spacer(modifier = Modifier.height(16.dp))
+                GenrePicker(
+                    selected = genres,
+                    onChange = {
+                        genres = it
+                        discardSuggestion()
+                    },
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                if (isEditing && onOpenRelated != null) {
+                    // Fila propia: en pantallas angostas, "Ver relacionadas" junto a
+                    // Borrar/Cancelar/Guardar empujaba "Guardar" fuera del borde visible.
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = onOpenRelated) {
+                            Text(text = "Ver relacionadas")
+                        }
                     }
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isEditing && onDelete != null) {
-                OutlinedButton(onClick = { showDeleteDialog = true }) {
-                    Text(text = "Borrar")
-                }
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            TextButton(onClick = onCancel) {
-                Text(text = "Cancelar")
-            }
-            Button(
-                onClick = { onSave(body, selectedTrack, genres) },
-                enabled = canSave,
+            Spacer(modifier = Modifier.height(16.dp))
+            // FlowRow: con font scale alto las acciones se apilan en vez de
+            // comprimir "Guardar" a una columna de una letra.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(text = "Guardar")
+                if (isEditing && onDelete != null) {
+                    OutlinedButton(onClick = { showDeleteDialog = true }) {
+                        Text(text = "Borrar")
+                    }
+                }
+                TextButton(onClick = onCancel) {
+                    Text(text = "Cancelar")
+                }
+                Button(
+                    onClick = { onSave(body, selectedTrack, genres) },
+                    enabled = canSave,
+                ) {
+                    Text(text = "Guardar")
+                }
             }
         }
     }

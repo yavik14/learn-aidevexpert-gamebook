@@ -165,3 +165,32 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
 - El GDD **MUST** ser **híbrido**: ficha estructurada del **Proyecto** + proyección
   de **Notas** agrupadas por `Track`. **MUST NOT** persistir una tabla que duplique
   las Notas. Razón: `docs/domain-model.md`.
+
+## Design system, tipos y cabecera (revisión 2026-10-21)
+
+- La UI **MUST** renderizarse bajo `PlaybookTheme` (único `MaterialTheme` de
+  `:composeApp`). `MaterialTheme { }` directo **MUST NOT** volver a usarse. Razón:
+  un theme default reintroduce violeta/tipografía de sistema y rompe la identidad.
+- Todo color de UI **MUST** venir de `MaterialTheme.colorScheme` o de
+  `MaterialTheme.playbookColors`. Los literales `Color(0x…)` **MUST NOT** existir
+  fuera de `composeApp/src/commonMain/kotlin/com/playbook/app/theme/Color.kt`.
+- Los tamaños de texto **MUST** definirse sólo en `theme/Type.kt` y en `sp`; usar
+  `.sp` o `fontSize` en pantallas/componentes **MUST NOT** ocurrir, y no se usan
+  tamaños de texto en `dp`. Razón: font scale del sistema y una sola escala.
+- El theme es **sólo claro**: `isSystemInDarkTheme`, `darkColorScheme` y
+  `dynamicColor` **MUST NOT** agregarse sin una feature explícita de dark mode.
+- Las fuentes (Bricolage Grotesque Regular/SemiBold, JetBrains Mono
+  Regular/Medium), sus licencias OFL y el icono de cabecera **MUST** versionarse
+  en `composeResources`; el gate **MUST NOT** descargar recursos ni usar red.
+- La cabecera de toda pantalla **MUST** ser `PlaybookBrandHeader`: modo marca
+  (onboarding/principal) o detalle con Back de 48dp, `contentDescription =
+  "Volver"`, icono decorativo y título ≤2 líneas. El icono **MUST NOT** ser el de
+  launcher ni tener un `contentDescription` redundante con el wordmark/título.
+- El edge-to-edge **MUST** consumirse una sola vez por `Scaffold`/`topBar`; los
+  paddings manuales de status bar duplicados **MUST NOT** agregarse. El
+  `windowBackground` **MUST** ser el base `#F9F6F8`.
+- El scrim del speed-dial **MUST** usar el token de tinta 32 %
+  (`MaterialTheme.playbookColors.scrim`), no `Color.Black`.
+- Los pares de color nuevos **MUST** medirse con WCAG (≥ 4.5:1 texto, ≥ 3:1 no
+  textual) y reflejarse en `PlaybookContrastTest`; track/estado **MUST NOT** usarse
+  como texto sin un token AA.

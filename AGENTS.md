@@ -70,9 +70,14 @@ quedó `accepted` (spec `docs/specs/main-screen-playbook-shell.md`; validación
 independiente `accept` en `docs/validations/main-screen-playbook-shell.md`).
 `ai-real-chat` quedó `accepted` (spec `docs/specs/ai-real-chat.md`; validación
 independiente `accept` en `docs/validations/ai-real-chat.md`, rebasada sobre
-`origin/develop` `85aba36`). Sigue `readme-project-documentation` (cierre del
-MVP). Para iOS: el upload firmado (`ios-release-pipeline-first-upload`) sigue
-`blocked`/account-gated.
+`origin/develop` `85aba36`). `design-system-brand-header` quedó implementada y
+`accepted` (2026-10-21; validación independiente `accept` en
+`docs/validations/design-system-brand-header.md`): `PlaybookTheme` claro
+(paleta, tipografía OFL, shapes y tokens extra), `PlaybookBrandHeader` en todas
+las pantallas y edge-to-edge; spec
+`docs/specs/design-system-brand-header.md`. Sigue
+`readme-project-documentation` (cierre del MVP). Para iOS: el upload firmado
+(`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
