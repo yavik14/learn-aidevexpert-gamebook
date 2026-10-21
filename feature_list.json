@@ -1685,14 +1685,21 @@
       "spain-spanish-copy",
       "note-content-suggestions"
     ],
-    "status": "not_started",
+    "status": "accepted",
     "verification": [
       "`README.md` existe en la raíz, está en español y sus enlaces relativos resuelven.",
       "Los comandos del quick start coinciden con `init.sh`/`docs/release/android.md` y se ejecutan sin error.",
       "El contenido no contradice `PROGRESS.md`, `feature_list.json`, ADRs ni validaciones; no contiene secrets.",
       "`CI=true ./init.sh` → exit 0 (el README no altera el gate)."
     ],
-    "evidence": [],
+    "evidence": [
+      "`README.md` en la raíz (240 líneas, 13 secciones, icono `docs/design/icon.png`); 20 enlaces relativos únicos resuelven, incluidos los 17 obligatorios, con script one-off.",
+      "Quick start verificado: `ANDROID_HOME=... CI=true ./init.sh` → exit 0; `./gradlew :composeApp:installDebug -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL y `adb shell am start -n com.playbook.app/.MainActivity` → OK en emulador (sin serial en README).",
+      "Comandos del README verificados con IA fake: `:composeApp:assembleDebug` OK; `:core:testDebugUnitTest` 37 suites/119 tests/0 fallos; `:composeApp:testDebugUnitTest` 6/15/0; `:core:iosSimulatorArm64Test` 37/119/0; link iOS OK.",
+      "Revisión es-ES/seguridad: greps de voseo/regionalismos y de `sk-`/`BEGIN ... PRIVATE KEY`/`password=`/`apiKey=` sin coincidencias; `python3 -m json.tool feature_list.json` OK y `git diff --check` limpio.",
+      "Repair de la revisión independiente (`revise`): README explicita que la validación consta en `PROGRESS.md` (y en `docs/validations/` cuando hay artefacto), separa el gate oficial de las verificaciones manuales, corrige la fila de cierre y la de Olas 1–6, y aclara que `GddSharer` vive en `:composeApp`; sigue en 240 líneas y 20 enlaces.",
+      "Validación independiente `accept` (2026-10-21, `docs/validations/readme-project-documentation.md`): los 6 hallazgos del repair quedaron resueltos; `ANDROID_HOME=... CI=true ./init.sh` exit 0; README de 240 líneas y 13 secciones; 20 enlaces relativos únicos (0 inexistentes, 17/17 obligatorios); greps de voseo/secrets limpios; `feature_list.json` válido y `git diff --check` limpio; `installDebug -Pplaybook.ai.mode=fake` + `am start` verificados en emulador."
+    ],
     "notes": "Tarea de documentación de cierre, no feature de producto. Se ejecuta después de que las 18 features del MVP estén `accepted` y de la validación end-to-end. Debe cubrir app, arquitectura, metodología/harness (planner→implementer→validator, worktrees/sesiones, gate fake), bitácora por fases, verificación, riesgos, lecciones aprendidas y próximos pasos. `PROGRESS.md` y `feature_list.json` siguen siendo la fuente de verdad operativa."
   }
 ]

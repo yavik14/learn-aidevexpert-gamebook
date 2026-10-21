@@ -79,9 +79,11 @@ las pantallas y edge-to-edge; spec
 implementada y `accepted` (spec `docs/specs/note-content-suggestions.md`;
 validación independiente `accept` en
 `docs/validations/note-content-suggestions.md`, 2026-10-21; “Sugerir ideas” en
-Nueva nota y edición, convive sin cambios con “Sugerir clasificación”). Sigue
-`readme-project-documentation` (cierre del MVP). Para iOS: el upload firmado
-(`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
+Nueva nota y edición, convive sin cambios con “Sugerir clasificación”).
+`readme-project-documentation` quedó implementada (`README.md` en la raíz) y
+`accepted` como cierre del MVP (validación independiente `accept` en
+`docs/validations/readme-project-documentation.md`, 2026-10-21). Para iOS: el
+upload firmado (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
