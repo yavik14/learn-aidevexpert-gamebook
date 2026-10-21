@@ -128,7 +128,7 @@ fun PlaybookBrandHeader(
  * versionado (`playbook_icon.png`) y siempre decorativo.
  */
 @Composable
-private fun PlaybookHeaderIcon(size: Dp) {
+fun PlaybookHeaderIcon(size: Dp) {
     Image(
         painter = painterResource(Res.drawable.playbook_icon),
         contentDescription = null,

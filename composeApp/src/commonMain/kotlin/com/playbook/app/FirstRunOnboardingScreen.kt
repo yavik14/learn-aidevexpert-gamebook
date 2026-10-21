@@ -34,7 +34,6 @@ fun FirstRunOnboardingScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PlaybookBrandHeader() },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -43,6 +42,10 @@ fun FirstRunOnboardingScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
+            PlaybookHeaderIcon(
+                size = 96.dp,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Tu Proyecto de Juego",
                 style = MaterialTheme.typography.headlineMedium,
