@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,8 +44,13 @@ import androidx.compose.ui.unit.dp
 import com.playbook.core.ai.ClassificationSuggestion
 import com.playbook.core.ai.ClassificationSuggestionResult
 import com.playbook.core.ai.ClassificationSuggestionService
+import com.playbook.core.ai.NoteContentSuggestion
+import com.playbook.core.ai.NoteContentSuggestionResult
+import com.playbook.core.ai.NoteContentSuggestionService
+import com.playbook.core.ai.appendNoteContentSuggestion
 import com.playbook.core.ai.applyClassificationSuggestion
 import com.playbook.core.model.Attachment
+import com.playbook.core.model.GameProject
 import com.playbook.core.model.GenreCatalog
 import com.playbook.core.model.NoteStatus
 import com.playbook.core.model.Track
@@ -58,6 +65,18 @@ private sealed interface SuggestionUiState {
     data class Ready(val suggestion: ClassificationSuggestion) : SuggestionUiState
     data object Empty : SuggestionUiState
     data object Error : SuggestionUiState
+}
+
+/** Estado efímero de las ideas de contenido en el editor. */
+private sealed interface ContentSuggestionUiState {
+    data object Idle : ContentSuggestionUiState
+    data object Loading : ContentSuggestionUiState
+    data class Loaded(
+        val suggestions: List<NoteContentSuggestion>,
+        val partial: Boolean,
+    ) : ContentSuggestionUiState
+
+    data object Error : ContentSuggestionUiState
 }
 
 /**
@@ -98,6 +117,15 @@ private sealed interface SuggestionUiState {
  *   consumen una sola vez con [onTranscribedTextConsumed]. Con `body` vacío el
  *   texto se aplica directo; con texto existente se abre un diálogo con vista
  *   previa y "Anexar"/"Reemplazar"/"Cancelar". Nunca hay auto-guardado.
+ * - "Sugerir ideas" (debajo del cuerpo/dictado y **antes** de clasificación)
+ *   pide a [noteContentSuggestionService] hasta 2 ideas de contenido usando el
+ *   `body`, el `Track`, los Géneros y el [project]. Está disponible también con
+ *   `body` vacío y convive sin cambios con "Sugerir clasificación" (estado,
+ *   `Job` y tarjetas independientes). "Añadir" anexa la idea al final del `body`
+ *   separada por una línea en blanco; "Ignorar" sólo quita esa tarjeta. Nunca
+ *   persiste: Guardar es la única escritura. Editar a mano `body`/`Track`/
+ *   Géneros, aplicar dictado/transcripción, Guardar, Cancelar o salir descarta
+ *   las tarjetas; un resultado tardío nunca se aplica a un borrador cambiado.
  * - "Sugerir clasificación" (debajo del cuerpo/dictado y antes de `Track`) pide
  *   una propuesta efímera a [classificationSuggestionService]: sólo acción
  *   explícita, deshabilitada con `body` en blanco o mientras carga. "Confirmar"
@@ -135,6 +163,8 @@ fun NoteEditorScreen(
     onTranscribe: ((String) -> Unit)? = null,
     onTranscribedTextConsumed: ((String) -> Unit)? = null,
     classificationSuggestionService: ClassificationSuggestionService,
+    noteContentSuggestionService: NoteContentSuggestionService,
+    project: GameProject? = null,
     readAloudState: ReadAloudUiState = ReadAloudUiState.Detenido,
     onReadAloud: ((String) -> Unit)? = null,
     onStopReadAloud: (() -> Unit)? = null,
@@ -159,6 +189,13 @@ fun NoteEditorScreen(
     var suggestionState by remember { mutableStateOf<SuggestionUiState>(SuggestionUiState.Idle) }
     var suggestionJob by remember { mutableStateOf<Job?>(null) }
     var suggestionRequest by remember { mutableStateOf(0) }
+
+    // Ideas de contenido: estado y `Job` independientes de la clasificación.
+    var contentSuggestionState by remember {
+        mutableStateOf<ContentSuggestionUiState>(ContentSuggestionUiState.Idle)
+    }
+    var contentSuggestionJob by remember { mutableStateOf<Job?>(null) }
+    var contentSuggestionRequest by remember { mutableStateOf(0) }
 
     fun discardSuggestion() {
         suggestionRequest++
@@ -194,12 +231,71 @@ fun NoteEditorScreen(
         discardSuggestion()
     }
 
+    /** Descarta las tarjetas de contenido y cualquier resultado en vuelo. */
+    fun discardContentSuggestions() {
+        contentSuggestionRequest++
+        contentSuggestionJob?.cancel()
+        contentSuggestionJob = null
+        contentSuggestionState = ContentSuggestionUiState.Idle
+    }
+
+    fun requestContentSuggestions() {
+        contentSuggestionJob?.cancel()
+        val request = ++contentSuggestionRequest
+        contentSuggestionState = ContentSuggestionUiState.Loading
+        contentSuggestionJob = suggestionScope.launch {
+            val result = noteContentSuggestionService.suggest(
+                body = body.trim(),
+                track = selectedTrack,
+                genres = genres,
+                project = project,
+            )
+            if (request != contentSuggestionRequest) return@launch
+            contentSuggestionState = when (result) {
+                is NoteContentSuggestionResult.Success ->
+                    ContentSuggestionUiState.Loaded(
+                        suggestions = result.suggestions,
+                        partial = result.partial,
+                    )
+
+                NoteContentSuggestionResult.InvalidResponse,
+                is NoteContentSuggestionResult.Failed,
+                -> ContentSuggestionUiState.Error
+            }
+            contentSuggestionJob = null
+        }
+    }
+
+    /** Añade una idea al borrador local y quita **sólo** esa tarjeta. */
+    fun addContentSuggestion(suggestion: NoteContentSuggestion) {
+        val current = contentSuggestionState as? ContentSuggestionUiState.Loaded ?: return
+        body = appendNoteContentSuggestion(body, suggestion.text)
+        val remaining = current.suggestions.filterNot { it.text == suggestion.text }
+        contentSuggestionState = if (remaining.isEmpty()) {
+            ContentSuggestionUiState.Idle
+        } else {
+            current.copy(suggestions = remaining)
+        }
+    }
+
+    /** Quita **sólo** esa tarjeta sin tocar el `body`. */
+    fun ignoreContentSuggestion(suggestion: NoteContentSuggestion) {
+        val current = contentSuggestionState as? ContentSuggestionUiState.Loaded ?: return
+        val remaining = current.suggestions.filterNot { it.text == suggestion.text }
+        contentSuggestionState = if (remaining.isEmpty()) {
+            ContentSuggestionUiState.Idle
+        } else {
+            current.copy(suggestions = remaining)
+        }
+    }
+
     // El texto final del dictado se anexa una sola vez. Mientras esté pendiente,
     // Guardar queda deshabilitado para no persistir el audio sin su texto.
     LaunchedEffect(dictatedText) {
         val dictated = dictatedText
         if (!dictated.isNullOrBlank()) {
             discardSuggestion()
+            discardContentSuggestions()
             body = appendDictation(body, dictated)
             onDictatedTextConsumed?.invoke(dictated)
         }
@@ -216,6 +312,7 @@ fun NoteEditorScreen(
         }
         transcriptionNotice = null
         if (body.isBlank()) {
+            discardContentSuggestions()
             body = trimmed
             transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
         } else {
@@ -243,7 +340,10 @@ fun NoteEditorScreen(
         topBar = {
             PlaybookBrandHeader(
                 title = if (isEditing) "Editar nota" else "Nueva nota",
-                onBack = onCancel,
+                onBack = {
+                    discardContentSuggestions()
+                    onCancel()
+                },
             )
         },
     ) { innerPadding ->
@@ -325,6 +425,7 @@ fun NoteEditorScreen(
                         if (it != body) {
                             body = it
                             discardSuggestion()
+                            discardContentSuggestions()
                         }
                     },
                     label = { Text(text = "Cuerpo") },
@@ -353,6 +454,13 @@ fun NoteEditorScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+                NoteContentSuggestionSection(
+                    state = contentSuggestionState,
+                    onSuggest = ::requestContentSuggestions,
+                    onAdd = ::addContentSuggestion,
+                    onIgnore = ::ignoreContentSuggestion,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 ClassificationSuggestionSection(
                     state = suggestionState,
                     enabled = body.isNotBlank(),
@@ -373,6 +481,7 @@ fun NoteEditorScreen(
                         onClick = {
                             selectedTrack = null
                             discardSuggestion()
+                            discardContentSuggestions()
                         },
                     )
                     Track.entries.forEach { track ->
@@ -382,6 +491,7 @@ fun NoteEditorScreen(
                             onClick = {
                                 selectedTrack = track
                                 discardSuggestion()
+                                discardContentSuggestions()
                             },
                         )
                     }
@@ -392,6 +502,7 @@ fun NoteEditorScreen(
                     onChange = {
                         genres = it
                         discardSuggestion()
+                        discardContentSuggestions()
                     },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
@@ -418,11 +529,19 @@ fun NoteEditorScreen(
                         Text(text = "Borrar")
                     }
                 }
-                TextButton(onClick = onCancel) {
+                TextButton(
+                    onClick = {
+                        discardContentSuggestions()
+                        onCancel()
+                    },
+                ) {
                     Text(text = "Cancelar")
                 }
                 Button(
-                    onClick = { onSave(body, selectedTrack, genres) },
+                    onClick = {
+                        discardContentSuggestions()
+                        onSave(body, selectedTrack, genres)
+                    },
                     enabled = canSave,
                 ) {
                     Text(text = "Guardar")
@@ -461,6 +580,7 @@ fun NoteEditorScreen(
                 Row {
                     TextButton(
                         onClick = {
+                            discardContentSuggestions()
                             body = appendDictation(body, preview)
                             transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
                             pendingTranscription = null
@@ -470,6 +590,7 @@ fun NoteEditorScreen(
                     }
                     TextButton(
                         onClick = {
+                            discardContentSuggestions()
                             body = preview.trim()
                             transcriptionNotice = TRANSCRIPTION_APPLIED_NOTICE
                             pendingTranscription = null
@@ -565,6 +686,122 @@ private fun AudioAttachmentSection(
     }
 }
 
+
+/**
+ * Sección "Sugerir ideas": ideas efímeras de contenido para la Nota.
+ *
+ * La acción está siempre disponible (también con `body` vacío) salvo mientras su
+ * propia petición está en curso. Cada tarjeta ofrece "Añadir" (anexa al `body`)
+ * e "Ignorar" (sólo la quita); una respuesta parcial avisa y un fallo permite
+ * "Reintentar". No hay auto-guardado ni persistencia: eso queda en Guardar.
+ */
+@Composable
+private fun NoteContentSuggestionSection(
+    state: ContentSuggestionUiState,
+    onSuggest: () -> Unit,
+    onAdd: (NoteContentSuggestion) -> Unit,
+    onIgnore: (NoteContentSuggestion) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        when (state) {
+            ContentSuggestionUiState.Idle -> {
+                OutlinedButton(
+                    onClick = onSuggest,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Sugerir ideas")
+                }
+            }
+
+            ContentSuggestionUiState.Loading -> {
+                OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Sugiriendo ideas…")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(
+                        text = "Playbook está pensando ideas…",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
+            is ContentSuggestionUiState.Loaded -> {
+                OutlinedButton(
+                    onClick = onSuggest,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Sugerir ideas")
+                }
+                if (state.partial) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Playbook devolvió una sola idea. Puedes pedir de nuevo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                state.suggestions.forEach { suggestion ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = suggestion.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { onAdd(suggestion) },
+                                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                                ) {
+                                    Text(text = "Añadir")
+                                }
+                                OutlinedButton(
+                                    onClick = { onIgnore(suggestion) },
+                                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                                ) {
+                                    Text(text = "Ignorar")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            ContentSuggestionUiState.Error -> {
+                Text(
+                    text = "No se pudieron obtener ideas. Inténtalo de nuevo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onSuggest,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                ) {
+                    Text(text = "Reintentar")
+                }
+            }
+        }
+    }
+}
 
 /**
  * Sección de sugerencia de clasificación. `Idle`/`Loading` muestran la acción

@@ -182,6 +182,14 @@
   (aciertos de `Track`/Género, formato/`none`) no se verifica en el gate. La UI
   facilita confirmar/descartar y corregir `track` y Géneros; la prueba real queda
   como follow-up fuera del gate (sin red ni API key en tests).
+- **Calidad real de las sugerencias de contenido pendiente de smoke key-gated:**
+  `note-content-suggestions` (2026-10-21) ya ofrece "Sugerir ideas" con fake
+  determinista, parser propio y UI efímera, pero el gate no mide la calidad real
+  del chat ni el cumplimiento del formato (2 líneas, ≤200 caracteres). El parser
+  es heurístico y la duplicación deliberada respecto de Brainstorming puede
+  divergir en ajustes futuros. Sin timeout propio: un transporte real lento puede
+  demorar "Sugiriendo ideas…" (Guardar nunca espera y editar/cancelar corta el
+  `Job`).
 - **Verificación del STT no determinista** (audio real puede requerir dispositivo
   físico) y **doble cliente de micrófono en Android** (`MediaRecorder` +
   `SpeechRecognizer`): mitigación por degradación tolerante; persistente desde
