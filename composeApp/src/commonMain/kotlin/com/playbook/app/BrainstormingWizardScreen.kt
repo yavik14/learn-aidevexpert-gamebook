@@ -63,9 +63,9 @@ private const val TOTAL_STEPS = 9
 private const val MAX_INSPIRATIONS = 3
 private const val MAX_OUT_OF_SCOPE = 3
 private const val MAX_KEY_MECHANICS = 5
-private const val SUGGESTION_ERROR = "No se pudieron obtener sugerencias. Probá de nuevo."
+private const val SUGGESTION_ERROR = "No se pudieron obtener sugerencias. Prueba de nuevo."
 private const val SUGGESTION_INVALID =
-    "La IA no devolvió sugerencias nuevas o válidas. Probá de nuevo."
+    "Playbook no devolvió sugerencias nuevas o válidas. Prueba de nuevo."
 
 private val STEP_TITLES = listOf(
     "Título",
@@ -218,13 +218,13 @@ fun BrainstormingWizardScreen(
             it.description.isNotBlank() && it.category == null
         }
         if (incompleteMechanic) {
-            saveError = "Elegí una categoría para cada mecánica con descripción."
+            saveError = "Elige una categoría para cada mecánica con descripción."
             return
         }
 
         resetSuggestions()
         if (!onSave(buildDraft())) {
-            saveError = "No se pudo guardar el Proyecto. Intentá de nuevo."
+            saveError = "No se pudo guardar el Proyecto. Inténtalo de nuevo."
         }
     }
 
@@ -234,7 +234,7 @@ fun BrainstormingWizardScreen(
             it.description.isNotBlank() && it.category == null
         }
         if (incompleteMechanic) {
-            noteError = "Elegí una categoría para cada mecánica con descripción."
+            noteError = "Elige una categoría para cada mecánica con descripción."
             return
         }
 
@@ -479,13 +479,13 @@ fun BrainstormingWizardScreen(
                     value = concept,
                     onValueChange = { concept = it },
                     label = "Concepto",
-                    placeholder = "Describí la idea central del juego.",
+                    placeholder = "Describe la idea central del juego.",
                     minLines = 4,
                 )
                 5 -> StringListStep(
                     values = inspirations,
                     label = "Inspiración",
-                    addLabel = "Agregar inspiración",
+                    addLabel = "Añadir inspiración",
                     max = MAX_INSPIRATIONS,
                 )
                 6 -> TextStep(
@@ -499,7 +499,7 @@ fun BrainstormingWizardScreen(
                 8 -> StringListStep(
                     values = outOfScope,
                     label = "Fuera de alcance",
-                    addLabel = "Agregar fuera de alcance",
+                    addLabel = "Añadir fuera de alcance",
                     max = MAX_OUT_OF_SCOPE,
                 )
             }
@@ -737,7 +737,7 @@ private fun MechanicsStep(
                         mechanics[index] = mechanic.copy(description = it)
                     },
                     label = { Text(text = "Descripción") },
-                    placeholder = { Text(text = "Describí la mecánica en una frase.") },
+                    placeholder = { Text(text = "Describe la mecánica en una frase.") },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -751,7 +751,7 @@ private fun MechanicsStep(
             onClick = { mechanics.add(MechanicForm()) },
             enabled = mechanics.size < MAX_KEY_MECHANICS,
         ) {
-            Text(text = "Agregar mecánica")
+            Text(text = "Añadir mecánica")
         }
         Text(
             text = "${mechanics.size}/$MAX_KEY_MECHANICS",
@@ -789,7 +789,7 @@ private fun SuggestionSection(
             SuggestUiState.Loading -> {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "La IA está pensando ideas…",
+                    text = "Playbook está pensando ideas…",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -810,7 +810,7 @@ private fun SuggestionSection(
                 if (state.partial) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "La IA devolvió una sola idea. Podés pedir de nuevo.",
+                        text = "Playbook devolvió una sola idea. Puedes pedir de nuevo.",
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -857,7 +857,7 @@ private fun SuggestionCard(
                     onClick = { onAccept(suggestion) },
                     enabled = enabled,
                 ) {
-                    Text(text = if (isScalarStep(stepKind)) "Usar" else "Agregar")
+                    Text(text = if (isScalarStep(stepKind)) "Usar" else "Añadir")
                 }
                 TextButton(onClick = { onIgnore(suggestion) }) {
                     Text(text = "Ignorar")

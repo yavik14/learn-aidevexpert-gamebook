@@ -222,7 +222,7 @@ fun AskNotesScreen(
         AlertDialog(
             onDismissRequest = { saveError = null },
             title = { Text(text = message) },
-            text = { Text(text = "Intentá de nuevo.") },
+            text = { Text(text = "Inténtalo de nuevo.") },
             confirmButton = {
                 TextButton(onClick = { saveError = null }) {
                     Text(text = "Aceptar")
@@ -251,7 +251,7 @@ private fun AskResult(
     ) {
         when (state) {
             AskUiState.Idle -> Text(
-                text = "Escribí una pregunta sobre tus notas.",
+                text = "Escribe una pregunta sobre tus notas.",
                 style = MaterialTheme.typography.bodyLarge,
             )
 
@@ -310,12 +310,12 @@ private fun AskResult(
             }
 
             AskUiState.NoIndexedNotes -> Text(
-                text = "Todavía no hay notas indexadas. Guardá una nota de texto y volvé a preguntar.",
+                text = "Todavía no hay notas indexadas. Guarda una nota de texto y vuelve a preguntar.",
                 style = MaterialTheme.typography.bodyLarge,
             )
 
             AskUiState.Error -> Text(
-                text = "No se pudo responder. Revisá el runtime de IA e intentá de nuevo.",
+                text = "Playbook no pudo responder. Revisa la conexión e inténtalo de nuevo.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }

@@ -38,11 +38,11 @@ fun ImageGenerationDialog(
     val generating = state is ImageGenerationUiState.Generating
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(text = "Generar imagen con IA") },
+        title = { Text(text = "Generar imagen con Playbook") },
         text = {
             Column {
                 Text(
-                    text = "Describí la imagen que querés crear.",
+                    text = "Describe la imagen que quieres crear.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(12.dp))

@@ -54,6 +54,15 @@ suspend fun verifyBrainstormingSuggestionHappyPath() {
     val request = assertNotNull(client.lastRequest)
     assertTrue(request.prompt.contains(BRAINSTORMING_PROMPT_MARKER))
     assertTrue(request.prompt.contains("STEP=TITLE"))
+    assertTrue(
+        request.prompt.contains("Eres Playbook"),
+        "el prompt debe usar la voz de marca Playbook",
+    )
+    assertTrue(
+        request.prompt.contains("español de España"),
+        "el prompt debe pedir español de España",
+    )
+    assertFalse(request.prompt.contains("Sugerí"), "el prompt no debe usar voseo")
     assertTrue(request.context.any { it == "Géneros: JRPG; Puzzle" })
     assertTrue(request.context.any { it == "Concepto: Un viaje por constelaciones" })
     assertTrue(request.context.any { it == "Borrador actual: Aurora" })

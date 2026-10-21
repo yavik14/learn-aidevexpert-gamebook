@@ -43,7 +43,7 @@ fun FirstRunOnboardingScreen(
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "Playbook organiza tus Notas y tu GDD en un Proyecto único. " +
-                    "Podés empezar con el Brainstorming guiado o crear el Proyecto " +
+                    "Puedes empezar con el Brainstorming guiado o crear el Proyecto " +
                     "vacío y completarlo después.",
                 style = MaterialTheme.typography.bodyLarge,
             )

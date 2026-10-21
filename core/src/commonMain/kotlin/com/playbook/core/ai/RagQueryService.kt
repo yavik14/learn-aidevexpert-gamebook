@@ -9,10 +9,11 @@ import com.playbook.core.repository.NoteRepository
 
 /** Instrucción de sistema del Q&A: grounding estricto en las Notas recuperadas. */
 internal const val RAG_INSTRUCTIONS: String =
-    "Respondé la pregunta usando exclusivamente el contexto provisto. Si el " +
-        "contexto no alcanza para responder, decilo explícitamente y no inventes. " +
+    "Responde la pregunta usando exclusivamente el contexto provisto. Si el " +
+        "contexto no alcanza para responder, dilo explícitamente y no inventes. " +
         "No uses conocimiento externo. No enumeres ni cites fuentes: la app las " +
-        "muestra por separado. Escribí en español, en texto plano, sin markdown, " +
+        "muestra por separado. Escribe en español de España (castellano), sin voseo, " +
+        "en texto plano, sin markdown, " +
         "de forma breve y concreta."
 
 private const val RAG_TEMPERATURE = 0.2

@@ -103,7 +103,7 @@ private fun EmptyRelatedNotes(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Cuando otras Notas se parezcan a esta, vas a verlas acá.",
+            text = "Cuando otras Notas se parezcan a esta, las verás aquí.",
             style = MaterialTheme.typography.bodyMedium,
         )
     }

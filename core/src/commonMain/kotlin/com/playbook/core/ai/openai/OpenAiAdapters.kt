@@ -117,8 +117,8 @@ internal class OpenAiAiClient(
 
     private companion object {
         const val SYSTEM_PROMPT =
-            "Sos un asistente de diseño de videojuegos. Respondé en español, " +
-                "de forma concreta y práctica."
+            "Eres Playbook, un asistente de diseño de videojuegos. Responde en " +
+                "español de España (castellano), sin voseo, de forma concreta y práctica."
     }
 }
 

@@ -322,7 +322,7 @@ fun NoteEditorScreen(
                     }
                 },
                 label = { Text(text = "Cuerpo") },
-                placeholder = { Text(text = "Escribí tu idea…") },
+                placeholder = { Text(text = "Escribe tu idea…") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 200.dp, max = 320.dp),
@@ -430,7 +430,7 @@ fun NoteEditorScreen(
             text = {
                 Column {
                     Text(
-                        text = "El cuerpo ya tiene texto. Elegí cómo integrar la transcripción:",
+                        text = "El cuerpo ya tiene texto. Elige cómo integrar la transcripción:",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -607,7 +607,7 @@ private fun ClassificationSuggestionSection(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Sugerencia de la IA",
+                            text = "Sugerencia de Playbook",
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -659,7 +659,7 @@ private fun ClassificationSuggestionSection(
 
             SuggestionUiState.Empty -> {
                 Text(
-                    text = "La IA no propuso una clasificación.",
+                    text = "Playbook no propuso una clasificación.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(8.dp))

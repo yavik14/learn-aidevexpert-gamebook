@@ -54,8 +54,8 @@ import com.playbook.core.model.Note
  *   acciones usan glifos textuales (`GDD`, `✦`, `?`) como fallback accesible.
  * - FAB desplegable: Nota de texto, Galería y Cámara. El menú se cierra al elegir
  *   una acción, al tocar el scrim o con Back; el scrim no entra en accesibilidad.
- * - Galería abre el diálogo "Agregar imagen" existente (que conserva Galería,
- *   Cámara y "Generar con IA"); Cámara lanza la captura nativa directo.
+ * - Galería abre el diálogo "Añadir imagen" existente (que conserva Galería,
+ *   Cámara y "Generar con Playbook"); Cámara lanza la captura nativa directo.
  * - El dictado ya no vive acá: sólo existe dentro del editor de Nueva nota.
  *
  * Se conservan la lista, el estado vacío, las tarjetas, miniaturas, chips y
@@ -214,7 +214,7 @@ private fun CaptureSpeedDial(
             SpeedDialAction(label = "Nota de texto", onClick = onTextNote)
             SpeedDialAction(
                 label = "Galería",
-                description = "Galería y generar imagen con IA",
+                description = "Galería y generar imagen con Playbook",
                 onClick = onGallery,
             )
             SpeedDialAction(label = "Cámara", onClick = onCamera)
@@ -276,7 +276,7 @@ private fun EmptyNotes(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Tus ideas capturadas van a aparecer acá.",
+            text = "Tus ideas capturadas aparecerán aquí.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -285,7 +285,7 @@ private fun EmptyNotes(
                 Text(text = "Crear primera nota")
             }
             OutlinedButton(onClick = onOpenImageSource) {
-                Text(text = "Agregar imagen")
+                Text(text = "Añadir imagen")
             }
         }
     }
