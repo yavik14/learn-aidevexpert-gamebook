@@ -75,7 +75,11 @@ independiente `accept` en `docs/validations/ai-real-chat.md`, rebasada sobre
 `docs/validations/design-system-brand-header.md`): `PlaybookTheme` claro
 (paleta, tipografía OFL, shapes y tokens extra), `PlaybookBrandHeader` en todas
 las pantallas y edge-to-edge; spec
-`docs/specs/design-system-brand-header.md`. Sigue
+`docs/specs/design-system-brand-header.md`. `note-content-suggestions` quedó
+implementada y `accepted` (spec `docs/specs/note-content-suggestions.md`;
+validación independiente `accept` en
+`docs/validations/note-content-suggestions.md`, 2026-10-21; “Sugerir ideas” en
+Nueva nota y edición, convive sin cambios con “Sugerir clasificación”). Sigue
 `readme-project-documentation` (cierre del MVP). Para iOS: el upload firmado
 (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 

@@ -1623,6 +1623,40 @@
   "notes": "Implementada 2026-10-21: theme claro M3 `PlaybookTheme` (paleta, tipografía OFL, shapes, tokens acción/track/estado/scrim), `PlaybookBrandHeader` en todas las pantallas y edge-to-edge con system bars light. Sin dark mode, splash, logo nuevo ni cambios de producto/datos/IA/navegación. Repair post-validación `revise`: semántica de acciones/Back en el mismo nodo clickeable, ratio AA 5.4:1 corregido, fallback tipográfico documentado y recapturas finales. `accepted` (validación independiente `accept`, `docs/validations/design-system-brand-header.md`, 2026-10-21). Follow-up fuera de alcance: FAB/speed-dial y `ReadAloudButton` conservan semántica anidada (padre con `content-desc` no clickable + hijo clickable sin descripción)."
   },
   {
+    "id": "note-content-suggestions",
+    "area": "ai",
+    "title": "Sugerencias de contenido en el editor de Notas",
+    "user_visible_behavior": "En Nueva nota y edición, 'Sugerir ideas' devuelve 2 ideas de contenido que el usuario agrega o ignora.",
+    "depends_on": [
+      "brainstorming-ai-suggestions",
+      "create-text-note",
+      "ai-fake-real-switch",
+      "game-project-persistence",
+      "genres-catalog-ui"
+    ],
+    "status": "accepted",
+    "verification": [
+      "`./gradlew :core:testDebugUnitTest -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; tests de `NoteContentSuggestionService` y del parser con `FakeAiClient` (2 ideas, parcial de 1, respuesta inválida, fallo de `AiClient`, dedupe, body vacío con contexto de Proyecto y límites), 0 failures.",
+      "`CI=true ./init.sh` con IA fake → exit 0 (gate Android-only).",
+      "`:composeApp:assembleDebug` → BUILD SUCCESSFUL.",
+      "Smoke Android en Nueva nota y edición: 'Sugerir ideas' con y sin body, con Proyecto disponible, agregar una/dos ideas, ignorar, error/reintentar y descarte al editar body/Track/Géneros o Guardar/Cancelar.",
+      "Guardar y relanzar: sólo persiste el `body` final (con las ideas anexadas); las sugerencias no se persisten.",
+      "Sin cambios de esquema (v8), proveedor/flag, clasificación existente ni persistencia de sugerencias."
+    ],
+    "evidence": [
+      "2026-10-21 (implementación, Session 097): `NoteContentSuggestions.kt` (tipos, marcador `PLAYBOOK_NOTE_CONTENT_SUGGESTIONS_V1`, prompt es-ES, contexto ≤12/300/1200 sin owner/ids/timestamps, parser propio con dedupe/truncado 200 y `appendNoteContentSuggestion`), rama determinista en `FakeAiClient`, sección \"Sugerir ideas\" (`Idle`/`Loading`/`Loaded(partial)`/`Error`, Añadir/Ignorar/Reintentar, ≥48 dp) antes de clasificación con descartes por body/Track/Géneros, dictado/transcripción, Guardar/Cancelar/volver y wiring de `NoteContentSuggestionService` + `project` en los tres editores. Sin cambios en esquema v8, `.sqm`, `AiRuntime`/puertos/adaptadores, `BrainstormingSuggestions.kt`, clasificación, build files, `init.sh`, `iosApp` ni roots.",
+      "`./gradlew :core:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; 37 suites / 119 tests / 0 failures (8 checks nuevos `NoteContentSuggestionAndroidTest`: feliz/contexto, fake, parcial/inválida/fallo/cancelación, dedupe/truncado 200, body vacío/sin Proyecto, límites, parser real y helper de anexado).",
+      "`./gradlew :core:iosSimulatorArm64Test -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; 37 suites / 119 tests / 0 failures (`NoteContentSuggestionIosTest` 8/0).",
+      "`./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL. `./gradlew :composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; 6 suites / 15 tests / 0 failures. `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL. `CI=true ./init.sh` → exit 0.",
+      "Controles negativos reproducidos y restaurados byte-idénticos (sha256): (a) sin la rama del fake → falla `fakeReturnsTwoParseableIdeasWithoutBreakingOtherBranches`; (b) anexar con `\\n` → falla `appendHelperKeepsBlankLineAndPreservesBody`; (c) sin dedupe → falla `deduplicatesBodyAndTruncatesTo200Chars`. (d) descarte por cambio manual no tiene harness UI: se verificó en el smoke positivo (las tarjetas desaparecen al editar body/Track/Géneros) y por inspección del request-id/`Job`.",
+      "Smoke Android en `emulator-5556` (IA fake, APK instalado con `adb install -r`; datos previos conservados y nota de prueba borrada al final): Nueva nota con body vacío → 2 tarjetas y body vacío; añadir una conserva la otra; ignorar no toca el body; pedir de nuevo con body distinto → 2 tarjetas y añadir dos deja párrafos separados por línea en blanco; parcial por dedupe contra el body (`Playbook devolvió una sola idea…`); editar body/Track/Géneros descarta tarjetas; Guardar descarta y persiste el body final tras relanzar; Editar Nota + añadir + Guardar persiste, y Cancelar conserva el body previo; convivencia con clasificación (ambas visibles e independientes); DB volcada: `user_version=8`, sin tablas/columnas que contengan `suggest`, `note.body` con las ideas anexadas. Capturas y `playbook-smoke.db` en `composeApp/build/smoke-evidence/note-content-suggestions/`.",
+      "Controles y paths: `git status` limitado a `:core` (servicio/fake/tests), `:composeApp` (editor/App), docs y harness; sin cambios en esquema/`.sqm`, `AiRuntime`/`AiPorts`/adaptadores OpenAI, `BrainstormingSuggestions.kt`, clasificación, build files, `init.sh`, `iosApp/**`, `MainActivity`/`MainViewController` ni secrets.",
+      "Docs durables: `ARCHITECTURE.md`, `CONSTRAINTS.md`, `docs/technical-discovery.md`, `DESIGN.md`, `docs/risks-and-open-questions.md`, `PROGRESS.md` y `AGENTS.md` (cola).",
+      "2026-10-21: validación independiente `accept` (`docs/validations/note-content-suggestions.md`). Re-ejecutó `:core:testDebugUnitTest` (37 suites/119 tests/0 failures; `NoteContentSuggestionAndroidTest` 8/0), `:core:iosSimulatorArm64Test` (37/119/0), `:composeApp:assembleDebug`, `:composeApp:testDebugUnitTest` (6/15/0), `linkDebugFrameworkIosSimulatorArm64` y `CI=true ./init.sh` (exit 0). Smoke propio en `emulator-5558` (API 34): 2 tarjetas con body vacío, añadir/ignorar, dos párrafos con línea en blanco, descarte por body/Track/Género, convivencia con clasificación (Confirmar no limpia tarjetas), Guardar+relanzar y Cancelar conservando el body; DB `user_version=8` sin objetos `suggest`; baseline restaurado con `pm clear`. Controles negativos (a) fake, (b) `\\n`, (c) dedupe reproducidos y restaurados byte-idénticos (`e057e8d6…`, `fca5d344…`); (d) descarte manual no automatizable (sin harness UI), verificado en smoke. Paths protegidos sin cambios; JSON válido y `git diff --check` limpio. Nits Low no bloqueantes: truncado puede quedar en 199 si el carácter 199 es espacio; checkboxes del spec sin marcar."
+    ],
+    "notes": "Patrón de `brainstorming-ai-suggestions`: `AiClient.generate` + parser acotado y `FakeAiClient` determinista; sugerencias efímeras (no se persisten). Dos ideas de contenido que el usuario anexa manualmente al final del `body` o ignora; no cambia la clasificación existente, el esquema ni el proveedor. Spec `docs/specs/note-content-suggestions.md`."
+  },
+  {
     "id": "readme-project-documentation",
     "area": "docs",
     "title": "README-bitácora del proyecto",
@@ -1647,7 +1681,8 @@
       "image-generation-from-text",
       "ai-suggest-classification",
       "design-system-brand-header",
-      "spain-spanish-copy"
+      "spain-spanish-copy",
+      "note-content-suggestions"
     ],
     "status": "not_started",
     "verification": [

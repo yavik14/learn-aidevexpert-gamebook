@@ -98,6 +98,20 @@ duplican la spec ni `ARCHITECTURE.md`; registran límites operativos descubierto
 - Las secciones de clasificación del GDD **MUST** derivarse de `Track`/`Género`
   elegidos por el usuario; la sugerencia de IA no reemplaza esa decisión.
 
+## Sugerencias de contenido en el editor (2026-10-21)
+
+- "Sugerir ideas" **MUST** ser una acción **explícita**, efímera y **MUST NOT**
+  auto-guardar ni persistir sugerencias (sin tabla, entidad, query ni migración).
+  Sólo "Añadir" **MAY** mutar el borrador local anexando al final del `body`
+  separado por una línea en blanco; "Ignorar" **MUST** limitarse a quitar esa
+  tarjeta. Razón: el usuario revisa y decide; Guardar sigue siendo la única
+  escritura y no espera a la IA.
+- Las tarjetas de contenido **MUST** descartarse al editar a mano `body`/`Track`/
+  Géneros, al aplicar dictado/transcripción y al Guardar/Cancelar/salir; un
+  resultado tardío **MUST NOT** aplicarse a un borrador ya cambiado. La acción
+  **MUST** convivir con "Sugerir clasificación" con estado, `Job` y tarjetas
+  independientes. Razón: evitar anexar ideas obsoletas o pisar la clasificación.
+
 ## Plataforma (Android-first, iOS congelado)
 
 - Las features **MUST NOT** exigir paridad ni verificación iOS; `init.sh` valida

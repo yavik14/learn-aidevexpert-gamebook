@@ -449,6 +449,20 @@ composeApp (Android app / commonMain) ──▶ core
   el marcador (determinista, sin red). `BrainstormingWizardScreen` mantiene el
   estado efímero por paso y sólo muta el borrador con Usar/Añadir; las
   sugerencias se descartan al navegar.
+- **Sugerencias de contenido en Notas (`note-content-suggestions`, 2026-10-21):**
+  `NoteContentSuggestionService` (`:core`, `NoteContentSuggestions.kt`) pide a
+  `AiClient.generate` **hasta 2 ideas** para el `body` de una Nota con prompt
+  es-ES marcado (`PLAYBOOK_NOTE_CONTENT_SUGGESTIONS_V1`, `temperature=0.7`,
+  `maxTokens=300`) y contexto acotado (máx. 12 entradas; valores de Proyecto/
+  listas a 300 y `body` a 1200) con la ficha del Proyecto, `Track`, Géneros
+  normalizados y texto actual, **sin** `owner`, ids ni timestamps. Un parser
+  propio (deliberadamente separado del de Brainstorming) tolera markdown/fences/
+  preámbulos, deduplica case-insensitive, descarta la idea idéntica al `body` y
+  trunca a 200 caracteres; devuelve `Success(partial)` / `InvalidResponse` /
+  `Failed` y propaga la cancelación. `appendNoteContentSuggestion` anexa con una
+  línea en blanco sin tocar el texto previo. `FakeAiClient` responde 2 ideas
+  deterministas con el marcador. La UI mantiene `Idle`/`Loading`/`Loaded`/`Error`
+  y un `Job`/request-id independientes de la clasificación; nunca persiste.
 - **Chat real de Brainstorming/Q&A (`ai-real-chat`, 2026-10-20):** sin duplicar
   `ai-fake-real-switch`, el adaptador `OpenAiAiClient.generate` acepta
   `instructions` (se agregan al `system`), `temperature` y `maxTokens` (se
@@ -691,7 +705,10 @@ composeApp (Android app / commonMain) ──▶ core
   (`ReadAloudUiState`) + player/request-id de lectura en voz alta, el estado de
   captura de imagen (`showImageSourceDialog`/`imageError`) y el estado del
   onboarding (`onboardingBusy`/`onboardingError`). Recibe `aiClient` y crea
-  `BrainstormingSuggestionService` con `remember(aiClient)` para el wizard. La
+  `BrainstormingSuggestionService` y `NoteContentSuggestionService` con
+  `remember(aiClient)` para el wizard y el editor; pasa el servicio de contenido y
+  el `GameProject?` cargado a los tres `NoteEditorScreen` (`Create`,
+  `CreateWithImage`, `Edit`). La
   lectura
   ocurre en un `LaunchedEffect(refreshKey)`, **nunca** en el cuerpo de
   composición; tras cada mutación se incrementa `refreshKey` (`reload()`). Sin DI,
@@ -814,8 +831,15 @@ composeApp (Android app / commonMain) ──▶ core
   texto → `AlertDialog` con vista previa y "Anexar" (misma semántica que
   `appendDictation`)/"Reemplazar" (sólo el texto)/"Cancelar" (sin cambios).
   `onTranscribedTextConsumed` limpia el texto de `App`; nunca hay auto-guardado.
-  Entre el cuerpo/dictado y `Track` ofrece "Sugerir clasificación" (sólo con
-  `body` no vacío y fuera de carga); la propuesta es estado local efímero
+  Entre el cuerpo/dictado y la clasificación ofrece **"Sugerir ideas"**, siempre
+  disponible (también con `body` vacío) salvo durante su propia carga: tarjetas
+  efímeras con "Añadir" (anexa al final del `body` con una línea en blanco) e
+  "Ignorar" (sólo quita la tarjeta), aviso de respuesta parcial y
+  "No se pudieron obtener ideas…" + "Reintentar" ante fallo o respuesta inválida.
+  Editar a mano `body`/`Track`/Géneros, aplicar dictado/transcripción, Guardar,
+  Cancelar o volver descarta las tarjetas y cancela el `Job`; un resultado tardío
+  se ignora con un request-id. Es independiente de "Sugerir clasificación" (sólo
+  con `body` no vacío y fuera de carga); la propuesta es estado local efímero
   (`Idle`/`Loading`/`Ready`/`Empty`/`Error`) con una tarjeta de `Track` + chips
   `GenreLabelChip`, y acciones Confirmar/Descartar/Reintentar. Confirmar aplica
   con `applyClassificationSuggestion` al borrador (sin guardar); cambiar a mano

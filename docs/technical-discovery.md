@@ -1715,6 +1715,62 @@ Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y
   (cubiertos por tests del core); con el fake la carga es instantánea y no se
   pudo capturar "Sugiriendo…" en el smoke.
 
+## Note Content Suggestion Decisions (note-content-suggestions)
+
+Implementado 2026-10-21. Detalles en `ARCHITECTURE.md`, `CONSTRAINTS.md` y
+`docs/specs/note-content-suggestions.md`.
+
+- **Servicio puro en `:core`.** `NoteContentSuggestionService.suggest(body,
+  track, genres, project)` llama `AiClient.generate` con el prompt marcado
+  `PLAYBOOK_NOTE_CONTENT_SUGGESTIONS_V1` (es-ES, 2 ideas, una por línea,
+  `temperature=0.7`, `maxTokens=300`). No persiste, no indexa, no diagnostica
+  contenido y **no añade `withTimeout`**: la cancelación la gobierna el `Job` de
+  la UI y el transporte real ya tiene sus límites; Guardar nunca espera.
+- **Contexto acotado.** Máximo 12 entradas `"<label>: <valor>"` en orden
+  determinista: ficha del Proyecto (título, Géneros, Core Loop, Audiencia,
+  Concepto, Fantasía, Mecánicas `categoría · descripción`, Inspiraciones, Fuera
+  de alcance), `Track` de la Nota, Géneros normalizados y texto actual. Valores de
+  Proyecto/listas a 300 caracteres y `body` a 1200; sin `owner`, ids ni
+  timestamps. Sin Proyecto o sin `body` se envían sólo las entradas disponibles
+  (o contexto vacío) y la acción sigue disponible.
+- **Parser propio, no compartido.** `parseNoteContentSuggestions` vive en
+  `NoteContentSuggestions.kt` y **no** reutiliza el de Brainstorming (privado y
+  acoplado al `step`/borrador): normaliza saltos de línea/fence, limpia
+  encabezados, blockquotes, viñetas, numeración, énfasis, prefijos `Idea/Opción N:`
+  y comillas; descarta vacías, separadores, ruido y preámbulos; deduplica
+  case-insensitive, descarta una idea idéntica al `body` normalizado, trunca a
+  200 y toma las 2 primeras. 0 usables → `InvalidResponse`; 1 → `Success(partial)`;
+  `AiClientException` → `Failed`; `CancellationException` se propaga. La
+  duplicación (~60 líneas) es una limitación aceptada.
+- **Fake determinista.** `FakeAiClient.generate` responde 2 ideas parseables tras
+  la rama de Brainstorming cuando el prompt contiene el marcador nuevo; la rama
+  de Brainstorming y el fallback `"[fake] …"` quedan intactos.
+- **Anexado explícito.** `appendNoteContentSuggestion` recorta sólo el espacio
+  final del `body`, usa `\n\n` (línea en blanco) y es no-op con idea en blanco;
+  nunca reemplaza el texto existente ni guarda.
+- **UI efímera e independiente.** `NoteEditorScreen` recibe el servicio y el
+  `GameProject?`; la sección "Sugerir ideas" va debajo del cuerpo/dictado y antes
+  de "Sugerir clasificación", con estados `Idle`/`Loading`/`Loaded(partial)`/
+  `Error`, tarjetas "Añadir"/"Ignorar", "Reintentar" y objetivos ≥48 dp. Usa
+  `rememberCoroutineScope` + `Job` + contador de request (sin DI/ViewModel/Flow).
+  Cambios manuales de `body`/`Track`/Géneros, dictado/transcripción aplicados,
+  Guardar, Cancelar o volver descartan las tarjetas y cancelan el `Job`; añadir
+  una idea no limpia la clasificación ni viceversa.
+- **Wiring.** `App` crea `NoteContentSuggestionService` con `remember(aiClient)` y
+  pasa servicio + `project` a los tres editores. No cambian `AiRuntime`,
+  `AiPorts`, adaptadores OpenAI, `MainActivity`/`MainViewController`, esquema v8,
+  build files ni `init.sh`.
+- **Verificación.** `:core:testDebugUnitTest` 37 suites/119 tests/0 failures y
+  `:core:iosSimulatorArm64Test` 8 checks nuevos/0 failures; `assembleDebug`,
+  `:composeApp:testDebugUnitTest`, link iOS y `CI=true ./init.sh` OK; controles
+  negativos (a/b/c) reproducidos y restaurados byte-idénticos; smoke Android en
+  `emulator-5556` con body vacío/con texto, 2 tarjetas, parcial por dedupe,
+  añadir/ignorar, descarte por body/Track/Géneros, Guardar/relanzar, edición y
+  Cancelar, convivencia con clasificación y DB v8 sin tablas de sugerencias.
+  `Error`/`InvalidResponse` no son alcanzables con el fake de producción
+  (cubiertos por tests); el control negativo (d) se verificó en el smoke positivo
+  (las tarjetas desaparecen al editar) y no con un harness UI.
+
 ## Image Generation Decisions (image-generation-from-text)
 
 Implementado 2026-10-20. Detalles en `ARCHITECTURE.md` y

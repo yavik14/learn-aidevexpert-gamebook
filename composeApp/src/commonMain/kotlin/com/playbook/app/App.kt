@@ -26,6 +26,7 @@ import com.playbook.core.ai.ClassificationSuggestionService
 import com.playbook.core.ai.ImageClient
 import com.playbook.core.ai.ImageGenerationResult
 import com.playbook.core.ai.JevClient
+import com.playbook.core.ai.NoteContentSuggestionService
 import com.playbook.core.ai.NoteIndexingOrchestrator
 import com.playbook.core.brainstorming.isDuplicateBrainstormingNote
 import com.playbook.core.ai.PendingIndexingRetry
@@ -184,6 +185,11 @@ fun App(
         val scope = rememberCoroutineScope()
         val suggestionService = remember(aiClient) {
             BrainstormingSuggestionService(aiClient)
+        }
+        // Ideas de contenido para el editor: efímeras, sólo por acción explícita
+        // y con el `AiClient` de texto (fake en tests/gate, real con key).
+        val noteContentSuggestionService = remember(aiClient) {
+            NoteContentSuggestionService(aiClient)
         }
         // Sugerencia de clasificación (Track/Géneros) con `jev`: efímera y sólo
         // por acción explícita del editor; nunca persiste ni auto-asigna.
@@ -956,6 +962,8 @@ fun App(
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
                 classificationSuggestionService = classificationSuggestionService,
+                noteContentSuggestionService = noteContentSuggestionService,
+                project = project,
                 readAloudState = readAloudState,
                 onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
                 onStopReadAloud = ::stopReadAloud,
@@ -980,6 +988,8 @@ fun App(
                 onStopDictation = ::stopDictation,
                 onDictatedTextConsumed = ::consumeDictatedText,
                 classificationSuggestionService = classificationSuggestionService,
+                noteContentSuggestionService = noteContentSuggestionService,
+                project = project,
                 readAloudState = readAloudState,
                 onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
                 onStopReadAloud = ::stopReadAloud,
@@ -1048,6 +1058,8 @@ fun App(
                             },
                             onTranscribedTextConsumed = ::consumeTranscribedText,
                             classificationSuggestionService = classificationSuggestionService,
+                            noteContentSuggestionService = noteContentSuggestionService,
+                            project = project,
                             readAloudState = readAloudState,
                             onReadAloud = { text -> readAloud(ReadAloudSurface.NOTE, text) },
                             onStopReadAloud = ::stopReadAloud,

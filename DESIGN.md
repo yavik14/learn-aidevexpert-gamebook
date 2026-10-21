@@ -210,14 +210,21 @@ M3). Superficies tipo papel; miniaturas con recorte `rounded.md`.
   "Ignorar"; Playbook sugiere y el usuario decide. Se descartan al navegar.
 - **Referencia de Nota (cita):** respuestas del Q&A.
 - **Superficies de IA:** control **play/pausa** (tts), acción **Generar imagen**,
-  acción **Transcribir** (Adjunto AUDIO), **sugerencia de clasificación**
+  acción **Transcribir** (Adjunto AUDIO), **sugerencia de contenido** en el
+  editor ("Sugerir ideas" → hasta 2 tarjetas con "Añadir"/"Ignorar", aviso de
+  respuesta parcial y "Reintentar"), **sugerencia de clasificación**
   (chips sugeridos + "Confirmar"/"Editar"), e **indicador de IA** (fake/real/“no
   disponible”).
+- **Editor con ideas de contenido:** debajo del cuerpo/dictado y antes de
+  "Sugerir clasificación"; "Sugerir ideas" está disponible también con el cuerpo
+  vacío, la carga muestra "Sugiriendo ideas…"/"Playbook está pensando ideas…" y
+  cada tarjeta explica con texto y borde (no sólo color), con acciones ≥48 dp.
+  Añadir anexa un párrafo al final; nada se guarda hasta Guardar.
 
 ## Core Screens
 
 1. **Pantalla principal (Playbook):** notas por track; top bar + iconos; FAB de captura.
-2. **Nueva nota / Editor:** cuerpo + track + géneros; dictado inline 30s.
+2. **Nueva nota / Editor:** cuerpo + track + géneros; dictado inline 30s; "Sugerir ideas" (contenido) y "Sugerir clasificación".
 3. **Bocetos:** cámara/galería → Nota con imagen (miniatura en listas).
 4. **Brainstorming (wizard):** 9 pasos para crear/iterar el Proyecto; sugerencias IA; crear Nota por paso.
 5. **GDD (documento del Proyecto):** ficha + Historia/Lore + Personajes + Notas por Track; exportar/compartir.

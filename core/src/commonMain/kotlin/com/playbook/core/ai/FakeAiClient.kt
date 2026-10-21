@@ -26,6 +26,10 @@ class FakeAiClient(private val dimension: Int = DEFAULT_DIMENSION) : AiClient {
                 "1. Idea de prueba A\n2. Idea de prueba B"
             }
         }
+        if (request.prompt.contains(NOTE_CONTENT_PROMPT_MARKER)) {
+            return "1. Añade un detalle sensorial que refuerce la fantasía del juego\n" +
+                "2. Describe una variante del core loop para probar en la próxima iteración"
+        }
         return "[fake] ${request.prompt} (context=${request.context.size})"
     }
 

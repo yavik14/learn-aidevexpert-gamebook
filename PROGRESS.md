@@ -54,7 +54,8 @@
 - `main-screen-playbook-shell` `accepted` (2026-10-20; Session 087 implementación + Session 088 cierre; validación independiente `accept` en `docs/validations/main-screen-playbook-shell.md`): pantalla principal con `TopAppBar` “Playbook” + acciones GDD/Brainstorming/Preguntar (fallback textual `GDD`/`✦`/`?`, `contentDescription` único) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim y Back; “Galería” conserva el diálogo “Agregar imagen”/“Generar con IA” y “Cámara” lanza el picker directo. El dictado sale de la principal y queda sólo en el editor. Se agregó `PlaybookBackHandler` expect/actual porque `androidx.compose.ui.backhandler` no está en el classpath Android. Sin cambios de esquema, deps, `init.sh`, `:core` ni otros destinos. Gate Android + link iOS OK; smoke en emulador dedicado API 31 con capturas 01–14. Ver `docs/specs/main-screen-playbook-shell.md`.
 - `spain-spanish-copy` `accepted` (2026-10-21; Session 091 implementación + Session 092 cierre; validación independiente `accept`): copy visible migrado a español de España (tuteo, sin voseo/regionalismos), “Añadir” en lugar de “Agregar” y “Playbook”/“Generar con Playbook” en lugar de “La IA”/“Generar con IA”. Incluye prompts de IA (sin cambiar su lógica) y cambios de soporte (`INTERNET`, `playbook.ai.mode=real`, marca Playbook en el wizard). **Excepción aceptada:** el repo queda en modo real por defecto; el gate y todo build/instalación manual usan `-Pplaybook.ai.mode=fake` (o key fuera del repo). Ver `docs/specs/spain-spanish-copy.md`.
 - `design-system-brand-header` `accepted` (2026-10-21; Session 094 implementación + Session 095 repair + Session 096 cierre; validación independiente `accept` en `docs/validations/design-system-brand-header.md`): feature combinada de **design system** (paleta, tipografía OFL Bricolage Grotesque + JetBrains Mono, estilos de texto, tokens extra) y **cabecera de marca** (`PlaybookBrandHeader`: onboarding/principal con icono + “Playbook”; secundarias con Back → icono → título). Solo modo claro, sin splash nativo, sin nuevo logo ni cambios de producto/datos/IA/esquema. Depende de `main-screen-playbook-shell`, `first-run-project-onboarding`, `gdd-document-hybrid`, `save-answer-as-note`, `tts-read-aloud` y `ai-real-chat`. Spec: `docs/specs/design-system-brand-header.md`.
-- Current state: **49 `accepted`, 0 `passing`, 1 `not_started` y 1 `blocked`** (51 total). Sigue `readme-project-documentation` (`not_started`, cierre del MVP). Ver `feature_list.json`.
+- `note-content-suggestions` `accepted` (2026-10-21; Session 097 implementación + Session 098 validación independiente `accept` en `docs/validations/note-content-suggestions.md`): “Sugerir ideas” en Nueva nota y edición pide hasta **2 ideas de contenido** con prompt es-ES (`PLAYBOOK_NOTE_CONTENT_SUGGESTIONS_V1`) y contexto acotado (ficha del Proyecto + `Track` + Géneros + body ≤1200; ≤12 entradas/300 chars, sin owner/ids/timestamps). `NoteContentSuggestionService` + parser propio (fence/markdown/ruido, dedupe case-insensitive, descarte del body, truncado 200, `Success(partial)`/`InvalidResponse`/`Failed`) y `appendNoteContentSuggestion` (`\n\n`) en `:core`; `FakeAiClient` con 2 ideas deterministas. `NoteEditorScreen` muestra la sección antes de clasificación con `Idle`/`Loading`/`Loaded(partial)`/`Error`, Añadir/Ignorar/Reintentar y ≥48 dp; editar body/Track/Géneros, dictado/transcripción, Guardar/Cancelar/volver descarta tarjetas y cancela el `Job`, con request-id para resultados tardíos. `App` recibe el servicio recordado y `project` en los tres editores. Sin persistencia, esquema v8 intacto, clasificación intacta ni cambios de runtime/puertos/build files/`init.sh`/`iosApp`. Spec `docs/specs/note-content-suggestions.md`.
+- Current state: **50 `accepted`, 0 `passing`, 1 `not_started` y 1 `blocked`** (52 total). Sigue `readme-project-documentation` (`not_started`, cierre del MVP). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
 - Last verified at: 2026-10-21.
 
@@ -2119,3 +2120,64 @@
 - PR: #59 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/59`) abierto contra `develop`, sin mergear.
 - Known risk or unresolved issue: follow-up fuera de alcance por semántica anidada en FAB/speed-dial y `ReadAloudButton`.
 - Next best step: PR #59 abierto contra `develop`; no mergear (lo hace la sesión integradora).
+
+### Session 097 (note-content-suggestions — implementación)
+
+- Date: 2026-10-21
+- Goal: implementar `docs/specs/note-content-suggestions.md` (worktree `worktree/note-content-suggestions`, rama `feature/note-content-suggestions`) sin cambiar alcance ni marcar `accepted`.
+- Completed:
+  - `:core`: `NoteContentSuggestions.kt` con `NoteContentSuggestion`/`NoteContentSuggestionResult`, marcador `PLAYBOOK_NOTE_CONTENT_SUGGESTIONS_V1`, prompt es-ES, `buildNoteContentContext` (máx. 12 entradas, 300 chars de Proyecto/listas, body 1200, sin owner/ids/timestamps), `parseNoteContentSuggestions` (fence/encabezados/viñetas/numeración/énfasis/prefijos/comillas/ruido/preámbulos, dedupe case-insensitive, descarte del body normalizado, truncado a 200), `NoteContentSuggestionService` (2 ideas, `temperature=0.7`, `maxTokens=300`, sin timeout propio) y `appendNoteContentSuggestion` (`\n\n`, no-op si la idea está en blanco).
+  - `FakeAiClient`: rama determinista nueva con 2 ideas parseables; Brainstorming y el fallback `[fake]` intactos.
+  - Tests: `NoteContentSuggestionCheck` en `commonTest` + runners Android/iOS (8 checks: feliz/contexto, fake, parcial/inválida/fallo/cancelación, dedupe/truncado, body vacío/sin Proyecto, límites, parser real, helper de anexado).
+  - `NoteEditorScreen`: parámetros `noteContentSuggestionService` y `project`; sección "Sugerir ideas" antes de clasificación con `Idle`/`Loading`/`Loaded(partial)`/`Error`, tarjetas "Añadir"/"Ignorar", "Reintentar", objetivos ≥48 dp; descarte en edición manual de body/Track/Géneros, dictado/transcripción, Guardar/Cancelar/volver; `Job` + request-id independientes de la clasificación.
+  - `App`: `NoteContentSuggestionService` recordado con `remember(aiClient)` y `project` pasado a los tres `NoteEditorScreen` (Create, CreateWithImage, Edit).
+  - Docs: `ARCHITECTURE.md`, `CONSTRAINTS.md` (regla acotada), `docs/technical-discovery.md`, `DESIGN.md`, `docs/risks-and-open-questions.md`, `AGENTS.md` (cola) y estado/evidencia en `feature_list.json`/`PROGRESS.md`.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **37 suites / 119 tests / 0 failures** (8 nuevos).
+  - `./gradlew :core:iosSimulatorArm64Test -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **37 suites / 119 tests / 0 failures**.
+  - `./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL.
+  - `./gradlew :composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **6 suites / 15 tests / 0 failures**.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL (iOS congelado: sólo compila).
+  - `CI=true ./init.sh` → **exit 0** (`assembleDebug` + `:core:testDebugUnitTest`, IA fake, sin red).
+  - Baseline inicial `CI=true ./init.sh` → exit 0 antes de tocar código.
+- Negative controls (restaurados byte-idénticos por sha256):
+  - (a) quitar la rama de `FakeAiClient` → falla `fakeReturnsTwoParseableIdeasWithoutBreakingOtherBranches` (se endureció la aserción para exigir las 2 ideas exactas); restaurado `e057e8d6…`.
+  - (b) anexar con `\n` → falla `appendHelperKeepsBlankLineAndPreservesBody`; restaurado `fca5d344…`.
+  - (c) omitir el dedupe → falla `deduplicatesBodyAndTruncatesTo200Chars`; restaurado `fca5d344…`.
+  - (d) descartar en cambios manuales: no hay harness UI/E2E; se verificó en el smoke positivo (tarjetas desaparecen al editar body/Track/Géneros) y por inspección del contador de request/`Job`. Limitación declarada, no se finge un control automatizado.
+- Smoke Android (IA fake) en `emulator-5556` (API 36, `adb install -r` del debug; sólo se usó ese serial, no se tocaron `emulator-5558` ni el Pixel físico):
+  1. Nueva nota con body vacío → "Sugerir ideas" habilitado, 2 tarjetas y body vacío.
+  2. "Añadir" la primera → body = idea; sólo desaparece esa tarjeta y la segunda sigue.
+  3. "Ignorar" la restante → desaparece sin tocar el body.
+  4. Pedir de nuevo → 2 tarjetas; "Añadir" ambas → body con párrafos separados por línea en blanco; sección vuelve a `Idle`.
+  5. Editar a mano el body → se descartan tarjetas y aviso parcial; cambiar `Track` y un Género con tarjetas visibles → se descartan y "Sugerir ideas" sigue funcionando.
+  6. Guardar con tarjetas visibles → vuelve a la lista; relanzar la app conserva exactamente el body final (sin metadatos de sugerencias).
+  7. Editar Nota existente: añadir + Guardar → persiste; pedir de nuevo + Cancelar → el body previo no cambia.
+  8. Convivencia: propuesta de clasificación visible + 2 tarjetas de contenido; "Añadir" una idea no limpia la clasificación.
+  9. Parcial real por dedupe contra el body: aviso "Playbook devolvió una sola idea. Puedes pedir de nuevo." con 1 tarjeta.
+  10. DB volcada a `playbook-smoke.db`: `PRAGMA user_version = 8`; tablas = `android_metadata`, `attachment`, `embedding`, `game_project*`, `note`, `note_genre`, `note_link`; sin objetos que contengan `suggest`; `note.body` con las ideas anexadas y `track=mecánicas`, `note_genre=JRPG`.
+  - Datos del emulador: la nota de smoke se borró desde la app al terminar; la lista vuelve a "Todavía no hay notas" (estado previo). Evidencia/capturas en `composeApp/build/smoke-evidence/note-content-suggestions/` (ignorado por git).
+- Files or artifacts updated: `core/.../ai/{NoteContentSuggestions.kt,FakeAiClient.kt}`, `core/src/commonTest/.../NoteContentSuggestionCheck.kt`, `core/src/{androidUnitTest,iosTest}/.../NoteContentSuggestion*Test.kt`, `composeApp/.../{NoteEditorScreen,App}.kt`, `ARCHITECTURE.md`, `CONSTRAINTS.md`, `DESIGN.md`, `docs/technical-discovery.md`, `docs/risks-and-open-questions.md`, `AGENTS.md`, `feature_list.json`, `PROGRESS.md`, `docs/specs/note-content-suggestions.md`.
+- Known risk or unresolved issue: parser heurístico y calidad real del chat no verificables con fake (follow-up key-gated); `Error`/`InvalidResponse` no alcanzables con el fake de producción (cubiertos por tests); sin timeout propio (un transporte lento puede demorar "Sugiriendo ideas…", Guardar no espera); `Loading` no se pudo capturar porque el fake responde al instante; duplicación deliberada del parser respecto de Brainstorming.
+- Next best step: validación independiente con `feature-validator`; no commit/push/merge desde esta sesión.
+
+### Session 098 (note-content-suggestions — validación independiente)
+
+- Date: 2026-10-21
+- Goal: validar de forma independiente `docs/specs/note-content-suggestions.md` (worktree `worktree/note-content-suggestions`, rama `feature/note-content-suggestions`, base `origin/develop` `f72ea65`) sin confiar en el reporte del implementer.
+- Completed:
+  - Revisión de código/diff: `NoteContentSuggestions.kt` (servicio, contexto ≤12/300/1200, parser propio, dedupe, truncado, `appendNoteContentSuggestion`), rama del fake, `NoteEditorScreen` (estados/Job/request-id, rutas de descarte, Añadir/Ignorar/Reintentar, ≥48 dp, independencia de clasificación) y wiring en `App` (tres editores).
+  - Verificación re-ejecutada por el validador con IA fake y `--rerun-tasks`.
+  - Smoke Android propio en `emulator-5558` (API 34): body vacío/con texto, 2 tarjetas, Añadir/Ignorar, dos párrafos, descarte por body/Track/Género, convivencia con clasificación, Guardar+relanzar, Cancelar conservando el body y DB v8 sin objetos `suggest`; baseline restaurado con `pm clear` (no se usaron `emulator-5556` ni el Pixel físico).
+  - Controles negativos (a) fake, (b) `\n` y (c) dedupe reproducidos y restaurados byte-idénticos; (d) declarado no automatizable (sin harness UI) y verificado en el smoke.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **37 suites / 119 tests / 0 failures** (`NoteContentSuggestionAndroidTest` 8/0).
+  - `./gradlew :core:iosSimulatorArm64Test -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **37 suites / 119 tests / 0 failures** (iOS no bloqueante).
+  - `./gradlew :composeApp:assembleDebug -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL.
+  - `./gradlew :composeApp:testDebugUnitTest -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; **6 suites / 15 tests / 0 failures**.
+  - `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL (no bloqueante).
+  - `CI=true ./init.sh` → **exit 0**; `git diff --check` → 0; `feature_list.json` válido; `.sqm` sólo `1`…`7`; `Schema.version == 8`; paths protegidos sin cambios.
+- Evidence captured: `docs/validations/note-content-suggestions.md`; capturas/dump del validador en `composeApp/build/smoke-evidence/note-content-suggestions/validator/` (ignorado por git); `feature_list.json` con `accepted`.
+- Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/note-content-suggestions.md`.
+- Known risk or unresolved issue: nits Low no bloqueantes (el truncado puede quedar en 199 caracteres si el carácter 199 es espacio; checkboxes del spec sin marcar). Parser heurístico y calidad real del chat siguen pendientes de smoke key-gated (fuera del gate). Sin timeout propio (Guardar no espera; editar/cancelar corta el `Job`).
+- Next best step: integrar la rama (rebase sobre `origin/develop` actual `ee251e9`; el commit nuevo de develop sólo toca `FirstRunOnboardingScreen`/`PlaybookBrandHeader`) y continuar con `readme-project-documentation` (`not_started`).
