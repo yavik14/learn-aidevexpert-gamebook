@@ -35,17 +35,17 @@ const val DICTATION_TICK_MILLIS: Long = 100L
 /** Mensaje en texto del error: la UI nunca comunica el estado sólo con color. */
 fun VoiceCaptureError.message(): String = when (this) {
     VoiceCaptureError.PERMISSION_DENIED ->
-        "Permiso de micrófono denegado. Habilitalo en los ajustes del sistema y reintentá."
+        "Permiso de micrófono denegado. Habilítalo en los ajustes del sistema y reintenta."
     VoiceCaptureError.UNAVAILABLE ->
         "El dictado no está disponible en este dispositivo."
     VoiceCaptureError.NO_MATCH ->
-        "No se escuchó nada. Probá de nuevo."
+        "No se escuchó nada. Prueba de nuevo."
     VoiceCaptureError.NETWORK ->
-        "No hay conexión para transcribir. Revisá tu red e intentá otra vez."
+        "No hay conexión para transcribir. Revisa tu red e inténtalo otra vez."
     VoiceCaptureError.BUSY ->
-        "El reconocimiento está ocupado. Reintentá en un momento."
+        "El reconocimiento está ocupado. Reintenta en un momento."
     VoiceCaptureError.UNKNOWN ->
-        "No se pudo transcribir. Probá de nuevo."
+        "No se pudo transcribir. Prueba de nuevo."
 }
 
 /**

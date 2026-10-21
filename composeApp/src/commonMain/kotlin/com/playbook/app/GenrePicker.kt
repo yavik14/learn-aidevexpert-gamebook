@@ -38,7 +38,7 @@ import com.playbook.core.model.normalizeGenres
  *   normalizado recibido.
  * - "Catálogo": los 12 Géneros de [GenreCatalog.GENRES], siempre visibles y en
  *   orden de catálogo. Tocar uno lo agrega o lo quita (toggle).
- * - "Género personalizado": campo libre + "Agregar"; se habilita sólo si el texto
+ * - "Género personalizado": campo libre + "Añadir"; se habilita sólo si el texto
  *   no está en blanco. No hay límites de cantidad ni de largo.
  *
  * Toda alta y remoción pasa por [normalizeGenres] (trim, canonización
@@ -47,7 +47,7 @@ import com.playbook.core.model.normalizeGenres
  *
  * La selección se comunica con más que color (`DESIGN.md`): `✓`, borde de 2.dp y
  * estado semántico `selected` en el chip del catálogo. Los chips interactivos
- * usan etiquetas de acción ("Agregar género X"/"Quitar género X"), `role =
+ * usan etiquetas de acción ("Añadir género X"/"Quitar género X"), `role =
  * Role.Button` y un objetivo táctil de al menos 48.dp. Las etiquetas largas se
  * truncan visualmente a una línea con ellipsis; el dato persistido no se recorta.
  */
@@ -121,7 +121,7 @@ internal fun GenrePicker(
                 value = newGenre,
                 onValueChange = { newGenre = it },
                 label = { Text(text = "Género personalizado") },
-                placeholder = { Text(text = "Escribí uno nuevo…") },
+                placeholder = { Text(text = "Escribe uno nuevo…") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
@@ -133,7 +133,7 @@ internal fun GenrePicker(
                 enabled = newGenre.isNotBlank(),
                 modifier = Modifier.defaultMinSize(minHeight = 48.dp),
             ) {
-                Text(text = "Agregar")
+                Text(text = "Añadir")
             }
         }
     }
@@ -166,7 +166,7 @@ private fun CatalogGenreChip(
             .defaultMinSize(minHeight = 48.dp)
             .semantics { this.selected = selected }
             .clickable(
-                onClickLabel = if (selected) "Quitar género $label" else "Agregar género $label",
+                onClickLabel = if (selected) "Quitar género $label" else "Añadir género $label",
                 role = Role.Button,
                 onClick = onClick,
             ),

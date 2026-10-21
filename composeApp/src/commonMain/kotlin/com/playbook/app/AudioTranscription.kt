@@ -27,7 +27,7 @@ sealed interface AudioTranscriptionUiState {
 
 /** Aviso tras aplicar el texto al borrador; recuerda que hay que Guardar. */
 const val TRANSCRIPTION_APPLIED_NOTICE: String =
-    "Transcripción aplicada. Guardá para conservarla."
+    "Transcripción aplicada. Guarda para conservarla."
 
 /** Mensaje textual del estado (o `null` si no hay nada que mostrar). */
 fun AudioTranscriptionUiState.message(): String? = when (this) {
@@ -38,7 +38,7 @@ fun AudioTranscriptionUiState.message(): String? = when (this) {
     AudioTranscriptionUiState.Empty -> "La transcripción quedó vacía"
     AudioTranscriptionUiState.Unavailable -> "No se pudo leer el audio adjunto"
     AudioTranscriptionUiState.Failed ->
-        "No se pudo transcribir. Revisá la conexión e intentá de nuevo"
+        "No se pudo transcribir. Revisa la conexión e inténtalo de nuevo"
 }
 
 /** Etiqueta del botón: invita a transcribir o a reintentar tras un error. */

@@ -783,17 +783,17 @@ fun App(
 
                         ImageGenerationResult.EmptyPrompt ->
                             imageGenerationState = ImageGenerationUiState.Error(
-                                "Escribí una descripción para generar la imagen.",
+                                "Escribe una descripción para generar la imagen.",
                             )
 
                         ImageGenerationResult.InvalidImage ->
                             imageGenerationState = ImageGenerationUiState.Error(
-                                "La IA devolvió una imagen inválida. Intentá de nuevo.",
+                                "Playbook devolvió una imagen inválida. Inténtalo de nuevo.",
                             )
 
                         is ImageGenerationResult.Failed ->
                             imageGenerationState = ImageGenerationUiState.Error(
-                                "No se pudo generar la imagen. Revisá la conexión e intentá de nuevo.",
+                                "No se pudo generar la imagen. Revisa la conexión e inténtalo de nuevo.",
                             )
                     }
                 } catch (cancel: CancellationException) {
@@ -804,7 +804,7 @@ fun App(
                         TextImageGenerationService.SUMMARY_FAILED,
                     )
                     imageGenerationState = ImageGenerationUiState.Error(
-                        "No se pudo generar la imagen. Intentá de nuevo.",
+                        "No se pudo generar la imagen. Inténtalo de nuevo.",
                     )
                 } finally {
                     generationJob = null
@@ -1073,7 +1073,7 @@ fun App(
             AlertDialog(
                 onDismissRequest = { onboardingError = false },
                 title = { Text(text = "No se pudo crear el Proyecto") },
-                text = { Text(text = "Intentá de nuevo.") },
+                text = { Text(text = "Inténtalo de nuevo.") },
                 confirmButton = {
                     TextButton(onClick = { onboardingError = false }) {
                         Text(text = "Aceptar")
@@ -1085,7 +1085,7 @@ fun App(
         if (showImageSourceDialog) {
             AlertDialog(
                 onDismissRequest = { showImageSourceDialog = false },
-                title = { Text(text = "Agregar imagen") },
+                title = { Text(text = "Añadir imagen") },
                 text = {
                     Column {
                         TextButton(
@@ -1112,7 +1112,7 @@ fun App(
                                 showGenerateImageDialog = true
                             },
                         ) {
-                            Text(text = "Generar con IA")
+                            Text(text = "Generar con Playbook")
                         }
                     }
                 },
@@ -1127,7 +1127,7 @@ fun App(
         imageError?.let { error ->
             AlertDialog(
                 onDismissRequest = { imageError = null },
-                title = { Text(text = "No se pudo agregar la imagen") },
+                title = { Text(text = "No se pudo añadir la imagen") },
                 text = { Text(text = imageErrorMessage(error)) },
                 confirmButton = {
                     TextButton(onClick = { imageError = null }) {
@@ -1151,11 +1151,11 @@ fun App(
 
 private fun imageErrorMessage(error: ImageCaptureError): String = when (error) {
     ImageCaptureError.PERMISSION_DENIED ->
-        "Permiso de cámara denegado. Habilitalo en los ajustes del sistema para usarla."
+        "Permiso de cámara denegado. Habilítalo en los ajustes del sistema para usarla."
     ImageCaptureError.CAMERA_UNAVAILABLE ->
         "La cámara no está disponible en este dispositivo."
     ImageCaptureError.READ_FAILED ->
         "No se pudo leer la imagen elegida."
     ImageCaptureError.UNKNOWN ->
-        "Ocurrió un error al agregar la imagen."
+        "Ocurrió un error al añadir la imagen."
 }

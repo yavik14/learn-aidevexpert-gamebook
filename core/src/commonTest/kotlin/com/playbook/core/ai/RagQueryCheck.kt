@@ -387,6 +387,14 @@ suspend fun verifyRagRealChatContract(driver: SqlDriver) {
     assertEquals("pregunta", request.prompt)
     assertEquals(listOf(note.body), request.context)
     assertEquals(RAG_INSTRUCTIONS, request.instructions)
+    assertTrue(
+        RAG_INSTRUCTIONS.contains("español de España"),
+        "las instrucciones RAG deben pedir español de España",
+    )
+    assertFalse(
+        RAG_INSTRUCTIONS.contains("Respondé"),
+        "las instrucciones RAG no deben usar voseo",
+    )
     assertEquals(0.2, request.temperature)
     assertEquals(600, request.maxTokens)
     assertTrue(diagnostics.snapshot().isEmpty(), "una respuesta válida no registra fallo")

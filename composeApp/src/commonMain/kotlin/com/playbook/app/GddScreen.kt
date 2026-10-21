@@ -213,7 +213,7 @@ private fun ProjectCard(project: GddProjectBlock?) {
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Completalo desde Brainstorming.",
+                        text = "Complétalo desde Brainstorming.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -251,7 +251,7 @@ private fun EmptyGdd(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Tus ideas capturadas van a aparecer acá, agrupadas por track.",
+            text = "Tus ideas capturadas aparecerán aquí, agrupadas por track.",
             style = MaterialTheme.typography.bodyMedium,
         )
     }

@@ -5,6 +5,7 @@
          photo picker del sistema y no requiere permisos de almacenamiento. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />

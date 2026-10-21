@@ -52,9 +52,10 @@
 - `tts-read-aloud` `accepted` (2026-10-20; Session 085 implementación + Session 086 cierre; validación independiente `accept` en `docs/validations/tts-read-aloud.md`): lectura en voz alta de la respuesta Q&A, el `body` del editor (Nueva/Edición) y la narración del GDD. `ReadAloudService`/`normalizeReadAloudText` (vacío/4096) y `buildGddNarration` en `:core`; `ReadAloudPlayer` expect/actual (Android `MediaPlayer`+`MediaDataSource` en memoria; iOS mínimo sin playback) y estado único con request-id en `App`; `FakeTtsClient` devuelve WAV PCM determinista (`audio/wav`). Sin Adjuntos, archivos/caché, esquema (v8), deps, audio focus ni timeout propio. Post-rebase sobre `origin/develop` `6a89317` (con `save-answer-as-note`): `:core` 36 suites/107 tests/0 failures en Android/JVM e iOS, `:composeApp` 4/10/0, `assembleDebug`/link iOS y `CI=true ./init.sh` exit 0; controles negativos y smoke Android revisado. Ver `docs/specs/tts-read-aloud.md` y `docs/validations/tts-read-aloud.md`.
 
 - `main-screen-playbook-shell` `accepted` (2026-10-20; Session 087 implementación + Session 088 cierre; validación independiente `accept` en `docs/validations/main-screen-playbook-shell.md`): pantalla principal con `TopAppBar` “Playbook” + acciones GDD/Brainstorming/Preguntar (fallback textual `GDD`/`✦`/`?`, `contentDescription` único) y speed-dial `+`/`×` con Nota de texto/Galería/Cámara, scrim y Back; “Galería” conserva el diálogo “Agregar imagen”/“Generar con IA” y “Cámara” lanza el picker directo. El dictado sale de la principal y queda sólo en el editor. Se agregó `PlaybookBackHandler` expect/actual porque `androidx.compose.ui.backhandler` no está en el classpath Android. Sin cambios de esquema, deps, `init.sh`, `:core` ni otros destinos. Gate Android + link iOS OK; smoke en emulador dedicado API 31 con capturas 01–14. Ver `docs/specs/main-screen-playbook-shell.md`.
-- Current state: **47 `accepted`, 1 `not_started`, 0 `passing` y 1 `blocked`** (49 total). `save-answer-as-note`, `tts-read-aloud`, `main-screen-playbook-shell` y `ai-real-chat` quedaron `accepted`; sigue `readme-project-documentation` (cierre del MVP). Ver `feature_list.json`.
+- `spain-spanish-copy` `accepted` (2026-10-21; Session 091 implementación + Session 092 cierre; validación independiente `accept`): copy visible migrado a español de España (tuteo, sin voseo/regionalismos), “Añadir” en lugar de “Agregar” y “Playbook”/“Generar con Playbook” en lugar de “La IA”/“Generar con IA”. Incluye prompts de IA (sin cambiar su lógica) y cambios de soporte (`INTERNET`, `playbook.ai.mode=real`, marca Playbook en el wizard). **Excepción aceptada:** el repo queda en modo real por defecto; el gate y todo build/instalación manual usan `-Pplaybook.ai.mode=fake` (o key fuera del repo). Ver `docs/specs/spain-spanish-copy.md`.
+- Current state: **48 `accepted`, 0 `passing`, 1 `not_started` y 1 `blocked`** (50 total). `spain-spanish-copy` quedó `accepted`; sigue `readme-project-documentation` (cierre del MVP). Ver `feature_list.json`.
 - Current blocker: `ios-release-pipeline-first-upload` (account-gated).
-- Last verified at: 2026-10-20.
+- Last verified at: 2026-10-21.
 
 ## Session Log
 
@@ -1998,3 +1999,40 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/ai-real-chat.md`; código/docs de la feature ya en `309cd26` (más el commit de cierre de estado).
 - Known risk or unresolved issue: Lows no bloqueantes del validador (fences con preámbulo, heurísticas de ruido, `__` en código inline); parser heurístico, el smoke no prueba que el proveedor honre los parámetros, sin reintentos/streaming, iOS fake. Nada bloqueante.
 - Next best step: PR #57 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/57`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
+
+### Session 091 (spain-spanish-copy — implementación)
+
+- Date: 2026-10-21
+- Goal: implementar `spain-spanish-copy` (spec `docs/specs/spain-spanish-copy.md`) y dejarla `passing` para validación independiente.
+- Completed:
+  - Spec nueva `docs/specs/spain-spanish-copy.md` y entrada en `feature_list.json` antes de `readme-project-documentation` (`area: ui`, `depends_on`: `main-screen-playbook-shell`, `gdd-document-hybrid`, `ai-real-chat`).
+  - Copy visible migrado a español de España en `GenrePicker`, `App`, `RelatedNotesScreen`, `GddScreen`, `Dictation`, `NotesListScreen`, `FirstRunOnboardingScreen`, `NoteEditorScreen`, `ImageGenerationDialog`, `BrainstormingWizardScreen`, `AskNotesScreen` y `AudioTranscription`: tuteo, “Añadir”, “Playbook”/“Generar con Playbook”, “aquí” en lugar de “acá”.
+  - Prompts actualizados en `BrainstormingSuggestions.kt`, `RagQueryService.kt` y `openai/OpenAiAdapters.kt`: “Eres Playbook”, “español de España (castellano)”, sin voseo; sin cambios de marcadores, contexto, temperatura, tokens ni contrato.
+  - Cambios de soporte incluidos: `INTERNET` en `AndroidManifest.xml`, `playbook.ai.mode = real` al final de `gradle.properties` y marca Playbook en los textos de `BrainstormingWizardScreen`. **Excepción aceptada por el autor:** el repo queda en modo `real` por defecto; el gate y todo build/instalación manual deben usar `-Pplaybook.ai.mode=fake` (o configurar key fuera del repo). El build por defecto sin flag/key falla por diseño y no es criterio de esta feature.
+  - Tests: `AudioTranscriptionTest` con el mensaje nuevo; aserciones es-ES en `RagQueryCheck` y `BrainstormingSuggestionCheck`; nuevo `DictationCopyTest` puro.
+  - `DESIGN.md` y `ARCHITECTURE.md` actualizados en referencias vigentes; evidencia histórica (`docs/validations/`, entradas previas) intacta.
+- Verification run:
+  - `./gradlew :core:testDebugUnitTest :composeApp:testDebugUnitTest :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake` → BUILD SUCCESSFUL; `:core` **36 suites/111 tests/0 failures** y `:composeApp` **5 suites/12 tests/0 failures**; link iOS OK.
+  - `ANDROID_HOME=… CI=true ./init.sh` → exit 0 (Android-only, IA fake).
+  - Greps de barrido (voseo/regionalismos, `Agregar`, `IA`, `La IA`, `Generar con IA`) → 0 hits de copy visible; sólo comentarios internos con “acá” y usos técnicos de “runtime de IA”.
+  - Smoke Android fake en `emulator-5556`: onboarding (“Puedes empezar…”), lista vacía, “Añadir imagen”, “Generar con Playbook”, diálogo de imagen, `GenrePicker` (“Añadir”), dictado denegado (“Habilítalo… reintenta”), Brainstorming fake, Q&A, GDD y Notas relacionadas (“las verás aquí”).
+- Files or artifacts updated: `docs/specs/spain-spanish-copy.md`; 12 archivos UI; 3 archivos de prompts; `AudioTranscriptionTest.kt`, `RagQueryCheck.kt`, `BrainstormingSuggestionCheck.kt`, `DictationCopyTest.kt`; `AndroidManifest.xml`, `gradle.properties`; `DESIGN.md`, `ARCHITECTURE.md`, `feature_list.json`, `PROGRESS.md`.
+- Known risk or unresolved issue: smoke manual (sin E2E persistente); quedan comentarios internos con “acá” y términos técnicos “runtime de IA” que no son copy visible. `gradle.properties` trackea `playbook.ai.mode = real` como excepción aceptada: el gate y los build/instalación manuales deben usar `-Pplaybook.ai.mode=fake` o configurar la key fuera del repo. Sin bloqueos.
+- Next best step: validación independiente con `feature-validator`; no commitear/pushear desde esta sesión sin indicación explícita.
+
+### Session 092 (spain-spanish-copy — cierre e integración)
+
+- Date: 2026-10-21
+- Goal: cerrar `spain-spanish-copy` (`passing` → `accepted`), revalidar, commitear, rebasar sobre `origin/develop`, pushear y abrir PR sin mergear.
+- Completed:
+  - Reparado el Medium de la validación previa: `ARCHITECTURE.md` con "Guarda" (no "Guardá") y "Complétalo" (no "Completalo"); `AudioTranscriptionTest` asserta `TRANSCRIPTION_APPLIED_NOTICE`. `AiRuntime.kt:54` se conserva como cadena interna no visible, justificada.
+  - Excepción de producto aceptada y documentada en spec, `feature_list.json` y `PROGRESS.md`: `gradle.properties` trackea `playbook.ai.mode = real`; el gate y todo build/instalación manual usan `-Pplaybook.ai.mode=fake` (o key fuera del repo). El build por defecto sin flag/key falla por diseño y no es criterio de aceptación.
+  - Revalidación independiente con `feature-validator` → **`accept`**, sin hallazgos Critical/High/Medium/Low que requieran reparación; `feature_list.json` actualizado a `accepted`.
+- Verification run:
+  - `ANDROID_HOME=… ./gradlew :core:testDebugUnitTest :composeApp:testDebugUnitTest :composeApp:assembleDebug :composeApp:linkDebugFrameworkIosSimulatorArm64 -Pplaybook.ai.mode=fake --rerun-tasks` → BUILD SUCCESSFUL; `:core` **36 suites/111 tests/0 failures**, `:composeApp` **5 suites/12 tests/0 failures**; link iOS OK.
+  - `ANDROID_HOME=… CI=true ./init.sh` → exit 0 (Android-only, IA fake).
+  - Greps de barrido → 0 hits de copy visible con voseo, "Agregar", "Generar con IA" o "La IA"; sólo comentarios/cadenas internas no visibles justificados.
+  - Smoke Android fake reconfirmado en `emulator-5556` (onboarding, lista vacía, "Añadir imagen", "Generar con Playbook"); evidencia en `composeApp/build/smoke-evidence/spain-spanish-copy/`.
+- Files or artifacts updated: `docs/specs/spain-spanish-copy.md`, `ARCHITECTURE.md`, `DESIGN.md`, `feature_list.json`, `PROGRESS.md`, código/tests de la feature.
+- Known risk or unresolved issue: el repo queda con modo IA real por defecto (excepción aceptada); los builds manuales deben pasar `-Pplaybook.ai.mode=fake` o configurar key. Smoke manual sin E2E persistente. Sin bloqueos.
+- Next best step: commit convencional, rebase sobre `origin/develop`, re-verificar, push de la rama y PR contra `develop` sin mergear.

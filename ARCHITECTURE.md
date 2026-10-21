@@ -419,8 +419,8 @@ composeApp (Android app / commonMain) ──▶ core
   (bytes no vacíos, `mimeType` no vacío e `image/*`; inválido → `InvalidImage`).
   `AiClientException` → `Failed` con diagnóstico `IMAGE`/`image_generation_failed`;
   la imagen inválida registra `image_generation_invalid`. No persiste ni indexa.
-  La UI (`App` + `ImageGenerationDialog`) ofrece "Generar con IA" desde el
-  diálogo "Agregar imagen" de la lista, muestra carga/error/cancelación y al
+  La UI (`App` + `ImageGenerationDialog`) ofrece "Generar con Playbook" desde el
+  diálogo "Añadir imagen" de la lista, muestra carga/error/cancelación y al
   éxito navega a `CreateWithImage(PickedImage)`; el Guardar existente
   (`saveNoteWithImage`) persiste el Adjunto `IMAGE` con ruta relativa/mime real,
   sin reindexar por la imagen. `FakeImageClient` devuelve un PNG 1×1 decodificable
@@ -447,7 +447,7 @@ composeApp (Android app / commonMain) ──▶ core
   resultado es `Success(partial)` / `Failed` / `InvalidResponse`. No persiste ni
   crea Notas. `FakeAiClient` devuelve 2 ideas parseables cuando el prompt contiene
   el marcador (determinista, sin red). `BrainstormingWizardScreen` mantiene el
-  estado efímero por paso y sólo muta el borrador con Usar/Agregar; las
+  estado efímero por paso y sólo muta el borrador con Usar/Añadir; las
   sugerencias se descartan al navegar.
 - **Chat real de Brainstorming/Q&A (`ai-real-chat`, 2026-10-20):** sin duplicar
   `ai-fake-real-switch`, el adaptador `OpenAiAiClient.generate` acepta
@@ -698,7 +698,7 @@ composeApp (Android app / commonMain) ──▶ core
   sin `ViewModel`/`Lifecycle` y sin Flow ni librería de navegación; las llamadas
   `suspend` de IA se invocan con `rememberCoroutineScope()`. Obtiene el
   `ImagePicker` y el `AttachmentFileStore` por
-  `remember`; la acción de imagen abre un `AlertDialog` "Agregar imagen"
+  `remember`; la acción de imagen abre un `AlertDialog` "Añadir imagen"
   (Cámara/Galería/Cancelar), `onResult` navega a `CreateWithImage` y `onError`
   muestra un `AlertDialog` accionable.
 - **Onboarding del Proyecto (`first-run-project-onboarding`):** `App` lee el
@@ -720,12 +720,12 @@ composeApp (Android app / commonMain) ──▶ core
   (`GDD`/`✦`/`?` como fallback textual sin `material-icons`, cada una con un único
   `contentDescription`: “Ver GDD”, “Brainstorming”, “Preguntar”). El speed-dial
   alterna `+`/`×` y apila “Nota de texto”, “Galería” (`contentDescription`
-  “Galería y generar imagen con IA”) y “Cámara”; un scrim dentro del contenido
+  “Galería y generar imagen con Playbook”) y “Cámara”; un scrim dentro del contenido
   cierra al tocar y un `PlaybookBackHandler` (`expect`/`actual`; Android usa
   `androidx.activity.compose.BackHandler`, iOS no-op) cierra con Back. “Galería”
-  abre el diálogo “Agregar imagen” existente (conserva Cámara/Galería/“Generar
-  con IA”); “Cámara” lanza `ImageSource.CAMERA` directo. Estado vacío (“Todavía
-  no hay notas”) con CTA “Crear primera nota” + “Agregar imagen”; y estado con
+  abre el diálogo “Añadir imagen” existente (conserva Cámara/Galería/“Generar
+  con Playbook”); “Cámara” lanza `ImageSource.CAMERA` directo. Estado vacío (“Todavía
+  no hay notas”) con CTA “Crear primera nota” + “Añadir imagen”; y estado con
   notas (`LazyColumn` de `Card`s clickeables que llaman `onEdit(note.id)`).
   `App` cablea `onOpenImageSource`/`onCaptureCamera` y ya no pasa `onDictate`.
   Cada tarjeta muestra
@@ -763,7 +763,7 @@ composeApp (Android app / commonMain) ──▶ core
   (nunca parcial) y llama `GameProjectRepository.save`; si falla, muestra un
   `AlertDialog` y no navega. `brainstorming-ai-suggestions` agrega un botón
   "Sugerir" por paso: pide 2 ideas a `BrainstormingSuggestionService`, las muestra
-  como tarjetas efímeras y el usuario decide con Usar/Agregar o Ignorar; nunca
+  como tarjetas efímeras y el usuario decide con Usar/Añadir o Ignorar; nunca
   auto-rellena ni guarda, y las sugerencias se descartan al cambiar de paso,
   cancelar o guardar. `brainstorming-note-per-step` agrega "Guardar como Nota"
   en cada paso: usa el mismo `buildDraft()` + el mapper puro, muestra un
@@ -774,7 +774,7 @@ composeApp (Android app / commonMain) ──▶ core
 - **`NoteEditorScreen`**: editor de texto para crear (`isEditing = false`) y editar
   (`isEditing = true`). `OutlinedTextField` multilínea para `body`; selector de
   `track` ("Sin track" + `Track.entries`) que comunica la selección con marca
-  textual "✓", borde y color; campo "Nuevo género" + botón "Agregar" (aplica
+  textual "✓", borde y color; campo "Nuevo género" + botón "Añadir" (aplica
   `normalizeGenres`) y chips de Género con control de quitar "×" (`clickable` con
   `onClickLabel`/`role = Role.Button`); `Guardar` deshabilitado si `body.isBlank()`
   **y** no hay `initialImage` (una nota sólo-imagen es válida); `Cancelar`; y en
@@ -792,7 +792,7 @@ composeApp (Android app / commonMain) ──▶ core
   (default el primero), y `Transcribir`/`Transcribiendo…`/`Reintentar` con
   mensajes textuales para vacío, archivo ilegible y fallo de IA. El texto llega
   por `transcribedText` (job en `App`) y se aplica una sola vez: `body` vacío →
-  directo + aviso "Transcripción aplicada. Guardá para conservarla."; `body` con
+  directo + aviso "Transcripción aplicada. Guarda para conservarla."; `body` con
   texto → `AlertDialog` con vista previa y "Anexar" (misma semántica que
   `appendDictation`)/"Reemplazar" (sólo el texto)/"Cancelar" (sin cambios).
   `onTranscribedTextConsumed` limpia el texto de `App`; nunca hay auto-guardado.
@@ -960,7 +960,7 @@ composeApp (Android app / commonMain) ──▶ core
   (`NoteThumbnail`, misma degradación tolerante que la lista) y apertura de la
   Nota. Todo se comunica con texto, no sólo color (`DESIGN.md`).
 - **Estados vacíos:** `project == null` → "Todavía no hay Proyecto" +
-  "Completalo desde Brainstorming." (sin CTA) y las Notas siguen visibles;
+  "Complétalo desde Brainstorming." (sin CTA) y las Notas siguen visibles;
   Proyecto sin datos → "Proyecto sin datos adicionales"; `notes.isEmpty()` →
   ficha (si existe) + "Todavía no hay notas", sin secciones de Track vacías. Sin
   Proyecto ni Notas ambos placeholders conviven sin crash. `App` pasa `project`

@@ -107,7 +107,7 @@ diseño de juegos para un único autor. Se organiza en tres `Track`
 
 La app genera conceptos visuales desde texto con el modelo `image` (runtime
 fake/real del MVP) y los adjunta a una Nota. La superficie es la acción
-**"Generar con IA"** dentro del diálogo "Agregar imagen" de la pantalla
+**"Generar con Playbook"** dentro del diálogo "Añadir imagen" de la pantalla
 principal: prompt → carga → previsualización en el editor → Guardar. La imagen
 resultante se ve con las miniaturas existentes (tarjeta de Nota). No hay
 historial de prompts, edición/retocado ni múltiples imágenes por Nota.
@@ -157,7 +157,7 @@ Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
   `material-icons` en `commonMain`); si un glifo no renderiza, se usa `*`.
 - **FAB desplegable:** "Nueva nota" → Nota de texto / Galería / Cámara. Estado
   local `+`/`×`, acciones apiladas, scrim y cierre por Back (Android). “Galería”
-  abre el diálogo “Agregar imagen” (conserva “Generar con IA”); “Cámara” lanza el
+  abre el diálogo “Añadir imagen” (conserva “Generar con Playbook”); “Cámara” lanza el
   picker directo.
 - **Selector de Track**; **Chip de Track**, **Chip de Género** (catálogo + libre),
   **Chip de categoría de mecánica** (`Movimiento`/`Interacción`/`Conflicto`).
@@ -165,8 +165,8 @@ Radios suaves (`sm`/`md`). Superficies tipo papel; miniaturas con recorte
 - **Dictado inline:** barra de progreso de **30s** con auto-stop.
 - **Badge de Estado:** `capturada`/`pendiente`/`indexada`/`fallida`.
 - **Wizard de Brainstorming:** stepper 9 pasos con progreso (Paso X/9) y 2
-  sugerencias por paso: botón "Sugerir", tarjetas con "Usar"/"Agregar" e
-  "Ignorar"; la IA sugiere y el usuario decide. Se descartan al navegar.
+  sugerencias por paso: botón "Sugerir", tarjetas con "Usar"/"Añadir" e
+  "Ignorar"; Playbook sugiere y el usuario decide. Se descartan al navegar.
 - **Referencia de Nota (cita):** respuestas del Q&A.
 - **Superficies de IA:** control **play/pausa** (tts), acción **Generar imagen**,
   acción **Transcribir** (Adjunto AUDIO), **sugerencia de clasificación**

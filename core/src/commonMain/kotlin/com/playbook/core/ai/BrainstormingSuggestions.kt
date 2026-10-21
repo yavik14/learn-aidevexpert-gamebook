@@ -108,11 +108,11 @@ internal fun buildBrainstormingPrompt(step: BrainstormingStep): String = buildSt
     appendLine(BRAINSTORMING_PROMPT_MARKER)
     appendLine("STEP=${step.name}")
     appendLine(
-        "Sos un asistente de diseño de videojuegos. Sugerí exactamente 2 ideas " +
+        "Eres Playbook, un asistente de diseño de videojuegos. Sugiere exactamente 2 ideas " +
             "para el paso \"${step.label}\".",
     )
     appendLine(
-        "Respondé sólo con 2 líneas, una idea por línea, sin títulos, " +
+        "Responde solo con 2 líneas, una idea por línea, sin títulos, " +
             "explicaciones ni markdown.",
     )
     appendLine(
@@ -120,12 +120,13 @@ internal fun buildBrainstormingPrompt(step: BrainstormingStep): String = buildSt
             "ni comillas.",
     )
     appendLine(
-        "Escribí en español, máximo 200 caracteres por idea y no repitas lo que " +
+        "Escribe en español de España (castellano), sin voseo, máximo 200 caracteres " +
+            "por idea y no repitas lo que " +
             "ya está en el contexto.",
     )
     if (step == BrainstormingStep.KEY_MECHANICS) {
         appendLine(
-            "Para cada idea usá el formato \"Movimiento: descripción\", " +
+            "Para cada idea usa el formato \"Movimiento: descripción\", " +
                 "\"Interacción: descripción\" o \"Conflicto: descripción\".",
         )
     }

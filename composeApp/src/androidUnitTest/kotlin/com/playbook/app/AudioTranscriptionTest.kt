@@ -20,6 +20,10 @@ class AudioTranscriptionTest {
 
     @Test
     fun transcriptionStatesMapToStableText() {
+        assertEquals(
+            "Transcripción aplicada. Guarda para conservarla.",
+            TRANSCRIPTION_APPLIED_NOTICE,
+        )
         assertNull(AudioTranscriptionUiState.Idle.message())
         assertNull(AudioTranscriptionUiState.Transcribing.message())
         assertEquals("La transcripción quedó vacía", AudioTranscriptionUiState.Empty.message())
@@ -28,7 +32,7 @@ class AudioTranscriptionTest {
             AudioTranscriptionUiState.Unavailable.message(),
         )
         assertEquals(
-            "No se pudo transcribir. Revisá la conexión e intentá de nuevo",
+            "No se pudo transcribir. Revisa la conexión e inténtalo de nuevo",
             AudioTranscriptionUiState.Failed.message(),
         )
 
