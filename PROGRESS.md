@@ -2181,3 +2181,19 @@
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/note-content-suggestions.md`.
 - Known risk or unresolved issue: nits Low no bloqueantes (el truncado puede quedar en 199 caracteres si el carácter 199 es espacio; checkboxes del spec sin marcar). Parser heurístico y calidad real del chat siguen pendientes de smoke key-gated (fuera del gate). Sin timeout propio (Guardar no espera; editar/cancelar corta el `Job`).
 - Next best step: integrar la rama (rebase sobre `origin/develop` actual `ee251e9`; el commit nuevo de develop sólo toca `FirstRunOnboardingScreen`/`PlaybookBrandHeader`) y continuar con `readme-project-documentation` (`not_started`).
+
+### Session 099 (note-content-suggestions — integración)
+
+- Date: 2026-10-21
+- Goal: rebasar `feature/note-content-suggestions` sobre `origin/develop` y dejar la rama lista para PR, sin mergear.
+- Completed:
+  - `git fetch origin develop`; `origin/develop` = `ee251e9` ("App icon on FirstRunOnboardingScreen", toca `FirstRunOnboardingScreen.kt` y `PlaybookBrandHeader.kt`).
+  - `git rebase origin/develop` → **sin conflictos**; el commit de la feature quedó reescrito como `efa71fd` ("feature: sugiere contenido en el editor de notas"). Sin merge commit ni squash.
+  - Re-ejecución post-rebase con IA fake (`-Pplaybook.ai.mode=fake`): `:core:testDebugUnitTest` 37 suites/119 tests/0 failures; `:core:iosSimulatorArm64Test` 37/119/0; `:composeApp:assembleDebug` BUILD SUCCESSFUL; `:composeApp:testDebugUnitTest` 6 suites/15 tests/0 failures; `:composeApp:linkDebugFrameworkIosSimulatorArm64` BUILD SUCCESSFUL; `CI=true ./init.sh` exit 0; `git diff --check` limpio y `feature_list.json` válido.
+  - Esquema sin cambios: `.sqm` 1..7 y `Schema.version == 8` (verificado por los checks de migración de `:core`).
+  - Sin cambios de código/alcance ni de estado: `feature_list.json` sigue `accepted`; se agregó una línea de evidencia de integración.
+- Verification run: comandos de arriba, todos en verde; el gate Android-only volvió a pasar tras el rebase.
+- Evidence captured: `feature_list.json` (evidencia de integración); `PROGRESS.md`.
+- Files or artifacts updated: `PROGRESS.md`, `feature_list.json`.
+- Known risk or unresolved issue: nits Low de la validación (truncado a 199 si el carácter 199 es espacio; checkboxes del spec sin marcar), parser heurístico y calidad real key-gated, sin timeout propio. No bloqueantes.
+- Next best step: push de la rama y PR contra `develop` (sin merge); después `readme-project-documentation` (`not_started`).
