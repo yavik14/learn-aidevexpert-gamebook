@@ -2034,5 +2034,7 @@
   - Greps de barrido → 0 hits de copy visible con voseo, "Agregar", "Generar con IA" o "La IA"; sólo comentarios/cadenas internas no visibles justificados.
   - Smoke Android fake reconfirmado en `emulator-5556` (onboarding, lista vacía, "Añadir imagen", "Generar con Playbook"); evidencia en `composeApp/build/smoke-evidence/spain-spanish-copy/`.
 - Files or artifacts updated: `docs/specs/spain-spanish-copy.md`, `ARCHITECTURE.md`, `DESIGN.md`, `feature_list.json`, `PROGRESS.md`, código/tests de la feature.
+- Commit: `281d729` (`feature(ui): migra el copy a español de España y voz Playbook`). Rebase sobre `origin/develop` `547b024` sin conflictos (rama ya al día); tests/gate/link re-ejecutados en verde.
+- Push: `origin/feature/spain-spanish-copy`; PR #58 abierto contra `develop`.
 - Known risk or unresolved issue: el repo queda con modo IA real por defecto (excepción aceptada); los builds manuales deben pasar `-Pplaybook.ai.mode=fake` o configurar key. Smoke manual sin E2E persistente. Sin bloqueos.
-- Next best step: commit convencional, rebase sobre `origin/develop`, re-verificar, push de la rama y PR contra `develop` sin mergear.
+- Next best step: PR #58 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/58`) abierto contra `develop`; no mergear (lo hace la sesión integradora).
