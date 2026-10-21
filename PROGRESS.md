@@ -2114,5 +2114,8 @@
   - Pre-rebase: `CI=true ./init.sh` exit 0; `assembleDebug` OK; `testDebugUnitTest` + link iOS OK (5 suites / 14 tests / 0 failures; `PlaybookContrastTest` 3/0); greps del spec sin hallazgos.
   - Rebase sobre `origin/develop` `9a3837b` (`spain-spanish-copy`) con conflictos resueltos preservando copy es-ES y design system; post-rebase `CI=true ./init.sh` exit 0, `assembleDebug` OK, tests + link iOS OK (6 suites / 15 tests / 0 failures; `PlaybookContrastTest` 3/0) y smoke mínimo en `emulator-5556` (3 acciones + `Volver` clickeables, scrim, font scale 1.0). Evidencia en `composeApp/build/smoke-evidence/design-system-brand-header/postrebase/`.
 - Files or artifacts updated: `feature_list.json`, `PROGRESS.md`, `AGENTS.md`, `docs/validations/design-system-brand-header.md`, `DESIGN.md`.
+- Commit: `6346fec` (`feature(ui): implementa design system Playbook y cabecera de marca`), rebasado sobre `origin/develop` `9a3837b` con conflictos resueltos preservando `spain-spanish-copy`.
+- Push: `origin/feature/design-system-brand-header`.
+- PR: #59 (`https://github.com/yavik14/learn-aidevexpert-gamebook/pull/59`) abierto contra `develop`, sin mergear.
 - Known risk or unresolved issue: follow-up fuera de alcance por semántica anidada en FAB/speed-dial y `ReadAloudButton`.
-- Next best step: rebase sobre `origin/develop`, re-verificación post-rebase, push de la rama y PR contra `develop` (sin merge).
+- Next best step: PR #59 abierto contra `develop`; no mergear (lo hace la sesión integradora).
