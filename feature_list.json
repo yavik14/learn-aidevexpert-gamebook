@@ -1701,5 +1701,39 @@
       "Validación independiente `accept` (2026-10-21, `docs/validations/readme-project-documentation.md`): los 6 hallazgos del repair quedaron resueltos; `ANDROID_HOME=... CI=true ./init.sh` exit 0; README de 240 líneas y 13 secciones; 20 enlaces relativos únicos (0 inexistentes, 17/17 obligatorios); greps de voseo/secrets limpios; `feature_list.json` válido y `git diff --check` limpio; `installDebug -Pplaybook.ai.mode=fake` + `am start` verificados en emulador."
     ],
     "notes": "Tarea de documentación de cierre, no feature de producto. Se ejecuta después de que las 18 features del MVP estén `accepted` y de la validación end-to-end. Debe cubrir app, arquitectura, metodología/harness (planner→implementer→validator, worktrees/sesiones, gate fake), bitácora por fases, verificación, riesgos, lecciones aprendidas y próximos pasos. `PROGRESS.md` y `feature_list.json` siguen siendo la fuente de verdad operativa."
+  },
+  {
+    "id": "video-script-mvp-ai",
+    "area": "docs",
+    "title": "Guion y storyboard del vídeo demo del MVP con IA",
+    "user_visible_behavior": "Existe un guion de 10–15 min, con storyboard y plan de grabación, que explica Playbook, el harness/SDD, las herramientas de IA, la historia del desarrollo, una demo Android con IA real, mejoras y conclusiones.",
+    "depends_on": [
+      "readme-project-documentation"
+    ],
+    "status": "accepted",
+    "verification": [
+      "Existen `docs/video/guion-demo-mvp.md`, `docs/video/storyboard-demo-mvp.md` y `docs/video/plan-grabacion-demo-mvp.md`, enlazados entre sí y con las fuentes durables.",
+      "La duración sumada del guion está entre 10 y 15 min (objetivo 13:30) e incluye recortes previstos.",
+      "Todos los claims sobre producto, arquitectura, historia, métricas y validaciones son trazables a `PROGRESS.md`, `feature_list.json`, specs, validaciones o ADRs.",
+      "Los enlaces relativos resuelven y no hay secrets ni API keys en los documentos.",
+      "`git diff --check` limpio y `CI=true ./init.sh` → exit 0."
+    ],
+    "evidence": [
+      "2026-10-22: creados `docs/video/guion-demo-mvp.md` (675 líneas), `docs/video/storyboard-demo-mvp.md` (370 líneas) y `docs/video/plan-grabacion-demo-mvp.md` (557 líneas); sin assets binarios nuevos.",
+      "Duración verificada por script one-off: bloques 1–7 = 40+80+80+150+330+60+70 = 810 s (13:30); + cierre 40 s = 850 s (14:10); margen hasta 900 s (15:00); demo 45+50+55+35+75+35+35 = 330 s (5:30). Storyboard: P00–P13 = 810 s, P00–P14 = 850 s y P15 = 50 s de margen (máximo 15:00).",
+      "Narración literal en primera persona: 1.983 palabras en la primera entrega; 2.052 tras la reparación del veredicto `revise` (≈13:30 a 152 ppm; dentro del rango 1.900–2.150 del spec). 14 bloques de narración revisados palabra por palabra.",
+      "Enlaces: 109 enlaces relativos en el guion, 41 en el storyboard y 26 en el plan (176 total); script one-off de comprobación de rutas y anclas → 0 enlaces rotos y 0 anclas inexistentes.",
+      "Seguridad: greps de `sk-`, `PLAYBOOK_AI_API_KEY=`, `apiKey=`, `BEGIN ... PRIVATE KEY`, `password=` y `local.properties` sobre `docs/video/` → 0 coincidencias. La ubicación de la key se describe como archivo local ignorado o variable de entorno, sin ruta ni contenido.",
+      "Claims: mapa claim → fuente con 30 filas; snapshot 52 features (51 accepted, 1 blocked), 85 commits, 30 validaciones, 51 specs y sesiones 001–101 verificado contra `origin/develop` y `git rev-list --count HEAD`; métricas marcadas «actualizar al grabar».",
+      "Demo: solo IA real y datos en vivo; 7 superficies con clips de respaldo reales B01–B07; dictado inline y transcripción de Adjuntos fuera y sin simular; pre-flight con smoke completo `RealAiSmokeTest` key-gated de seis modelos; si falla solo `transcribe`, pre-flight manual obligatorio de tts/image/jev y `pm clear` antes de la toma limpia.",
+      "`python3 -m json.tool feature_list.json` → OK; `git diff --check` → limpio.",
+      "`ANDROID_HOME=\"$HOME/Library/Android/sdk\" CI=true ./init.sh` → exit 0, `BUILD SUCCESSFUL` (68 tareas, 33 ejecutadas, 35 en caché); el intento previo sin `ANDROID_HOME` exportado abortó con exit 1 por entorno, no por el cambio.",
+      "Sin cambios en `composeApp/`, `core/`, `iosApp/`, `init.sh`, build files, IA ni esquema; solo docs y artefactos durables.",
+      "2026-10-22 (reparación del veredicto `revise`): A corregido en `plan-grabacion-demo-mvp.md` §5 (smoke todo-o-nada, `transcribe` aborta antes de image/jev, `smokeRealChat` no aísla la demo, pre-flight manual obligatorio de tts/image/jev y `pm clear`); B corregido en `guion-demo-mvp.md` §4.5.4 y `storyboard-demo-mvp.md` P08 (cabecera `GDD — <título>` y solo campos no vacíos; en la toma solo Título en cabecera y Géneros); C corregido con `[ACCIÓN: pulsar “Guardar”]` en guion §4.5.2 y storyboard P06 (persiste Título y Géneros y vuelve a la lista; Cancelar no escribe); D–F documentados como riesgos asumidos en plan §14 con referencias mínimas en guion y storyboard.",
+      "Verificación de la reparación: duraciones intactas (810 s / 850 s / 900 s / 600 s); enlaces y anclas de los tres documentos resueltos; greps de secrets sin coincidencias; `python3 -m json.tool feature_list.json` OK; `git diff --check` limpio; `ANDROID_HOME=\"$HOME/Library/Android/sdk\" CI=true ./init.sh` → exit 0, `BUILD SUCCESSFUL` (68 tareas up-to-date).",
+      "2026-10-22: validación independiente `accept` (`docs/validations/video-script-mvp-ai.md`) tras la reparación del veredicto `revise`. A–C verificados contra el código: `RealAiSmokeTest` ejecuta embedding→chat→tts→transcribe→image→jev y aborta en `transcribe` (image/jev no corren), y `smokeRealChat` solo cubre chat e indexado/RAG; `GddDocument` emite la ficha en orden fijo (Géneros, Core Loop, Audiencia, Concepto, Inspiraciones, Fantasía, Mecánicas clave, Fuera de alcance) omitiendo vacíos y con el Título en la cabecera `GDD — <título>`; `BrainstormingWizardScreen` + `App` persisten con “Guardar” y vuelven a la lista, mientras Back/Cancelar no escribe. D–F quedan declarados como riesgos asumidos con mitigación en plan §14, sin afirmar que estén resueltos.",
+      "Verificación re-ejecutada: duraciones 810 s / 850 s / 900 s / 600 s intactas (storyboard P00–P14 = 850 s; P15 = 50 s); 176 enlaces relativos (109 guion + 41 storyboard + 26 plan), 0 rutas y 0 anclas rotas; 0 coincidencias de secrets o rutas personales; `python3 -m json.tool feature_list.json` OK; `git diff --check` limpio y .md nuevos sin espacios finales ni tabs; `ANDROID_HOME=\"$HOME/Library/Android/sdk\" CI=true ./init.sh` → exit 0 (68 tareas up-to-date); sin cambios en `composeApp/`, `core/`, `iosApp/`, `init.sh` ni build files. Conteos actuales: guion 675 líneas, storyboard 370, plan 557; narración 2.052 palabras."
+    ],
+    "notes": "Tarea de documentación posterior al README: no toca código, esquema, IA, `init.sh`, build files ni `iosApp/`. Demo final sólo con IA real y datos generados en vivo; Gemini como chat; OpenCode Desktop + VS Code y Android Studio (Device Mirroring) en pantalla; Pixel 8 Pro (Android 17); imagen sí, dictado y transcripción no; WeTransfer sin música. No se graba el vídeo: se entregan guion, storyboard y plan de grabación. Reparada tras el veredicto `revise` (A–C corregidos; D–F documentados como riesgos asumidos). `accepted` (validación independiente `accept`, `docs/validations/video-script-mvp-ai.md`, 2026-10-22). D–F siguen como riesgos asumidos documentados en el plan §14."
   }
 ]

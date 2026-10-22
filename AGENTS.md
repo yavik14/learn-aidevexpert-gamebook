@@ -85,6 +85,25 @@ Nueva nota y edición, convive sin cambios con “Sugerir clasificación”).
 `docs/validations/readme-project-documentation.md`, 2026-10-21). Para iOS: el
 upload firmado (`ios-release-pipeline-first-upload`) sigue `blocked`/account-gated.
 
+`video-script-mvp-ai` quedó implementada y `accepted` (2026-10-22; Session 102
+implementación, Session 103 reparación del `revise` y Session 104 validación
+independiente `accept` en `docs/validations/video-script-mvp-ai.md`; spec
+`docs/specs/video-script-mvp-ai.md`). La reparación corrigió A–C (pre-flight real
+honesto, narración del GDD y “Guardar” al salir del Brainstorming) y documentó
+D–F como riesgos asumidos de la demo (umbral 0.8 de relacionadas, panel “Dictado”
+y distinción gate fake / smoke real manual).
+Entrega `docs/video/guion-demo-mvp.md`, `storyboard-demo-mvp.md` y
+`plan-grabacion-demo-mvp.md` (13:30 de contenido, 14:10 con cierre, límite
+15:00) sobre producto, arquitectura, harness/SDD, herramientas (Chat/CLI/IDE/ADE),
+historia real del desarrollo, demo Android con IA real, resultados, riesgos,
+mejoras y conclusiones. No toca código, esquema, IA, `init.sh`, build files ni
+`iosApp/`; no graba el vídeo. La demo final usa **sólo IA real** con datos
+generados en vivo: **Gemini** como chat, OpenCode Desktop + VS Code sin etiqueta
+estricta, Android Studio (Device Mirroring) para validación y demo, **Pixel 8 Pro
+(Android 17)**, imagen generada sí y dictado/transcripción no; publicación en
+**WeTransfer** sin música. Las métricas se marcan «actualizar al grabar»; no se
+inventan herramientas, fechas, métricas ni evidencias.
+
 ## Leer primero
 1. `PROGRESS.md` — estado verificado y próximo paso (fuente de la verdad actual).
 2. `feature_list.json` — estado de las features y dependencias.
